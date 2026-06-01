@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SocialPlatform } from './types';
 import Header from './components/Header';
 import Hero from './components/Hero';
@@ -15,10 +15,10 @@ import Footer from './components/Footer';
 import FloatingWidgets from './components/FloatingWidgets';
 import AdminPanel from './components/AdminPanel';
 import { 
-  getStoredServices, setStoredServices, 
-  getStoredPlans, setStoredPlans, 
-  getStoredOrders, setStoredOrders, 
-  addSimulatedOrder, resetAllToDefault
+  fetchServices, saveServicesToServer,
+  fetchPlans, savePlansToServer,
+  fetchOrders, saveOrdersToServer,
+  addOrderToServer, resetServerDatabase
 } from './utils/storage';
 
 export default function App() {
@@ -30,11 +30,33 @@ export default function App() {
     }
   };
 
-  // State hooks from localStorage seed
+  // State hooks from Node.js backend
   const [isAdminOpen, setIsAdminOpen] = useState(false);
-  const [services, setServices] = useState(() => getStoredServices());
-  const [plans, setPlans] = useState(() => getStoredPlans());
-  const [orders, setOrders] = useState(() => getStoredOrders());
+  const [services, setServices] = useState<any[]>([]);
+  const [plans, setPlans] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load all initial server state from Node process APIs
+  useEffect(() => {
+    async function loadBackendData() {
+      try {
+        const [loadedServices, loadedPlans, loadedOrders] = await Promise.all([
+          fetchServices(),
+          fetchPlans(),
+          fetchOrders()
+        ]);
+        setServices(loadedServices);
+        setPlans(loadedPlans);
+        setOrders(loadedOrders);
+      } catch (err) {
+        console.error('Error loading secure REST API endpoints:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadBackendData();
+  }, []);
 
   // State hooks to synchronize platform selections between plans grid, services tabs and calculators
   const [selectedPlatform, setSelectedPlatform] = useState<SocialPlatform>('instagram');
@@ -63,32 +85,52 @@ export default function App() {
   };
 
   // State handlers propagated down to operations panel
-  const handleUpdateServices = (newSvcList: typeof services) => {
-    setStoredServices(newSvcList);
-    setServices(newSvcList);
+  const handleUpdateServices = async (newSvcList: typeof services) => {
+    try {
+      await saveServicesToServer(newSvcList);
+      setServices(newSvcList);
+    } catch (e) {
+      console.error('Failed to update services on backend:', e);
+    }
   };
 
-  const handleUpdatePlans = (newPlanList: typeof plans) => {
-    setStoredPlans(newPlanList);
-    setPlans(newPlanList);
+  const handleUpdatePlans = async (newPlanList: typeof plans) => {
+    try {
+      await savePlansToServer(newPlanList);
+      setPlans(newPlanList);
+    } catch (e) {
+      console.error('Failed to update plans on backend:', e);
+    }
   };
 
-  const handleUpdateOrders = (newOrdersList: typeof orders) => {
-    setStoredOrders(newOrdersList);
-    setOrders(newOrdersList);
+  const handleUpdateOrders = async (newOrdersList: typeof orders) => {
+    try {
+      await saveOrdersToServer(newOrdersList);
+      setOrders(newOrdersList);
+    } catch (e) {
+      console.error('Failed to update orders on backend:', e);
+    }
   };
 
-  const handleResetAll = () => {
-    const backup = resetAllToDefault();
-    setServices(backup.services);
-    setPlans(backup.plans);
-    setOrders(backup.orders);
+  const handleResetAll = async () => {
+    try {
+      const backup = await resetServerDatabase();
+      setServices(backup.services);
+      setPlans(backup.plans);
+      setOrders(backup.orders);
+    } catch (e) {
+      console.error('Failed to reset backend database:', e);
+    }
   };
 
-  const handleAddSimulatedOrder = (orderInfo: any) => {
-    addSimulatedOrder(orderInfo);
-    setOrders(getStoredOrders());
-    handleUpdatePlatformStats();
+  const handleAddSimulatedOrder = async (orderInfo: any) => {
+    try {
+      const savedOrder = await addOrderToServer(orderInfo);
+      setOrders(prev => [savedOrder, ...prev]);
+      handleUpdatePlatformStats();
+    } catch (e) {
+      console.error('Failed to record order on backend:', e);
+    }
   };
 
   return (

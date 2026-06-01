@@ -1,5 +1,4 @@
 import { ServiceItem, PlanItem } from '../types';
-import { SERVICES, PREBUILT_PLANS } from '../data';
 
 export interface AdminOrder {
   id: string;
@@ -15,136 +14,80 @@ export interface AdminOrder {
   status: 'Pendente' | 'Processando' | 'Aprovado' | 'Entregue' | 'Cancelado';
 }
 
-const SERVICES_KEY = 'impulsionegram_services_v1';
-const PLANS_KEY = 'impulsionegram_plans_v1';
-const ORDERS_KEY = 'impulsionegram_orders_v1';
-
-// Initial pre-seeded simulated orders
-const SEED_ORDERS: AdminOrder[] = [
-  {
-    id: "TRX-824195",
-    username: "@juliana.vasconcelos",
-    platform: "instagram",
-    serviceLabel: "Seguidores Brasileiros",
-    quantity: 2000,
-    price: 49.90,
-    paymentMethod: "Card",
-    email: "juliana.vasc@gmail.com",
-    phone: "(11) 98765-4321",
-    date: "2026-06-01T10:15:30Z",
-    status: "Entregue"
-  },
-  {
-    id: "TRX-412781",
-    username: "@burguer_gourmet_br",
-    platform: "instagram",
-    serviceLabel: "Curtidas Premium",
-    quantity: 500,
-    price: 19.90,
-    paymentMethod: "PIX",
-    email: "renan_burguer@outlook.com",
-    phone: "(21) 91234-5678",
-    date: "2026-06-01T12:05:00Z",
-    status: "Entregue"
-  },
-  {
-    id: "TRX-918234",
-    username: "@gamer_becker_tt",
-    platform: "tiktok",
-    serviceLabel: "Seguidores TikTok",
-    quantity: 5000,
-    price: 119.90,
-    paymentMethod: "PIX",
-    email: "leticia.becker@gamer.com",
-    phone: "(47) 99888-7777",
-    date: "2026-06-01T14:10:12Z",
-    status: "Aprovado"
-  }
-];
-
-export function getStoredServices(): ServiceItem[] {
+// REST Backend API calls
+export async function fetchServices(): Promise<ServiceItem[]> {
   try {
-    const data = localStorage.getItem(SERVICES_KEY);
-    if (data) {
-      return JSON.parse(data);
-    }
-  } catch (e) {
-    console.error('Error reading services from localStorage:', e);
+    const res = await fetch('/api/services');
+    if (!res.ok) throw new Error('Failed to fetch services');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching services API:', error);
+    return [];
   }
-  // Seeds database-fallback if empty
-  setStoredServices(SERVICES);
-  return SERVICES;
 }
 
-export function setStoredServices(services: ServiceItem[]) {
+export async function saveServicesToServer(services: ServiceItem[]): Promise<void> {
+  const res = await fetch('/api/services', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(services)
+  });
+  if (!res.ok) throw new Error('Failed to save services to server');
+}
+
+export async function fetchPlans(): Promise<PlanItem[]> {
   try {
-    localStorage.setItem(SERVICES_KEY, JSON.stringify(services));
-  } catch (e) {
-    console.error('Error saving services to localStorage:', e);
+    const res = await fetch('/api/plans');
+    if (!res.ok) throw new Error('Failed to fetch plans');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching plans API:', error);
+    return [];
   }
 }
 
-export function getStoredPlans(): PlanItem[] {
+export async function savePlansToServer(plans: PlanItem[]): Promise<void> {
+  const res = await fetch('/api/plans', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(plans)
+  });
+  if (!res.ok) throw new Error('Failed to save plans to server');
+}
+
+export async function fetchOrders(): Promise<AdminOrder[]> {
   try {
-    const data = localStorage.getItem(PLANS_KEY);
-    if (data) {
-      return JSON.parse(data);
-    }
-  } catch (e) {
-    console.error('Error reading plans from localStorage:', e);
-  }
-  setStoredPlans(PREBUILT_PLANS);
-  return PREBUILT_PLANS;
-}
-
-export function setStoredPlans(plans: PlanItem[]) {
-  try {
-    localStorage.setItem(PLANS_KEY, JSON.stringify(plans));
-  } catch (e) {
-    console.error('Error saving plans to localStorage:', e);
+    const res = await fetch('/api/orders');
+    if (!res.ok) throw new Error('Failed to fetch orders');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching orders API:', error);
+    return [];
   }
 }
 
-export function getStoredOrders(): AdminOrder[] {
-  try {
-    const data = localStorage.getItem(ORDERS_KEY);
-    if (data) {
-      return JSON.parse(data);
-    }
-  } catch (e) {
-    console.error('Error reading orders from localStorage:', e);
-  }
-  setStoredOrders(SEED_ORDERS);
-  return SEED_ORDERS;
+export async function saveOrdersToServer(orders: AdminOrder[]): Promise<void> {
+  const res = await fetch('/api/orders', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(orders)
+  });
+  if (!res.ok) throw new Error('Failed to update orders status on server');
 }
 
-export function setStoredOrders(orders: AdminOrder[]) {
-  try {
-    localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
-  } catch (e) {
-    console.error('Error saving orders to localStorage:', e);
-  }
+export async function addOrderToServer(order: Omit<AdminOrder, 'id' | 'date'>): Promise<AdminOrder> {
+  const res = await fetch('/api/orders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(order)
+  });
+  if (!res.ok) throw new Error('Failed to create order on server');
+  const data = await res.json();
+  return data.order;
 }
 
-export function addSimulatedOrder(order: Omit<AdminOrder, 'id' | 'date'>): AdminOrder {
-  const newOrder: AdminOrder = {
-    ...order,
-    id: `TRX-${Math.floor(100000 + Math.random() * 900000)}`,
-    date: new Date().toISOString(),
-  };
-  const currentOrders = getStoredOrders();
-  const updated = [newOrder, ...currentOrders];
-  setStoredOrders(updated);
-  return newOrder;
-}
-
-export function resetAllToDefault() {
-  localStorage.removeItem(SERVICES_KEY);
-  localStorage.removeItem(PLANS_KEY);
-  localStorage.removeItem(ORDERS_KEY);
-  return {
-    services: getStoredServices(),
-    plans: getStoredPlans(),
-    orders: getStoredOrders()
-  };
+export async function resetServerDatabase(): Promise<{ services: ServiceItem[], plans: PlanItem[], orders: AdminOrder[] }> {
+  const res = await fetch('/api/reset', { method: 'POST' });
+  if (!res.ok) throw new Error('Failed to reset server database');
+  return await res.json();
 }
