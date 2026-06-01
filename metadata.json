@@ -1,0 +1,6 @@
+{
+  "name": "ImpulsioneGram",
+  "description": "Plataforma premium para impulsionar suas redes sociais com seguidores, curtidas e visualizações reais e brasileiros.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
