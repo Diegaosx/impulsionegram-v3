@@ -1,0 +1,1002 @@
+import React, { useState, useMemo } from 'react';
+import { ServiceItem, PlanItem, SocialPlatform } from '../types';
+import { AdminOrder } from '../utils/storage';
+import { 
+  X, Plus, Pencil, Trash2, RotateCcw, LayoutDashboard, ShoppingBag, 
+  BarChart3, Settings, ShieldCheck, HelpCircle, Save, Check, AlertCircle,
+  TrendingUp, CircleDollarSign, Compass, Layers, Globe, Filter, Sparkles, MessageCircle
+} from 'lucide-react';
+import { SOCIAL_PLATFORMS } from '../data';
+
+interface AdminPanelProps {
+  isOpen: boolean;
+  onClose: () => void;
+  services: ServiceItem[];
+  plans: PlanItem[];
+  orders: AdminOrder[];
+  onUpdateServices: (services: ServiceItem[]) => void;
+  onUpdatePlans: (plans: PlanItem[]) => void;
+  onUpdateOrders: (orders: AdminOrder[]) => void;
+  onResetAll: () => void;
+}
+
+export default function AdminPanel({
+  isOpen,
+  onClose,
+  services,
+  plans,
+  orders,
+  onUpdateServices,
+  onUpdatePlans,
+  onUpdateOrders,
+  onResetAll
+}: AdminPanelProps) {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'settings'>('dashboard');
+  
+  // Platform filter for services
+  const [servicesPlatformFilter, setServicesPlatformFilter] = useState<SocialPlatform | 'todos'>('todos');
+  
+  // Modals / Form editing states
+  const [editingService, setEditingService] = useState<ServiceItem | null>(null);
+  const [isAddingService, setIsAddingService] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<PlanItem | null>(null);
+
+  // New/Edit Service Form States
+  const [serviceForm, setServiceForm] = useState<Omit<ServiceItem, 'id'>>({
+    platform: 'instagram',
+    type: 'followers',
+    label: '',
+    pricePerItem: 0.015,
+    minQuantity: 100,
+    maxQuantity: 10000,
+    deliverySpeed: 'Início imediato, entrega natural',
+    benefits: ['Perfis reais', 'Recarga garantida', 'Sem precisar de senha']
+  });
+
+  // New Benefit helper text
+  const [newBenefitText, setNewBenefitText] = useState('');
+
+  // Status message hooks
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const triggerSuccess = (msg: string) => {
+    setSuccessMessage(msg);
+    setTimeout(() => setSuccessMessage(''), 3000);
+  };
+
+  if (!isOpen) return null;
+
+  // --- STATS CALCULATIONS ---
+  const stats = useMemo(() => {
+    const totalOrders = orders.length;
+    const totalRevenue = orders.reduce((acc, current) => acc + current.price, 0);
+    const averageOrderPrice = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    
+    // Revenue by platform
+    const platformRevenue: Record<string, number> = {};
+    orders.forEach(o => {
+      platformRevenue[o.platform] = (platformRevenue[o.platform] || 0) + o.price;
+    });
+
+    return {
+      totalOrders,
+      totalRevenue,
+      averageOrderPrice,
+      platformRevenue
+    };
+  }, [orders]);
+
+  // --- SERVICE OPERATIONS ---
+  const handleEditServiceInit = (service: ServiceItem) => {
+    setEditingService(service);
+    setServiceForm({
+      platform: service.platform,
+      type: service.type,
+      label: service.label,
+      pricePerItem: service.pricePerItem,
+      minQuantity: service.minQuantity,
+      maxQuantity: service.maxQuantity,
+      deliverySpeed: service.deliverySpeed,
+      benefits: [...service.benefits]
+    });
+    setIsAddingService(false);
+  };
+
+  const handleAddServiceInit = () => {
+    setEditingService(null);
+    setServiceForm({
+      platform: 'instagram',
+      type: 'followers',
+      label: '',
+      pricePerItem: 0.015,
+      minQuantity: 100,
+      maxQuantity: 50000,
+      deliverySpeed: 'Entrega rápida (5-15 min)',
+      benefits: ['Perfis de alta qualidade', 'Prevenção contra quedas', 'Totalmente seguro']
+    });
+    setIsAddingService(true);
+  };
+
+  const handleSaveService = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!serviceForm.label) {
+      setErrorMessage('O título do serviço é obrigatório.');
+      return;
+    }
+
+    if (isAddingService) {
+      const newService: ServiceItem = {
+        ...serviceForm,
+        id: `custom-svc-${Date.now()}`
+      };
+      onUpdateServices([...services, newService]);
+      triggerSuccess('Novo serviço criado e ativado com sucesso!');
+      setIsAddingService(false);
+    } else if (editingService) {
+      const updated = services.map(s => s.id === editingService.id ? { ...s, ...serviceForm } : s);
+      onUpdateServices(updated);
+      triggerSuccess('Serviço atualizado com sucesso!');
+      setEditingService(null);
+    }
+  };
+
+  const handleDeleteService = (id: string) => {
+    if (confirm('Tem certeza de que deseja excluir este serviço? Ele não aparecerá mais no catálogo e na calculadora.')) {
+      onUpdateServices(services.filter(s => s.id !== id));
+      triggerSuccess('Serviço removido do catálogo.');
+    }
+  };
+
+  const handleAddBenefit = () => {
+    if (newBenefitText.trim()) {
+      setServiceForm(prev => ({
+        ...prev,
+        benefits: [...prev.benefits, newBenefitText.trim()]
+      }));
+      setNewBenefitText('');
+    }
+  };
+
+  const handleRemoveBenefit = (index: number) => {
+    setServiceForm(prev => ({
+      ...prev,
+      benefits: prev.benefits.filter((_, idx) => idx !== index)
+    }));
+  };
+
+  // --- PLAN OPERATIONS ---
+  const handleEditPlanInit = (plan: PlanItem) => {
+    setEditingPlan(plan);
+  };
+
+  const handleSavePlan = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPlan) return;
+
+    const updated = plans.map(p => p.id === editingPlan.id ? editingPlan : p);
+    onUpdatePlans(updated);
+    triggerSuccess(`Plano "${editingPlan.name}" atualizado com sucesso!`);
+    setEditingPlan(null);
+  };
+
+  // --- ORDER OPERATIONS ---
+  const handleToggleOrderStatus = (id: string, currentStatus: string) => {
+    const statuses: AdminOrder['status'][] = ['Pendente', 'Processando', 'Aprovado', 'Entregue', 'Cancelado'];
+    const currentIndex = statuses.indexOf(currentStatus as any);
+    const nextIndex = (currentIndex + 1) % statuses.length;
+    const nextStatus = statuses[nextIndex];
+
+    const updated = orders.map(o => o.id === id ? { ...o, status: nextStatus } : o);
+    onUpdateOrders(updated);
+    triggerSuccess(`Pedido #${id} alterado para: ${nextStatus}`);
+  };
+
+  const handleDeleteOrder = (id: string) => {
+    if (confirm('Deseja excluir este registro de pedido do histórico?')) {
+      onUpdateOrders(orders.filter(o => o.id !== id));
+      triggerSuccess('Pedido removido do registro.');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-md z-50 flex justify-center items-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+        
+        {/* UPPER TITLEBAR HEADER */}
+        <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="bg-primary p-2 rounded-lg text-white">
+              <Settings className="h-5 w-5 animate-spin-slow" />
+            </div>
+            <div>
+              <h2 className="font-display font-black text-lg tracking-tight">Painel de Gestão ImpulsioneGram</h2>
+              <p className="text-slate-400 text-[10px] font-semibold tracking-wider uppercase">Área Diretor-Administrativa</p>
+            </div>
+          </div>
+          <button 
+            onClick={onClose}
+            className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
+            id="close-admin-panel"
+            title="Sair do Painel"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* FEEDBACK FLOATING MESSAGES */}
+        {successMessage && (
+          <div className="bg-green-500 text-white text-xs font-bold font-mono px-5 py-3 flex items-center gap-2 animate-in slide-in-from-top duration-200">
+            <Check className="h-4 w-4 shrink-0" />
+            <span>{successMessage}</span>
+          </div>
+        )}
+
+        {/* MAIN BODY AREA (With sidebar menu + workspace body) */}
+        <div className="flex-grow flex overflow-hidden">
+          
+          {/* SIDEBAR NAVIGATION COLUMN */}
+          <div className="w-56 bg-slate-50 border-r border-slate-200 p-4 flex flex-col justify-between shrink-0">
+            <div className="space-y-1.5">
+              <span className="text-[10px] uppercase font-black text-slate-400 block px-2.5 mb-2.5 tracking-wider">Módulos</span>
+              
+              <button
+                onClick={() => { setActiveTab('dashboard'); setEditingService(null); setIsAddingService(false); setEditingPlan(null); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'dashboard' 
+                    ? 'bg-primary text-white shadow-sm' 
+                    : 'text-slate-600 hover:text-primary hover:bg-slate-100'
+                }`}
+              >
+                <LayoutDashboard className="h-4 w-4" />
+                <span>Dashboard Geral</span>
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('services'); setEditingPlan(null); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'services' 
+                    ? 'bg-primary text-white shadow-sm' 
+                    : 'text-slate-600 hover:text-primary hover:bg-slate-100'
+                }`}
+              >
+                <ShoppingBag className="h-4 w-4" />
+                <span>Gerenciar Serviços</span>
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('plans'); setEditingService(null); setIsAddingService(false); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'plans' 
+                    ? 'bg-primary text-white shadow-sm' 
+                    : 'text-slate-600 hover:text-primary hover:bg-slate-100'
+                }`}
+              >
+                <Layers className="h-4 w-4" />
+                <span>Gerenciar Planos</span>
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('orders'); setEditingService(null); setIsAddingService(false); setEditingPlan(null); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-all relative ${
+                  activeTab === 'orders' 
+                    ? 'bg-primary text-white shadow-sm' 
+                    : 'text-slate-600 hover:text-primary hover:bg-slate-100'
+                }`}
+              >
+                <BarChart3 className="h-4 w-4" />
+                <span>Pedidos Recentes</span>
+                {orders.length > 0 && (
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black animate-pulse">
+                    {orders.length}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            <div className="border-t border-slate-200 pt-4 space-y-1 bg-slate-50">
+              <button
+                onClick={() => { setActiveTab('settings'); setEditingService(null); setIsAddingService(false); setEditingPlan(null); }}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'settings' 
+                    ? 'bg-primary text-white shadow-sm' 
+                    : 'text-slate-500 hover:text-red-600 hover:bg-slate-100'
+                }`}
+              >
+                <RotateCcw className="h-4 w-4" />
+                <span>Redefinição / Reset</span>
+              </button>
+              
+              <div className="p-2 text-[9px] text-slate-400 font-semibold bg-slate-100 rounded-lg leading-snug mt-2">
+                Modificações aplicam-se instantaneamente na calculadora e catálogo.
+              </div>
+            </div>
+          </div>
+
+          {/* ACTIVE WORKSPACE FRAME */}
+          <div className="flex-grow p-6 overflow-y-auto bg-slate-50/40">
+            
+            {/* =================== TAB 1: DASHBOARD OVERVIEW =================== */}
+            {activeTab === 'dashboard' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="font-display font-black text-xl text-slate-900">Métricas de Faturamento e Desempenho</h3>
+                  <p className="text-slate-500 text-xs font-semibold">Simulação em tempo real baseada nos checkouts efetuados pelos usuários</p>
+                </div>
+
+                {/* SUMARY GRID BOXES */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-slate-400 uppercase font-black block">Faturamento Realizado</span>
+                      <span className="font-display font-black text-lg text-slate-950">
+                        R$ {stats.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="bg-purple-100 text-primary p-2.5 rounded-xl">
+                      <CircleDollarSign className="h-5 w-5" />
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-slate-400 uppercase font-black block">Vendas Efetuadas</span>
+                      <span className="font-display font-black text-lg text-slate-950">{stats.totalOrders} un.</span>
+                    </div>
+                    <div className="bg-green-100 text-green-700 p-2.5 rounded-xl">
+                      <TrendingUp className="h-5 w-5" />
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-slate-400 uppercase font-black block">Ticket Médio</span>
+                      <span className="font-display font-black text-lg text-slate-950">
+                        R$ {stats.averageOrderPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="bg-blue-100 text-blue-700 p-2.5 rounded-xl">
+                      <BarChart3 className="h-5 w-5" />
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-slate-400 uppercase font-black block">Tipos de Serviço</span>
+                      <span className="font-display font-black text-lg text-slate-950">{services.length} ativos</span>
+                    </div>
+                    <div className="bg-amber-100 text-amber-700 p-2.5 rounded-xl">
+                      <Layers className="h-5 w-5" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Revenue Distribution */}
+                  <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                    <h4 className="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2">
+                      <Globe className="h-4 w-4 text-slate-500" />
+                      Faturamento por Rede Social
+                    </h4>
+                    <div className="space-y-3">
+                      {SOCIAL_PLATFORMS.map(p => {
+                        const rev = stats.platformRevenue[p.id] || 0;
+                        const percent = stats.totalRevenue > 0 ? (rev / stats.totalRevenue) * 100 : 0;
+                        return (
+                          <div key={p.id} className="space-y-1">
+                            <div className="flex justify-between font-semibold text-xs text-slate-700">
+                              <span>{p.name}</span>
+                              <span className="font-mono">R$ {rev.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ({percent.toFixed(0)}%)</span>
+                            </div>
+                            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                              <div className="bg-primary h-full transition-all" style={{ width: `${percent}%` }}></div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Hot stats details */}
+                  <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-sm mb-3">Auditoria de Vendas Ativa</h4>
+                      <p className="text-slate-500 text-xs font-semibold leading-relaxed">
+                        A plataforma está simulando vendas em ambiente Sandbox. Cada ação de pagamento completada pelos usuários finais na calculadora ou nos planos gera uma guia imediata no módulo de <strong>Pedidos Recentes</strong> para validação de fluxos.
+                      </p>
+                    </div>
+                    <div className="bg-purple-50 text-primary border border-primary/20 rounded-xl p-4 mt-4 text-xs font-semibold space-y-1">
+                      <span className="flex items-center gap-1.5 font-bold">
+                        <ShieldCheck className="h-4 w-4" /> 
+                        Conexão com Gateways Assegurada
+                      </span>
+                      <span>Os gateways configurados atuam em conformidade integral com LGPD e garantem taxa de conversão simulada estável de entrega de seguidores.</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* =================== TAB 2: GERENCIAR SERVIÇOS =================== */}
+            {activeTab === 'services' && (
+              <div className="space-y-6">
+                
+                {/* HEAD CONTROLS */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <h3 className="font-display font-black text-xl text-slate-900">Catálogo de Serviços Integrados</h3>
+                    <p className="text-slate-500 text-xs font-semibold">Consulte, altere preços unitários ou crie novos itens de provimento</p>
+                  </div>
+                  
+                  <button 
+                    onClick={handleAddServiceInit}
+                    className="bg-primary hover:bg-purple-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg flex items-center gap-2 cursor-pointer transition-all shrink-0 hover:scale-[1.02] shadow-sm ml-auto"
+                    id="add-new-service-btn"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Novo Serviço
+                  </button>
+                </div>
+
+                {/* FORM PANEL FOR ADD/EDIT (ONLY DOCK-IN WHEN ACTIVE) */}
+                {(editingService || isAddingService) && (
+                  <form onSubmit={handleSaveService} className="bg-white border-2 border-primary/30 p-5 rounded-xl shadow-md space-y-4 animate-in slide-in-from-top duration-300">
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                      <h4 className="font-bold text-xs text-slate-800 uppercase tracking-wider">
+                        {isAddingService ? '➕ Adição de Novo Serviço' : `✏️ Editando Serviço: ${editingService?.label}`}
+                      </h4>
+                      <button 
+                        type="button"
+                        onClick={() => { setEditingService(null); setIsAddingService(false); }}
+                        className="text-slate-400 hover:text-slate-600 text-xs font-bold"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {/* Name label */}
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase block">Nome do Serviço (Visual)</label>
+                        <input
+                          type="text"
+                          required
+                          value={serviceForm.label}
+                          onChange={(e) => setServiceForm(prev => ({ ...prev, label: e.target.value }))}
+                          placeholder="Ex: Seguidores Brasileiros Ativos"
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800"
+                        />
+                      </div>
+
+                      {/* Social platform selection */}
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase block">Plataforma Social</label>
+                        <select
+                          value={serviceForm.platform}
+                          onChange={(e) => setServiceForm(prev => ({ ...prev, platform: e.target.value as SocialPlatform }))}
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2"
+                        >
+                          {SOCIAL_PLATFORMS.map(p => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Service Category/Type */}
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase block">Tipo de Entrega</label>
+                        <select
+                          value={serviceForm.type}
+                          onChange={(e) => setServiceForm(prev => ({ ...prev, type: e.target.value as any }))}
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2"
+                        >
+                          <option value="followers">Seguidores</option>
+                          <option value="likes">Curtidas</option>
+                          <option value="views">Visualizações</option>
+                          <option value="comments">Comentários</option>
+                          <option value="stories">Views Stories</option>
+                        </select>
+                      </div>
+
+                      {/* Price Per Unit (calculate to 1000 items) */}
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase block">Preço Unitário (Média de custo / item)</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
+                          <input
+                            type="number"
+                            step="0.0001"
+                            required
+                            value={serviceForm.pricePerItem}
+                            onChange={(e) => setServiceForm(prev => ({ ...prev, pricePerItem: parseFloat(e.target.value) }))}
+                            className="w-full bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg p-2.5 pl-8 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800"
+                          />
+                        </div>
+                        <span className="text-[10px] text-slate-500 block">
+                          Custo por 1.000un: <strong>R$ {((serviceForm.pricePerItem || 0) * 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
+                        </span>
+                      </div>
+
+                      {/* Min Quantity */}
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase block">Quantidade Mínima</label>
+                        <input
+                          type="number"
+                          required
+                          value={serviceForm.minQuantity}
+                          onChange={(e) => setServiceForm(prev => ({ ...prev, minQuantity: parseInt(e.target.value, 10) }))}
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800"
+                        />
+                      </div>
+
+                      {/* Max Quantity */}
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase block">Quantidade Máxima</label>
+                        <input
+                          type="number"
+                          required
+                          value={serviceForm.maxQuantity}
+                          onChange={(e) => setServiceForm(prev => ({ ...prev, maxQuantity: parseInt(e.target.value, 10) }))}
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800"
+                        />
+                      </div>
+
+                      {/* Delivery Speed description */}
+                      <div className="space-y-1 md:col-span-2">
+                        <label className="text-xs font-black text-slate-500 uppercase block">Velocidade de Processamento</label>
+                        <input
+                          type="text"
+                          required
+                          value={serviceForm.deliverySpeed}
+                          onChange={(e) => setServiceForm(prev => ({ ...prev, deliverySpeed: e.target.value }))}
+                          placeholder="Ex: Entrega instantânea, média de 5-15 minutos"
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Manage benefits list tags */}
+                    <div className="space-y-2 border-t border-slate-100 pt-3">
+                      <label className="text-xs font-black text-slate-500 uppercase block">Benefícios do Serviço (Pontos de Valor)</label>
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {serviceForm.benefits.map((b, idx) => (
+                          <span key={idx} className="bg-slate-100 text-slate-700 text-[11px] font-bold py-1 px-2.5 rounded-lg border border-slate-200 flex items-center gap-1.5">
+                            {b}
+                            <button 
+                              type="button" 
+                              onClick={() => handleRemoveBenefit(idx)}
+                              className="text-red-500 hover:text-red-700 font-bold hover:bg-slate-200 rounded px-1 text-[10px]"
+                            >
+                              x
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                      
+                      <div className="flex gap-2 max-w-md">
+                        <input
+                          type="text"
+                          placeholder="Escreva mais um diferencial..."
+                          value={newBenefitText}
+                          onChange={(e) => setNewBenefitText(e.target.value)}
+                          className="bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2 flex-grow text-slate-800 outline-none focus:ring-1 focus:ring-primary"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddBenefit}
+                          className="bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold px-3 py-2 rounded-lg"
+                        >
+                          Adicionar
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => { setEditingService(null); setIsAddingService(false); }}
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs px-4 py-2 rounded-lg cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        className="bg-primary hover:bg-purple-700 text-white font-bold text-xs px-5 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer shadow"
+                      >
+                        <Save className="h-3.5 w-3.5" />
+                        Salvar Alterações
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* PLATFORMS FILTER SUB-BAR */}
+                <div className="flex gap-1.5 overflow-x-auto pb-1 bg-white border border-slate-200/60 p-2.5 rounded-xl">
+                  <button 
+                    onClick={() => setServicesPlatformFilter('todos')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      servicesPlatformFilter === 'todos' ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    🌟 Todos ({services.length})
+                  </button>
+                  {SOCIAL_PLATFORMS.map(p => {
+                    const count = services.filter(s => s.platform === p.id).length;
+                    return (
+                      <button 
+                        key={p.id}
+                        onClick={() => setServicesPlatformFilter(p.id)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                          servicesPlatformFilter === p.id ? 'bg-primary text-white' : 'bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {p.name} ({count})
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* SEARCH RESULTS DISPLAY TABLE */}
+                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                  <table className="w-full text-left font-semibold text-xs text-slate-700">
+                    <thead className="bg-slate-50 text-slate-400 font-black text-[10px] uppercase border-b border-slate-100 font-mono tracking-wider">
+                      <tr>
+                        <th className="p-4">Serviço / Rede</th>
+                        <th className="p-4">Preço por 1k</th>
+                        <th className="p-4">Limites (Min/Max)</th>
+                        <th className="p-4">Velocidade</th>
+                        <th className="p-4 text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {services
+                        .filter(s => servicesPlatformFilter === 'todos' || s.platform === servicesPlatformFilter)
+                        .map(service => {
+                          const pf = SOCIAL_PLATFORMS.find(p => p.id === service.platform);
+                          const formattedPrice = (service.pricePerItem * 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                          
+                          return (
+                            <tr key={service.id} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="p-4">
+                                <div className="space-y-0.5">
+                                  <span className="font-bold text-slate-900 text-sm block">{service.label}</span>
+                                  <span className="text-[10px] uppercase font-black tracking-wider text-primary font-mono block">
+                                    {pf?.name} • type: {service.type}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="p-4 font-bold text-slate-950 font-mono text-sm">
+                                R$ {formattedPrice}
+                              </td>
+                              <td className="p-4 text-slate-500 font-mono">
+                                {service.minQuantity.toLocaleString('pt-BR')} ~ {service.maxQuantity.toLocaleString('pt-BR')} un.
+                              </td>
+                              <td className="p-4 text-slate-500 font-semibold italic text-[11px]">
+                                {service.deliverySpeed}
+                              </td>
+                              <td className="p-4">
+                                <div className="flex gap-2 justify-end">
+                                  <button
+                                    onClick={() => handleEditServiceInit(service)}
+                                    className="p-1.5 hover:bg-purple-100 hover:text-primary text-slate-500 rounded transition-colors cursor-pointer"
+                                    title="Editar Serviço"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteService(service.id)}
+                                    className="p-1.5 hover:bg-red-100 hover:text-red-600 text-slate-500 rounded transition-colors cursor-pointer"
+                                    title="Excluir Serviço"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* =================== TAB 3: GERENCIAR PLANOS =================== */}
+            {activeTab === 'plans' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="font-display font-black text-xl text-slate-900">Gerenciador de Planos em Destaque</h3>
+                  <p className="text-slate-500 text-xs font-semibold">Customize pacotes pré-modelados e aumente descontos percentuais nas abas rápidas</p>
+                </div>
+
+                {/* PLAN EDIT FORM SCREEN */}
+                {editingPlan && (
+                  <form onSubmit={handleSavePlan} className="bg-white border-2 border-primary/30 p-5 rounded-xl shadow-md space-y-4 animate-in slide-in-from-top duration-300">
+                    <h4 className="font-bold text-xs text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-100">
+                      📝 Customização do Plano: "{editingPlan.name}"
+                    </h4>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase block">Nome do Plano</label>
+                        <input
+                          type="text"
+                          required
+                          value={editingPlan.name}
+                          onChange={(e) => setEditingPlan(prev => prev ? ({ ...prev, name: e.target.value }) : null)}
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase block">Quantidade (Itens)</label>
+                        <input
+                          type="number"
+                          required
+                          value={editingPlan.quantity}
+                          onChange={(e) => setEditingPlan(prev => prev ? ({ ...prev, quantity: parseInt(e.target.value, 10) }) : null)}
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg p-2.5 text-slate-800"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase block">Preço Final (R$)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          required
+                          value={editingPlan.price}
+                          onChange={(e) => setEditingPlan(prev => prev ? ({ ...prev, price: parseFloat(e.target.value) }) : null)}
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg p-2.5 text-slate-800"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase block">Economia Estimada (%)</label>
+                        <input
+                          type="number"
+                          value={editingPlan.savingsPercent || ''}
+                          onChange={(e) => setEditingPlan(prev => prev ? ({ ...prev, savingsPercent: parseInt(e.target.value, 10) }) : null)}
+                          placeholder="Ex: 15"
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-6">
+                        <input
+                          type="checkbox"
+                          id="is-popular-checkbox"
+                          checked={!!editingPlan.isPopular}
+                          onChange={(e) => setEditingPlan(prev => prev ? ({ ...prev, isPopular: e.target.checked }) : null)}
+                          className="h-4 w-4 rounded text-primary focus:ring-primary border-slate-300"
+                        />
+                        <label htmlFor="is-popular-checkbox" className="text-xs font-bold text-slate-700 cursor-pointer">
+                          Destacar como Popular (Borda Colorida)
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setEditingPlan(null)}
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs px-4 py-2 rounded-lg"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        className="bg-primary hover:bg-purple-700 text-white font-bold text-xs px-5 py-2 rounded-lg flex items-center gap-1.5"
+                      >
+                        <Save className="h-3.5 w-3.5" />
+                        Atualizar Plano
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* PLANS GRID DISPLAY LIST */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {plans.map(plan => {
+                    const plat = SOCIAL_PLATFORMS.find(p => p.id === plan.platform);
+                    return (
+                      <div 
+                        key={plan.id}
+                        className={`bg-white border rounded-xl p-5 shadow-sm space-y-3 relative group transition-all ${
+                          plan.isPopular ? 'border-primary/50 bg-[#faf5ff]/20' : 'border-slate-200'
+                        }`}
+                      >
+                        {plan.isPopular && (
+                          <span className="absolute top-3 right-3 bg-primary text-white text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider">
+                            Destaque
+                          </span>
+                        )}
+
+                        <div className="space-y-1">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">{plat?.name}</span>
+                          <h4 className="font-display font-black text-slate-900 text-base">{plan.name}</h4>
+                        </div>
+
+                        <div className="bg-slate-50 p-3 rounded-lg border border-slate-100/80 grid grid-cols-2 gap-2 text-center text-xs">
+                          <div>
+                            <span className="text-slate-400 font-bold block text-[9px] uppercase">Quantidade</span>
+                            <strong className="text-slate-900 text-sm font-mono">{plan.quantity.toLocaleString('pt-BR')}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 font-bold block text-[9px] uppercase">Valor Final</span>
+                            <strong className="text-primary text-sm font-mono">R$ {plan.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
+                          <button
+                            onClick={() => handleEditPlanInit(plan)}
+                            className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] px-3.5 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all active:scale-95 ml-auto"
+                          >
+                            <Pencil className="h-3 w-3" />
+                            Editar Plano
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* =================== TAB 4: PEDIDOS RECENTES =================== */}
+            {activeTab === 'orders' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="font-display font-black text-xl text-slate-900">Histórico de Pedidos Sandbox</h3>
+                  <p className="text-slate-500 text-xs font-semibold">Registro das aprovações enviadas à Sofia e ao sistema integrado</p>
+                </div>
+
+                {orders.length === 0 ? (
+                  <div className="bg-white rounded-2xl p-12 text-center shadow-sm max-w-sm mx-auto border border-slate-200">
+                    <HelpCircle className="h-10 w-10 text-slate-400 mx-auto mb-2" />
+                    <h4 className="font-bold text-slate-800">Sem pedidos realizados</h4>
+                    <p className="text-slate-500 text-xs mt-1 font-semibold leading-relaxed">
+                      Nenhum checkout simulado foi efetuado ainda. Vá até a calculadora e realize um pagamento completo para carregar!
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                    <table className="w-full text-left font-semibold text-xs text-slate-700">
+                      <thead className="bg-slate-50 text-slate-400 font-black text-[10px] uppercase border-b border-slate-150 font-mono tracking-wider">
+                        <tr>
+                          <th className="p-4">Pedido / Perfil</th>
+                          <th className="p-4">Serviço Solicitado</th>
+                          <th className="p-4">Faturamento</th>
+                          <th className="p-4">Cliente / Contatos</th>
+                          <th className="p-4">Status Simulado</th>
+                          <th className="p-4 text-right">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {orders.map(order => {
+                          const orderDateStr = new Date(order.date).toLocaleDateString('pt-BR', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          });
+
+                          // Status CSS Config
+                          let statusColor = "bg-yellow-100 text-yellow-800 border-yellow-200";
+                          if (order.status === 'Entregue') statusColor = "bg-green-100 text-green-800 border-green-200";
+                          if (order.status === 'Aprovado') statusColor = "bg-blue-100 text-blue-800 border-blue-200";
+                          if (order.status === 'Cancelado') statusColor = "bg-red-100 text-red-800 border-red-200";
+                          if (order.status === 'Processando') statusColor = "bg-purple-100 text-purple-800 border-purple-200";
+
+                          return (
+                            <tr key={order.id} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="p-4">
+                                <div className="space-y-0.5">
+                                  <span className="font-bold text-slate-900 font-mono text-sm block">#{order.id}</span>
+                                  <span className="text-[10px] text-slate-400 block font-mono">{orderDateStr}</span>
+                                </div>
+                              </td>
+                              <td className="p-4">
+                                <span className="font-bold text-slate-800 block">
+                                  {order.quantity.toLocaleString('pt-BR')} {order.serviceLabel}
+                                </span>
+                                <span className="text-[10px] bg-slate-100 border text-slate-500 font-black py-0.5 px-2 rounded uppercase tracking-wider font-mono">
+                                  {order.platform}
+                                </span>
+                              </td>
+                              <td className="p-4">
+                                <span className="font-bold text-slate-950 font-mono text-sm block">
+                                  R$ {order.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                                <span className="text-[9px] font-black text-slate-400 uppercase font-mono block">
+                                  via {order.paymentMethod}
+                                </span>
+                              </td>
+                              <td className="p-4 text-[11px] leading-tight text-slate-500 space-y-0.5">
+                                <div className="font-bold text-primary text-xs">{order.username}</div>
+                                <div>{order.email}</div>
+                                <div>{order.phone}</div>
+                              </td>
+                              <td className="p-4">
+                                <button
+                                  onClick={() => handleToggleOrderStatus(order.id, order.status)}
+                                  className={`px-3 py-1 text-[10px] font-black border uppercase rounded-full cursor-pointer transition-all hover:scale-105 active:scale-95 select-none ${statusColor}`}
+                                  title="Clique para alternar o status do pedido"
+                                >
+                                  {order.status} 🔄
+                                </button>
+                              </td>
+                              <td className="p-4">
+                                <button
+                                  onClick={() => handleDeleteOrder(order.id)}
+                                  className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors ml-auto block cursor-pointer"
+                                  title="Remover Registro"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* =================== TAB 5: RESET / CONFIGS =================== */}
+            {activeTab === 'settings' && (
+              <div className="space-y-6 max-w-xl">
+                <div>
+                  <h3 className="font-display font-black text-xl text-slate-900">Configurações e Redefinição de Base</h3>
+                  <p className="text-slate-500 text-xs font-semibold">Gerencie e retorne os catálogos para o estado padrão de fábrica</p>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+                  <div className="space-y-2">
+                    <span className="flex items-center gap-1.5 text-slate-800 font-bold text-sm">
+                      <AlertCircle className="h-4 w-4 text-amber-500" />
+                      Aviso de Redefinição Completa
+                    </span>
+                    <p className="text-slate-500 text-xs font-semibold leading-relaxed">
+                      Esta ação limpará as informações armazenadas no LocalStorage de sua máquina (Serviços e Planos editados, além de todos os pedidos agendados na calculadora). O catálogo retornará instantaneamente à configuração definida no código-fonte principal (`src/data.ts`).
+                    </p>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-100 flex justify-end">
+                    <button
+                      onClick={() => {
+                        if (confirm('Atenção! Isso redefinirá todos os dados personalizados para os valores padrão de fábrica. Continuar?')) {
+                          onResetAll();
+                          triggerSuccess('Configurações redefinidas com sucesso para o padrão de fábrica!');
+                          setActiveTab('dashboard');
+                        }
+                      }}
+                      className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs py-3 px-5 rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 shadow-md"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Redefinir Para Padrões de Fábrica
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-purple-50 border border-primary/20 rounded-xl p-5 space-y-3">
+                  <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    Canal Administrativo Direto
+                  </h4>
+                  <p className="text-slate-500 text-xs font-semibold leading-relaxed">
+                    Você pode alterar os limites mínimos e máximos da calculadora arrastável modificando o serviço correspondente. Os multiplicadores de margem e descontos progressivos (10%, 20% e 30% discount percent) serão aplicados no faturamento em tempo de renderização.
+                  </p>
+                </div>
+              </div>
+            )}
+
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  );
+}

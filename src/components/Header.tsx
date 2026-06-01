@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, ShoppingCart, Search, Sparkles } from 'lucide-react';
+import { Menu, X, ShoppingCart, Search, Sparkles, Settings } from 'lucide-react';
 import { SocialPlatform } from '../types';
 
 interface HeaderProps {
@@ -7,9 +7,10 @@ interface HeaderProps {
   cartCount: number;
   onOpenCart: () => void;
   onSearch: (term: string) => void;
+  onOpenAdmin?: () => void;
 }
 
-export default function Header({ onNavigate, cartCount, onOpenCart, onSearch }: HeaderProps) {
+export default function Header({ onNavigate, cartCount, onOpenCart, onSearch, onOpenAdmin }: HeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -140,6 +141,19 @@ export default function Header({ onNavigate, cartCount, onOpenCart, onSearch }: 
               )}
             </button>
 
+            {/* Admin Toggle Panel (Desktop) */}
+            {onOpenAdmin && (
+              <button
+                onClick={onOpenAdmin}
+                className="flex items-center gap-1.5 text-slate-700 hover:text-primary hover:bg-slate-50 text-xs font-bold px-3 py-2.5 rounded-lg border border-slate-100 transition-all cursor-pointer"
+                title="Painel Administrativo de Produtos e Vendas"
+                id="header-admin-btn"
+              >
+                <Settings className="h-4 w-4 text-primary animate-spin-slow" />
+                <span>Painel Admin</span>
+              </button>
+            )}
+
             {/* Action CTAs */}
             <button
               onClick={() => handleMenuClick('calculadora')}
@@ -214,6 +228,19 @@ export default function Header({ onNavigate, cartCount, onOpenCart, onSearch }: 
           </div>
 
           <div className="border-t border-slate-100 pt-3 flex flex-col gap-2.5">
+            {onOpenAdmin && (
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  onOpenAdmin();
+                }}
+                className="w-full text-center py-2.5 text-xs font-bold text-primary hover:bg-slate-50 border border-primary/20 rounded-lg flex items-center justify-center gap-1.5"
+                id="mobile-admin-btn"
+              >
+                <Settings className="h-4 w-4 animate-spin-slow" />
+                Painel Administrativo
+              </button>
+            )}
             <button
               onClick={() => handleMenuClick('faq')}
               className="w-full text-center py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 rounded-lg"

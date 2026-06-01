@@ -11,12 +11,26 @@ interface InteractiveCalculatorProps {
   initialPlatform?: SocialPlatform;
   initialType?: string;
   onAddOrderToStats: () => void;
+  services?: ServiceItem[];
+  onAddSimulatedOrder?: (order: {
+    username: string;
+    platform: string;
+    serviceLabel: string;
+    quantity: number;
+    price: number;
+    paymentMethod: 'PIX' | 'Card';
+    email: string;
+    phone: string;
+    status: 'Pendente' | 'Processando' | 'Aprovado' | 'Entregue' | 'Cancelado';
+  }) => void;
 }
 
 export default function InteractiveCalculator({ 
   initialPlatform, 
   initialType, 
-  onAddOrderToStats 
+  onAddOrderToStats,
+  services,
+  onAddSimulatedOrder
 }: InteractiveCalculatorProps) {
   
   // Selection States
@@ -66,9 +80,10 @@ export default function InteractiveCalculator({
 
   // Find all available service categories for current platform
   const categoriesList = useMemo(() => {
-    const matching = SERVICES.filter(s => s.platform === platform);
+    const list = services || SERVICES;
+    const matching = list.filter(s => s.platform === platform);
     return matching.map(m => ({ type: m.type, label: m.label }));
-  }, [platform]);
+  }, [platform, services]);
 
   // Sync serviceType if it is not in the categories list of the new platform
   useEffect(() => {
@@ -80,8 +95,9 @@ export default function InteractiveCalculator({
 
   // Get active service configuration item
   const activeService = useMemo<ServiceItem | undefined>(() => {
-    return SERVICES.find(s => s.platform === platform && s.type === serviceType);
-  }, [platform, serviceType]);
+    const list = services || SERVICES;
+    return list.find(s => s.platform === platform && s.type === serviceType);
+  }, [platform, serviceType, services]);
 
   // Adjust default quantity limits whenever service changes
   useEffect(() => {
@@ -243,6 +259,21 @@ export default function InteractiveCalculator({
         clearInterval(interval);
         setCheckoutStep('success');
         onAddOrderToStats(); // Notification trigger
+        
+        // Add to simulated admin orders
+        if (onAddSimulatedOrder) {
+          onAddSimulatedOrder({
+            username: username.startsWith('@') ? username : '@' + username,
+            platform,
+            serviceLabel: activeService ? activeService.label : 'Serviço Personalizado',
+            quantity,
+            price: bulkMetrics.finalPrice,
+            paymentMethod: paymentMethod === 'pix' ? 'PIX' : 'Card',
+            email,
+            phone,
+            status: 'Aprovado'
+          });
+        }
       }
     }, 1200);
   };

@@ -13,6 +13,13 @@ import ContactForm from './components/ContactForm';
 import Newsletter from './components/Newsletter';
 import Footer from './components/Footer';
 import FloatingWidgets from './components/FloatingWidgets';
+import AdminPanel from './components/AdminPanel';
+import { 
+  getStoredServices, setStoredServices, 
+  getStoredPlans, setStoredPlans, 
+  getStoredOrders, setStoredOrders, 
+  addSimulatedOrder, resetAllToDefault
+} from './utils/storage';
 
 export default function App() {
   // Navigation scrolling logic
@@ -22,6 +29,12 @@ export default function App() {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
+
+  // State hooks from localStorage seed
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [services, setServices] = useState(() => getStoredServices());
+  const [plans, setPlans] = useState(() => getStoredPlans());
+  const [orders, setOrders] = useState(() => getStoredOrders());
 
   // State hooks to synchronize platform selections between plans grid, services tabs and calculators
   const [selectedPlatform, setSelectedPlatform] = useState<SocialPlatform>('instagram');
@@ -49,22 +62,53 @@ export default function App() {
     setSearchFilter('');
   };
 
+  // State handlers propagated down to operations panel
+  const handleUpdateServices = (newSvcList: typeof services) => {
+    setStoredServices(newSvcList);
+    setServices(newSvcList);
+  };
+
+  const handleUpdatePlans = (newPlanList: typeof plans) => {
+    setStoredPlans(newPlanList);
+    setPlans(newPlanList);
+  };
+
+  const handleUpdateOrders = (newOrdersList: typeof orders) => {
+    setStoredOrders(newOrdersList);
+    setOrders(newOrdersList);
+  };
+
+  const handleResetAll = () => {
+    const backup = resetAllToDefault();
+    setServices(backup.services);
+    setPlans(backup.plans);
+    setOrders(backup.orders);
+  };
+
+  const handleAddSimulatedOrder = (orderInfo: any) => {
+    addSimulatedOrder(orderInfo);
+    setOrders(getStoredOrders());
+    handleUpdatePlatformStats();
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 antialiased font-sans flex flex-col justify-between selection:bg-blue-600 selection:text-white pb-0">
       
-      {/* Dynamic Header */}
+      {/* Dynamic Header with painel control togglers */}
       <Header 
         onNavigate={handleScrollToSection}
         cartCount={0}
         onOpenCart={() => handleScrollToSection('calculadora')}
         onSearch={setSearchFilter}
+        onOpenAdmin={() => setIsAdminOpen(true)}
       />
 
       {/* Hero Section */}
       <Hero onNavigate={handleScrollToSection} />
 
-      {/* Services Showcase Catalog */}
+      {/* Services Showcase Catalog - dynamic */}
       <ServicesGrid 
+        services={services}
         onSelectService={(plat, type) => handleCustomizerSelection(plat, type, 1000)}
         searchTerm={searchFilter}
         onNavigate={handleScrollToSection}
@@ -73,15 +117,18 @@ export default function App() {
       {/* Benefits Block */}
       <Benefits />
 
-      {/* Interactive Pricing Customizer Calculator */}
+      {/* Interactive Pricing Customizer Calculator - dynamic */}
       <InteractiveCalculator 
+        services={services}
         initialPlatform={selectedPlatform}
         initialType={selectedServiceType}
         onAddOrderToStats={handleUpdatePlatformStats}
+        onAddSimulatedOrder={handleAddSimulatedOrder}
       />
 
-      {/* Pre-packaged Popular Plans Grid */}
+      {/* Pre-packaged Popular Plans Grid - dynamic */}
       <PlansGrid 
+        plans={plans}
         onSelectPlanCustomizer={handleCustomizerSelection}
         onNavigate={handleScrollToSection}
       />
@@ -111,6 +158,19 @@ export default function App() {
       <FloatingWidgets 
         onNavigate={handleScrollToSection}
         ordersCalculatedStat={statsCount - 15482}
+      />
+
+      {/* Admin Panel CRUD Overlay backdrop */}
+      <AdminPanel 
+        isOpen={isAdminOpen}
+        onClose={() => setIsAdminOpen(false)}
+        services={services}
+        plans={plans}
+        orders={orders}
+        onUpdateServices={handleUpdateServices}
+        onUpdatePlans={handleUpdatePlans}
+        onUpdateOrders={handleUpdateOrders}
+        onResetAll={handleResetAll}
       />
 
     </div>

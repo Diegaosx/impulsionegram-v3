@@ -7,9 +7,10 @@ interface ServicesGridProps {
   onSelectService: (platform: SocialPlatform, type: string) => void;
   searchTerm?: string;
   onNavigate: (sectionId: string) => void;
+  services?: ServiceItem[];
 }
 
-export default function ServicesGrid({ onSelectService, searchTerm = '', onNavigate }: ServicesGridProps) {
+export default function ServicesGrid({ onSelectService, searchTerm = '', onNavigate, services }: ServicesGridProps) {
   const [activePlatform, setActivePlatform] = useState<SocialPlatform | 'todos'>('todos');
 
   // Map platform string IDs to Lucide components
@@ -27,7 +28,8 @@ export default function ServicesGrid({ onSelectService, searchTerm = '', onNavig
 
   // Filter services dynamically based on active tab and search query
   const filteredServices = useMemo(() => {
-    return SERVICES.filter((service) => {
+    const listToFilter = services || SERVICES;
+    return listToFilter.filter((service) => {
       const matchPlatform = activePlatform === 'todos' || service.platform === activePlatform;
       const cleanSearch = searchTerm.toLowerCase().trim();
       if (!cleanSearch) return matchPlatform;
@@ -39,7 +41,7 @@ export default function ServicesGrid({ onSelectService, searchTerm = '', onNavig
 
       return matchPlatform && matchSearch;
     });
-  }, [activePlatform, searchTerm]);
+  }, [activePlatform, searchTerm, services]);
 
   const handleServiceClick = (platform: SocialPlatform, type: string) => {
     onSelectService(platform, type);

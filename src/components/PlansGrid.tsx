@@ -6,15 +6,17 @@ import { Check, Flame, Award, ShieldAlert, Sparkles, Instagram, Plus } from 'luc
 interface PlansGridProps {
   onSelectPlanCustomizer: (platform: SocialPlatform, type: string, quantity: number) => void;
   onNavigate: (sectionId: string) => void;
+  plans?: PlanItem[];
 }
 
-export default function PlansGrid({ onSelectPlanCustomizer, onNavigate }: PlansGridProps) {
+export default function PlansGrid({ onSelectPlanCustomizer, onNavigate, plans: customPlans }: PlansGridProps) {
   const [activeTab, setActiveTab] = useState<'instagram' | 'tiktok'>('instagram');
 
   // Filter plans based on selected network
   const plans = useMemo(() => {
-    return PREBUILT_PLANS.filter(p => p.platform === activeTab);
-  }, [activeTab]);
+    const list = customPlans || PREBUILT_PLANS;
+    return list.filter(p => p.platform === activeTab);
+  }, [activeTab, customPlans]);
 
   const handleBuyPlan = (plan: PlanItem) => {
     onSelectPlanCustomizer(plan.platform, plan.type, plan.quantity);
