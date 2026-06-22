@@ -18,7 +18,8 @@ import {
   fetchServices, saveServicesToServer,
   fetchPlans, savePlansToServer,
   fetchOrders, saveOrdersToServer,
-  addOrderToServer, resetServerDatabase
+  addOrderToServer, resetServerDatabase,
+  fetchHomeContent, saveHomeContentToServer, HomeContent
 } from './utils/storage';
 
 export default function App() {
@@ -35,20 +36,23 @@ export default function App() {
   const [services, setServices] = useState<any[]>([]);
   const [plans, setPlans] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
+  const [homeContent, setHomeContent] = useState<HomeContent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Load all initial server state from Node process APIs
   useEffect(() => {
     async function loadBackendData() {
       try {
-        const [loadedServices, loadedPlans, loadedOrders] = await Promise.all([
+        const [loadedServices, loadedPlans, loadedOrders, loadedHome] = await Promise.all([
           fetchServices(),
           fetchPlans(),
-          fetchOrders()
+          fetchOrders(),
+          fetchHomeContent()
         ]);
         setServices(loadedServices);
         setPlans(loadedPlans);
         setOrders(loadedOrders);
+        setHomeContent(loadedHome);
       } catch (err) {
         console.error('Error loading secure REST API endpoints:', err);
       } finally {
@@ -112,12 +116,24 @@ export default function App() {
     }
   };
 
+  const handleUpdateHomeContent = async (newContent: HomeContent) => {
+    try {
+      await saveHomeContentToServer(newContent);
+      setHomeContent(newContent);
+    } catch (e) {
+      console.error('Failed to update home content on backend:', e);
+    }
+  };
+
   const handleResetAll = async () => {
     try {
       const backup = await resetServerDatabase();
       setServices(backup.services);
       setPlans(backup.plans);
       setOrders(backup.orders);
+      if (backup.homeContent) {
+        setHomeContent(backup.homeContent);
+      }
     } catch (e) {
       console.error('Failed to reset backend database:', e);
     }
@@ -146,7 +162,10 @@ export default function App() {
       />
 
       {/* Hero Section */}
-      <Hero onNavigate={handleScrollToSection} />
+      <Hero 
+        onNavigate={handleScrollToSection} 
+        homeContent={homeContent}
+      />
 
       {/* Services Showcase Catalog - dynamic */}
       <ServicesGrid 
@@ -200,6 +219,7 @@ export default function App() {
       <FloatingWidgets 
         onNavigate={handleScrollToSection}
         ordersCalculatedStat={statsCount - 15482}
+        homeContent={homeContent}
       />
 
       {/* Admin Panel CRUD Overlay backdrop */}
@@ -209,9 +229,11 @@ export default function App() {
         services={services}
         plans={plans}
         orders={orders}
+        homeContent={homeContent}
         onUpdateServices={handleUpdateServices}
         onUpdatePlans={handleUpdatePlans}
         onUpdateOrders={handleUpdateOrders}
+        onUpdateHomeContent={handleUpdateHomeContent}
         onResetAll={handleResetAll}
       />
 

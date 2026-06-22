@@ -3,9 +3,16 @@ import { useState, useEffect } from 'react';
 
 interface HeroProps {
   onNavigate: (sectionId: string) => void;
+  homeContent: {
+    heroTitle: string;
+    heroSubtitle: string;
+    alertBannerText: string;
+    companyWhatsApp: string;
+    companyEmail: string;
+  } | null;
 }
 
-export default function Hero({ onNavigate }: HeroProps) {
+export default function Hero({ onNavigate, homeContent }: HeroProps) {
   const [followerCount, setFollowerCount] = useState(14450);
 
   // Animate follower count upwards to simulate actual live tracking growth!
@@ -38,19 +45,15 @@ export default function Hero({ onNavigate }: HeroProps) {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
               </span>
-              Promoção de Inverno: Até 50% OFF em Combos Selecionados!
+              {homeContent?.alertBannerText || "Promoção de Inverno: Até 50% OFF em Combos Selecionados!"}
             </div>
 
-            <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-tight">
-              Impulsione suas redes sociais com{' '}
-              <span className="text-primary">
-                seguidores reais
-              </span>{' '}
-              e brasileiros
+            <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-tight whitespace-pre-line">
+              {homeContent?.heroTitle || "Impulsione suas redes sociais com seguidores reais e brasileiros"}
             </h1>
 
             <p className="text-slate-600 text-lg sm:text-xl max-w-2xl mx-auto lg:mx-0 font-medium leading-relaxed">
-              Serviços premium de seguidores, curtidas e visualizações estáveis para <strong>Instagram</strong>, <strong>TikTok</strong>, <strong>YouTube</strong> e mais. Crescimento rápido, permanente e 100% seguro.
+              {homeContent?.heroSubtitle || "Serviços premium de seguidores, curtidas e visualizações estáveis para Instagram, TikTok, YouTube e mais. Crescimento rápido, permanente e 100% seguro."}
             </p>
 
             {/* Action CTAs */}

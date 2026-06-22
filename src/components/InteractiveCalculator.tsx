@@ -78,6 +78,25 @@ export default function InteractiveCalculator({
     }
   }, [initialPlatform, initialType]);
 
+  // Handle ESC key press and body overflow prevention when checkout modal is shown
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showCheckout) {
+        setShowCheckout(false);
+      }
+    };
+    if (showCheckout) {
+      document.addEventListener('keydown', handleKeyDown, true);
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true);
+      document.body.style.overflow = 'unset';
+    };
+  }, [showCheckout]);
+
   // Find all available service categories for current platform
   const categoriesList = useMemo(() => {
     const list = services || SERVICES;
@@ -531,24 +550,33 @@ export default function InteractiveCalculator({
 
       {/* --- CHECKOUT SIMULATOR DIALOG / MODAL --- */}
       {showCheckout && (
-        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center bg-slate-950/85 backdrop-blur-sm p-4 animate-fade-in" id="checkout-modal-overlay">
+        <div 
+          className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center bg-slate-950/85 backdrop-blur-sm p-4 animate-fade-in cursor-pointer" 
+          id="checkout-modal-overlay"
+          onClick={() => setShowCheckout(false)}
+        >
           
-          <div className="bg-white text-slate-900 rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden relative animate-scale-up">
+          <div 
+            onClick={(e) => e.stopPropagation()} 
+            className="bg-white text-slate-900 rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden relative animate-scale-up cursor-default"
+          >
             
-            {/* Header close btn */}
-            <button
-              onClick={() => setShowCheckout(false)}
-              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-full transition-colors cursor-pointer"
-              aria-label="Close Checkout"
-              id="close-checkout-modal"
-            >
-              <X className="h-6 w-6" />
-            </button>
-
             {/* Checkout Stage Title Banner */}
             <div className="bg-slate-900 text-white p-6 pb-5 relative">
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-green-400 via-blue-500 to-indigo-500" />
-              <div className="flex items-center gap-3">
+              
+              {/* Highly prominent close button styled with background hover states */}
+              <button
+                onClick={() => setShowCheckout(false)}
+                className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white hover:bg-slate-800 bg-slate-850 rounded-full transition-all cursor-pointer z-20 flex items-center justify-center"
+                aria-label="Close Checkout"
+                id="close-checkout-modal"
+                title="Fechar (ESC)"
+              >
+                <X className="h-4.5 w-4.5" />
+              </button>
+
+              <div className="flex items-center gap-3 pr-8">
                 <div className="bg-blue-600/20 text-blue-400 p-2 rounded-xl">
                   {getPlatformIcon(platform)}
                 </div>
@@ -676,6 +704,14 @@ export default function InteractiveCalculator({
                   >
                     Prosseguir Para Pagamento
                     <ArrowRight className="h-4 w-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowCheckout(false)}
+                    className="w-full text-xs font-bold text-slate-400 hover:text-red-500 py-2.5 text-center transition-colors cursor-pointer block"
+                  >
+                    Cancelar e fechar modal
                   </button>
                 </form>
               )}
@@ -844,13 +880,20 @@ export default function InteractiveCalculator({
                     </div>
                   )}
 
-                  <div className="text-center">
+                  <div className="text-center flex flex-col items-center gap-2 mt-4 pt-2 border-t border-slate-100">
                     <button
                       onClick={() => setCheckoutStep('info')}
-                      className="text-xs text-slate-500 hover:text-blue-600 font-black cursor-pointer uppercase tracking-wider"
+                      className="text-xs text-slate-500 hover:text-blue-600 font-black cursor-pointer uppercase tracking-wider block"
                       id="back-to-info-btn"
                     >
                       ← Voltar para dados do perfil
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowCheckout(false)}
+                      className="text-[11px] text-slate-400 hover:text-red-500 font-bold cursor-pointer block mt-1"
+                    >
+                      Cancelar compra e fechar
                     </button>
                   </div>
                 </div>

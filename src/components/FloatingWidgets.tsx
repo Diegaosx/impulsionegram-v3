@@ -8,9 +8,16 @@ import { ChatMessage } from '../types';
 interface FloatingWidgetsProps {
   onNavigate: (sectionId: string) => void;
   ordersCalculatedStat: number;
+  homeContent: {
+    heroTitle: string;
+    heroSubtitle: string;
+    alertBannerText: string;
+    companyWhatsApp: string;
+    companyEmail: string;
+  } | null;
 }
 
-export default function FloatingWidgets({ onNavigate, ordersCalculatedStat }: FloatingWidgetsProps) {
+export default function FloatingWidgets({ onNavigate, ordersCalculatedStat, homeContent }: FloatingWidgetsProps) {
   
   // Sticky Top Promo Countdown State
   const [promoTime, setPromoTime] = useState(899); // 14 min 59 sec
@@ -134,7 +141,8 @@ export default function FloatingWidgets({ onNavigate, ordersCalculatedStat }: Fl
       return;
     }
     if (quest.includes('WhatsApp')) {
-      window.open('https://api.whatsapp.com/send?phone=5511999999999&text=Falar+com+atendente', '_blank');
+      const waPhone = homeContent?.companyWhatsApp || '5511999999999';
+      window.open(`https://api.whatsapp.com/send?phone=${waPhone}&text=Falar+com+atendente`, '_blank');
       return;
     }
 
@@ -145,16 +153,16 @@ export default function FloatingWidgets({ onNavigate, ordersCalculatedStat }: Fl
     setShowCookie(false);
   };
 
+  const waPhone = homeContent?.companyWhatsApp || '5511999999999';
+
   return (
     <>
       {/* 1. STICKY TOP FLASH PROMO COUNTDOWN BAR */}
       <div className="fixed top-0 left-0 right-0 min-h-[3rem] py-2 sm:py-0 sm:h-12 bg-slate-900 text-white z-50 flex items-center justify-center px-4 font-bold text-[10px] sm:text-xs shadow-md border-b border-primary/30">
         <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2.5 text-center">
           <Clock className="h-3.5 w-3.5 animate-pulse text-accent shrink-0" />
-          <span className="hidden sm:inline">OFERTA RELÂMPAGO DE INVERNO:</span>
-          <span className="inline sm:hidden">OFERTA ATIVA:</span>
-          <span className="bg-primary text-white px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-black uppercase shrink-0">
-            20% OFF EXTRA NO PIX
+          <span className="text-slate-100 uppercase tracking-wide">
+            {homeContent?.alertBannerText || "OFERTA RELÂMPAGO DE INVERNO: 20% OFF EXTRA NO PIX"}
           </span>
           <span className="text-accent font-mono tracking-wider tabular-nums font-black whitespace-nowrap">
             Termina em: {formatPromoTimer(promoTime)}
@@ -170,7 +178,7 @@ export default function FloatingWidgets({ onNavigate, ordersCalculatedStat }: Fl
 
       {/* 2. FLOATING WHATSAPP BUTTON */}
       <a
-        href="https://api.whatsapp.com/send?phone=5511999999999&text=Ol%C3%A1%21+Vim+do+site+ImpulsioneGram+e+gostaria+de+saber+mais+sobre+os+pacotes."
+        href={`https://api.whatsapp.com/send?phone=${waPhone}&text=Ol%C3%A1%21+Vim+do+site+e+gostaria+de+saber+mais+sobre+os+pacotes.`}
         target="_blank"
         rel="noopener noreferrer"
         className="fixed bottom-6 left-6 z-40 bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all flex items-center justify-center animate-bounce duration-1000 cursor-pointer"

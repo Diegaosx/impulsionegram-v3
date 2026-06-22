@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ServiceItem, PlanItem, SocialPlatform } from '../types';
-import { AdminOrder } from '../utils/storage';
+import { AdminOrder, HomeContent, loginAdminToServer } from '../utils/storage';
 import { 
   X, Plus, Pencil, Trash2, RotateCcw, LayoutDashboard, ShoppingBag, 
   BarChart3, Settings, ShieldCheck, HelpCircle, Save, Check, AlertCircle,
-  TrendingUp, CircleDollarSign, Compass, Layers, Globe, Filter, Sparkles, MessageCircle
+  TrendingUp, CircleDollarSign, Compass, Layers, Globe, Filter, Sparkles, MessageCircle,
+  User, Lock, Users, Ban, UserCheck
 } from 'lucide-react';
 import { SOCIAL_PLATFORMS } from '../data';
 
@@ -14,9 +15,11 @@ interface AdminPanelProps {
   services: ServiceItem[];
   plans: PlanItem[];
   orders: AdminOrder[];
+  homeContent: HomeContent | null;
   onUpdateServices: (services: ServiceItem[]) => void;
   onUpdatePlans: (plans: PlanItem[]) => void;
   onUpdateOrders: (orders: AdminOrder[]) => void;
+  onUpdateHomeContent: (content: HomeContent) => void;
   onResetAll: () => void;
 }
 
@@ -26,12 +29,144 @@ export default function AdminPanel({
   services,
   plans,
   orders,
+  homeContent,
   onUpdateServices,
   onUpdatePlans,
   onUpdateOrders,
+  onUpdateHomeContent,
   onResetAll
 }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'users' | 'home' | 'settings'>('dashboard');
+  
+  // Login & Authentication States
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return localStorage.getItem('admin_authenticated') === 'true';
+  });
+  const [loginUsername, setLoginUsername] = useState('admin');
+  const [loginPassword, setLoginPassword] = useState('admin');
+  const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // Users management states
+  const [users, setUsers] = useState<any[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [userSearchText, setUserSearchText] = useState('');
+
+  // Home Content Editor Form
+  const [homeForm, setHomeForm] = useState({
+    heroTitle: '',
+    heroSubtitle: '',
+    alertBannerText: '',
+    companyWhatsApp: '',
+    companyEmail: ''
+  });
+
+  // Sync state for homeForm when homeContent loads
+  useEffect(() => {
+    if (homeContent) {
+      setHomeForm({
+        heroTitle: homeContent.heroTitle || '',
+        heroSubtitle: homeContent.heroSubtitle || '',
+        alertBannerText: homeContent.alertBannerText || '',
+        companyWhatsApp: homeContent.companyWhatsApp || '',
+        companyEmail: homeContent.companyEmail || ''
+      });
+    }
+  }, [homeContent]);
+
+  // Load registered users from client database on active authentication
+  useEffect(() => {
+    if (isOpen && isAuthenticated) {
+      async function loadUsersData() {
+        try {
+          setUsersLoading(true);
+          const res = await fetch('/api/users');
+          if (res.ok) {
+            const data = await res.json();
+            setUsers(data);
+          }
+        } catch (e) {
+          console.error('Error loading users:', e);
+        } finally {
+          setUsersLoading(false);
+        }
+      }
+      loadUsersData();
+    }
+  }, [isOpen, isAuthenticated]);
+
+  const handleAdminLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    setIsLoggingIn(true);
+    try {
+      const response = await loginAdminToServer({ username: loginUsername, password: loginPassword });
+      if (response.success) {
+        setIsAuthenticated(true);
+        localStorage.setItem('admin_authenticated', 'true');
+      } else {
+        setLoginError(response.error || 'Autenticação recusada pelo servidor.');
+      }
+    } catch (err) {
+      setLoginError('Falha de conexão com a API.');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleAdminLogout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('admin_authenticated');
+  };
+
+  const handleToggleUserStatus = async (user: any) => {
+    const updatedStatus = user.status === 'Ativo' ? 'Bloqueado' : 'Ativo';
+    const updatedUsers = users.map(u => u.id === user.id ? { ...u, status: updatedStatus } : u);
+    setUsers(updatedUsers);
+    
+    try {
+      const res = await fetch('/api/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedUsers)
+      });
+      if (res.ok) {
+        triggerSuccess(`Usuário ${user.username} marcado como ${updatedStatus}!`);
+      } else {
+        throw new Error();
+      }
+    } catch (e) {
+      triggerError('Erro ao atualizar status do usuário no servidor.');
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!window.confirm('Tem certeza que deseja remover este usuário permanentemente?')) return;
+    const updatedUsers = users.filter(u => u.id !== userId);
+    setUsers(updatedUsers);
+    try {
+      const res = await fetch('/api/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedUsers)
+      });
+      if (res.ok) {
+        triggerSuccess('Usuário removido da base com sucesso!');
+      }
+    } catch (e) {
+      triggerError('Erro ao excluir usuário do banco de dados.');
+    }
+  };
+
+  const handleSaveHomeContent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await onUpdateHomeContent(homeForm);
+      triggerSuccess('Conteúdo da página inicial atualizado com sucesso no servidor!');
+    } catch (err) {
+      triggerError('Falha ao atualizar conteúdo da Home.');
+    }
+  };
   
   // Platform filter for services
   const [servicesPlatformFilter, setServicesPlatformFilter] = useState<SocialPlatform | 'todos'>('todos');
@@ -62,21 +197,33 @@ export default function AdminPanel({
 
   const triggerSuccess = (msg: string) => {
     setSuccessMessage(msg);
-    setTimeout(() => setSuccessMessage(''), 3000);
+    setTimeout(() => setSuccessMessage(''), 3500);
+  };
+
+  const triggerError = (msg: string) => {
+    setErrorMessage(msg);
+    setTimeout(() => setErrorMessage(''), 3500);
   };
 
   if (!isOpen) return null;
 
+  console.log('AdminPanel: Rendering admin panel. isOpen:', isOpen, 'isAuthenticated:', isAuthenticated);
+
   // --- STATS CALCULATIONS ---
   const stats = useMemo(() => {
+    if (!Array.isArray(orders)) {
+      return { totalOrders: 0, totalRevenue: 0, averageOrderPrice: 0, platformRevenue: {} };
+    }
     const totalOrders = orders.length;
-    const totalRevenue = orders.reduce((acc, current) => acc + current.price, 0);
+    const totalRevenue = orders.reduce((acc, current) => acc + (Number(current?.price) || 0), 0);
     const averageOrderPrice = totalOrders > 0 ? totalRevenue / totalOrders : 0;
     
     // Revenue by platform
     const platformRevenue: Record<string, number> = {};
     orders.forEach(o => {
-      platformRevenue[o.platform] = (platformRevenue[o.platform] || 0) + o.price;
+      if (o && o.platform) {
+        platformRevenue[o.platform] = (platformRevenue[o.platform] || 0) + (Number(o.price) || 0);
+      }
     });
 
     return {
@@ -226,31 +373,108 @@ export default function AdminPanel({
 
         {/* FEEDBACK FLOATING MESSAGES */}
         {successMessage && (
-          <div className="bg-green-500 text-white text-xs font-bold font-mono px-5 py-3 flex items-center gap-2 animate-in slide-in-from-top duration-200">
+          <div className="bg-green-500 text-white text-xs font-bold font-mono px-5 py-3 flex items-center gap-2 animate-in slide-in-from-top duration-550">
             <Check className="h-4 w-4 shrink-0" />
             <span>{successMessage}</span>
           </div>
         )}
+        {errorMessage && (
+          <div className="bg-red-500 text-white text-xs font-bold font-mono px-5 py-3 flex items-center gap-2 animate-in slide-in-from-top duration-550">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
 
-        {/* MAIN BODY AREA (With sidebar menu + workspace body) */}
-        <div className="flex-grow flex overflow-hidden">
-          
-          {/* SIDEBAR NAVIGATION COLUMN */}
-          <div className="w-56 bg-slate-50 border-r border-slate-200 p-4 flex flex-col justify-between shrink-0">
-            <div className="space-y-1.5">
-              <span className="text-[10px] uppercase font-black text-slate-400 block px-2.5 mb-2.5 tracking-wider">Módulos</span>
-              
-              <button
-                onClick={() => { setActiveTab('dashboard'); setEditingService(null); setIsAddingService(false); setEditingPlan(null); }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
-                  activeTab === 'dashboard' 
-                    ? 'bg-primary text-white shadow-sm' 
-                    : 'text-slate-600 hover:text-primary hover:bg-slate-100'
-                }`}
-              >
-                <LayoutDashboard className="h-4 w-4" />
-                <span>Dashboard Geral</span>
-              </button>
+        {/* MAIN BODY AREA & LOGIN CHECK */}
+        {!isAuthenticated ? (
+          <div className="flex-grow flex items-center justify-center bg-slate-50 p-6 relative">
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px] pointer-events-none" />
+            
+            <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-8 w-full max-w-md space-y-6 relative z-10 transition-all duration-200">
+              <div className="text-center space-y-2">
+                <div className="inline-flex p-3 bg-purple-50 rounded-xl text-primary border border-primary/10">
+                  <Lock className="h-6 w-6" />
+                </div>
+                <h3 className="font-display font-black text-xl text-slate-900">Autenticação Requerida</h3>
+                <p className="text-slate-500 text-xs font-semibold">Insira suas credenciais de administrador para prosseguir</p>
+              </div>
+
+              {loginError && (
+                <div className="bg-red-50 text-red-600 border border-red-200 rounded-xl p-3 text-xs font-bold flex items-center gap-2 animate-shake">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{loginError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Usuário</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                      <User className="h-4 w-4" />
+                    </span>
+                    <input
+                      type="text"
+                      required
+                      value={loginUsername}
+                      onChange={(e) => setLoginUsername(e.target.value)}
+                      placeholder="admin"
+                      className="w-full bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-primary text-slate-805"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Senha</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                      <Lock className="h-4 w-4" />
+                    </span>
+                    <input
+                      type="password"
+                      required
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-primary text-slate-805"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoggingIn}
+                  className="w-full bg-primary hover:bg-purple-700 disabled:bg-purple-400 text-white font-bold text-xs py-3.5 rounded-lg shadow-md hover:scale-[1.01] transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  {isLoggingIn ? 'Autenticando...' : 'Acessar Painel'}
+                </button>
+              </form>
+
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 text-[10px] text-slate-400 font-semibold text-center leading-relaxed">
+                Acesso de demonstração pré-configurado.<br />
+                Usuário: <strong className="text-slate-600">admin</strong> • Senha: <strong className="text-slate-600">admin</strong>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-grow flex overflow-hidden">
+            
+            {/* SIDEBAR NAVIGATION COLUMN */}
+            <div className="w-56 bg-slate-50 border-r border-slate-200 p-4 flex flex-col justify-between shrink-0">
+              <div className="space-y-1.5">
+                <span className="text-[10px] uppercase font-black text-slate-400 block px-2.5 mb-2.5 tracking-wider">Módulos</span>
+                
+                <button
+                  onClick={() => { setActiveTab('dashboard'); setEditingService(null); setIsAddingService(false); setEditingPlan(null); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                    activeTab === 'dashboard' 
+                      ? 'bg-primary text-white shadow-sm' 
+                      : 'text-slate-600 hover:text-primary hover:bg-slate-100'
+                  }`}
+                >
+                  <LayoutDashboard className="h-4 w-4" />
+                  <span>Dashboard Geral</span>
+                </button>
 
               <button
                 onClick={() => { setActiveTab('services'); setEditingPlan(null); }}
@@ -292,19 +516,51 @@ export default function AdminPanel({
                   </span>
                 )}
               </button>
+
+              <button
+                onClick={() => { setActiveTab('users'); setEditingService(null); setIsAddingService(false); setEditingPlan(null); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'users' 
+                    ? 'bg-primary text-white shadow-sm' 
+                    : 'text-slate-600 hover:text-primary hover:bg-slate-100'
+                }`}
+              >
+                <Users className="h-4 w-4" />
+                <span>Gerenciar Usuários</span>
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('home'); setEditingService(null); setIsAddingService(false); setEditingPlan(null); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'home' 
+                    ? 'bg-primary text-white shadow-sm' 
+                    : 'text-slate-600 hover:text-primary hover:bg-slate-100'
+                }`}
+              >
+                <Globe className="h-4 w-4" />
+                <span>Conteúdo da Home</span>
+              </button>
             </div>
 
-            <div className="border-t border-slate-200 pt-4 space-y-1 bg-slate-50">
+            <div className="border-t border-slate-200 pt-4 space-y-1">
               <button
                 onClick={() => { setActiveTab('settings'); setEditingService(null); setIsAddingService(false); setEditingPlan(null); }}
                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
                   activeTab === 'settings' 
                     ? 'bg-primary text-white shadow-sm' 
-                    : 'text-slate-500 hover:text-red-600 hover:bg-slate-100'
+                    : 'text-slate-500 hover:text-red-650 hover:bg-slate-100'
                 }`}
               >
                 <RotateCcw className="h-4 w-4" />
                 <span>Redefinição / Reset</span>
+              </button>
+
+              <button
+                onClick={handleAdminLogout}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-bold text-red-500 hover:text-red-700 hover:bg-red-50 transition-all"
+              >
+                <Lock className="h-4 w-4" />
+                <span>Sair do Painel</span>
               </button>
               
               <div className="p-2 text-[9px] text-slate-400 font-semibold bg-slate-100 rounded-lg leading-snug mt-2">
@@ -992,9 +1248,228 @@ export default function AdminPanel({
               </div>
             )}
 
-          </div>
+            {/* =================== TAB 6: GERENCIAR USUÁRIOS =================== */}
+            {activeTab === 'users' && (
+              <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <h3 className="font-display font-black text-xl text-slate-900">Gerenciamento de Clientes</h3>
+                    <p className="text-slate-500 text-xs font-semibold">Consulte dados cadastrais, volume de compras e alterne bloqueio de acessos</p>
+                  </div>
 
+                  <div className="relative w-full sm:w-64">
+                    <input
+                      type="text"
+                      placeholder="Buscar por usuário ou email..."
+                      value={userSearchText}
+                      onChange={(e) => setUserSearchText(e.target.value)}
+                      className="w-full bg-white border border-slate-200 text-xs font-semibold rounded-lg py-2.5 px-4 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800"
+                    />
+                  </div>
+                </div>
+
+                {usersLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : (
+                  (() => {
+                    const filteredUsers = users.filter(u => {
+                      const search = userSearchText.toLowerCase();
+                      return u.username.toLowerCase().includes(search) || u.email.toLowerCase().includes(search);
+                    });
+
+                    return filteredUsers.length === 0 ? (
+                      <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500 text-xs font-semibold">
+                        <Users className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                        Nenhum cliente cadastrado ou encontrado com esta pesquisa.
+                      </div>
+                    ) : (
+                      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-500 uppercase tracking-wider">
+                              <th className="p-4">Usuário</th>
+                              <th className="p-4">Contatos</th>
+                              <th className="p-4">Cadastrado Em</th>
+                              <th className="p-4">Compras</th>
+                              <th className="p-4">Status da Conta</th>
+                              <th className="p-4 text-right">Ação</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-medium text-slate-600">
+                            {filteredUsers.map(user => {
+                              const createdStr = user.createdAt ? new Date(user.createdAt).toLocaleDateString('pt-BR', {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              }) : 'Manual';
+
+                              const isBlocked = user.status === 'Bloqueado';
+
+                              return (
+                                <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
+                                  <td className="p-4">
+                                    <div className="flex items-center gap-2.5">
+                                      <div className={`p-2 rounded-full font-bold text-center shrink-0 w-8 h-8 flex items-center justify-center text-xs ${isBlocked ? 'bg-red-50 text-red-600' : 'bg-purple-50 text-primary'}`}>
+                                        {user.username.slice(0, 2).toUpperCase()}
+                                      </div>
+                                      <div>
+                                        <div className="font-bold text-slate-900 text-sm leading-tight flex items-center gap-1.5">
+                                          {user.username}
+                                          {isBlocked && (
+                                            <span className="bg-red-100 text-red-600 text-[8px] px-1 rounded uppercase font-black">
+                                              Bloqueado
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="text-[10px] text-slate-400 font-mono">ID: {user.id.slice(0, 8)}...</div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="p-4 text-[11px] leading-relaxed">
+                                    <div className="font-semibold text-slate-800">{user.email}</div>
+                                    <div className="text-slate-400 font-mono">{user.phone}</div>
+                                  </td>
+                                  <td className="p-4 text-slate-400 font-mono">
+                                    {createdStr}
+                                  </td>
+                                  <td className="p-4">
+                                    <div className="font-bold text-slate-900 text-sm font-mono">{user.ordersCount || 0} ped.</div>
+                                    <div className="text-[10px] text-slate-400 font-mono">R$ {(user.totalSpent || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                  </td>
+                                  <td className="p-4">
+                                    <button
+                                      onClick={() => handleToggleUserStatus(user)}
+                                      className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border cursor-pointer hover:scale-105 active:scale-95 transition-all flex items-center gap-1 leading-none ${
+                                        isBlocked 
+                                          ? 'bg-red-50 text-red-600 border-red-200' 
+                                          : 'bg-green-50 text-green-700 border-green-200'
+                                      }`}
+                                      title={isBlocked ? 'Clique para Desbloquear' : 'Clique para Bloquear'}
+                                    >
+                                      {isBlocked ? (
+                                        <>
+                                          <Ban className="h-3 w-3" />
+                                          Bloqueado
+                                        </>
+                                      ) : (
+                                        <>
+                                          <UserCheck className="h-3 w-3" />
+                                          Ativo
+                                        </>
+                                      )}
+                                    </button>
+                                  </td>
+                                  <td className="p-4 text-right">
+                                    <button
+                                      onClick={() => handleDeleteUser(user.id)}
+                                      className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer inline-block"
+                                      title="Remover Usuário"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()
+                )}
+              </div>
+            )}
+
+            {/* =================== TAB 7: EDITAR CONTEÚDO DA HOME =================== */}
+            {activeTab === 'home' && (
+              <div className="space-y-6 max-w-2xl">
+                <div>
+                  <h3 className="font-display font-black text-xl text-slate-900">Gestão de Conteúdo da Página Inicial</h3>
+                  <p className="text-slate-500 text-xs font-semibold">Modifique os banners e os textos dinâmicos da plataforma instantaneamente</p>
+                </div>
+
+                <form onSubmit={handleSaveHomeContent} className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-5">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Título Principal do Hero (H1)</label>
+                    <textarea
+                      required
+                      rows={2}
+                      value={homeForm.heroTitle}
+                      onChange={(e) => setHomeForm(prev => ({ ...prev, heroTitle: e.target.value }))}
+                      placeholder="Ex: Impulsione Suas Redes Sociais com Seguidores Reais"
+                      className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-y"
+                    />
+                    <span className="text-[10px] text-slate-400 block font-medium">Use quebras de linha normais para formatar a visualização.</span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Subtítulo de Apoio do Hero</label>
+                    <textarea
+                      required
+                      rows={3}
+                      value={homeForm.heroSubtitle}
+                      onChange={(e) => setHomeForm(prev => ({ ...prev, heroSubtitle: e.target.value }))}
+                      placeholder="Ex: Aumente sua autoridade, alcance orgânico e vendas com nossa entrega natural e segura."
+                      className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-y"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Texto da Barra de Alerta (Flash Promo Banner)</label>
+                    <input
+                      type="text"
+                      required
+                      value={homeForm.alertBannerText}
+                      onChange={(e) => setHomeForm(prev => ({ ...prev, alertBannerText: e.target.value }))}
+                      placeholder="Ex: OFERTA RELÂMPAGO DE INVERNO: 20% OFF EXTRA NO PIX"
+                      className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">WhatsApp de Suporte (Apenas Números)</label>
+                      <input
+                        type="text"
+                        required
+                        value={homeForm.companyWhatsApp}
+                        onChange={(e) => setHomeForm(prev => ({ ...prev, companyWhatsApp: e.target.value.replace(/\D/g, '') }))}
+                        placeholder="Ex: 5511999999999"
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                      />
+                      <span className="text-[9px] text-slate-400 block font-semibold">Inclua código do país (55) + DDD + celular.</span>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">E-mail de Contato Comercial</label>
+                      <input
+                        type="email"
+                        required
+                        value={homeForm.companyEmail}
+                        onChange={(e) => setHomeForm(prev => ({ ...prev, companyEmail: e.target.value }))}
+                        placeholder="suporte@impulsionegram.com"
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-100 flex justify-end">
+                    <button
+                      type="submit"
+                      className="bg-primary hover:bg-purple-700 text-white font-bold text-xs py-3 px-5 rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-[1.01] active:scale-95 shadow-md"
+                    >
+                      <Save className="h-4 w-4" />
+                      Salvar Alterações
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+          </div>
         </div>
+      )}
 
       </div>
     </div>

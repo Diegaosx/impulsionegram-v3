@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, ShoppingCart, Search, Sparkles, Settings } from 'lucide-react';
+import { Menu, X, ShoppingCart, Search, Sparkles, Settings, ChevronDown } from 'lucide-react';
 import { SocialPlatform } from '../types';
 
 interface HeaderProps {
@@ -15,6 +15,7 @@ export default function Header({ onNavigate, cartCount, onOpenCart, onSearch, on
   const [scrolled, setScrolled] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -24,16 +25,21 @@ export default function Header({ onNavigate, cartCount, onOpenCart, onSearch, on
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const menuItems = [
+  const mainMenuItems = [
     { label: 'Início', id: 'inicio' },
     { label: 'Serviços', id: 'servicos' },
     { label: 'Calculadora', id: 'calculadora' },
     { label: 'Planos', id: 'planos' },
+  ];
+
+  const dropdownMenuItems = [
     { label: 'Como Funciona', id: 'como-funciona' },
     { label: 'Depoimentos', id: 'depoimentos' },
     { label: 'FAQ', id: 'faq' },
     { label: 'Contato', id: 'contato' },
   ];
+
+  const menuItems = [...mainMenuItems, ...dropdownMenuItems];
 
   const handleMenuClick = (id: string) => {
     setIsOpen(false);
@@ -49,7 +55,7 @@ export default function Header({ onNavigate, cartCount, onOpenCart, onSearch, on
   };
 
   return (
-    <header className={`fixed top-12 left-0 right-0 z-40 transition-all duration-300 ${scrolled ? 'bg-white/95 backdrop-blur-md shadow-md py-3 top-0' : 'bg-white/80 backdrop-blur-sm py-4'}`}>
+    <header className={`fixed top-12 left-0 right-0 z-40 transition-all duration-300 ${scrolled ? 'bg-white/95 backdrop-blur-md shadow-md py-3' : 'bg-white/80 backdrop-blur-sm py-4'}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           
@@ -72,8 +78,8 @@ export default function Header({ onNavigate, cartCount, onOpenCart, onSearch, on
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden lg:flex space-x-1 xl:space-x-2">
-            {menuItems.map((item) => (
+          <nav className="hidden lg:flex space-x-1 xl:space-x-2 items-center">
+            {mainMenuItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => handleMenuClick(item.id)}
@@ -83,6 +89,40 @@ export default function Header({ onNavigate, cartCount, onOpenCart, onSearch, on
                 {item.label}
               </button>
             ))}
+
+            {/* Dropdown 'MAIS' */}
+            <div 
+              className="relative py-2"
+              onMouseEnter={() => setIsDropdownOpen(true)}
+              onMouseLeave={() => setIsDropdownOpen(false)}
+            >
+              <button
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="flex items-center gap-1 text-slate-600 hover:text-primary hover:bg-slate-50 px-3 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer"
+                id="nav-dropdown-trigger"
+              >
+                <span>MAIS</span>
+                <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isDropdownOpen && (
+                <div className="absolute left-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg py-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                  {dropdownMenuItems.map((subItem) => (
+                    <button
+                      key={subItem.id}
+                      onClick={() => {
+                        handleMenuClick(subItem.id);
+                        setIsDropdownOpen(false);
+                      }}
+                      className="w-full text-left text-slate-600 hover:text-primary hover:bg-slate-50 px-4 py-2 text-sm font-semibold transition-colors cursor-pointer block"
+                      id={`nav-sub-${subItem.id}`}
+                    >
+                      {subItem.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </nav>
 
           {/* Right Action Controls */}
@@ -146,11 +186,11 @@ export default function Header({ onNavigate, cartCount, onOpenCart, onSearch, on
               <button
                 onClick={onOpenAdmin}
                 className="flex items-center gap-1.5 text-slate-700 hover:text-primary hover:bg-slate-50 text-xs font-bold px-3 py-2.5 rounded-lg border border-slate-100 transition-all cursor-pointer"
-                title="Painel Administrativo de Produtos e Vendas"
+                title="Painel de Produtos e Vendas"
                 id="header-admin-btn"
               >
                 <Settings className="h-4 w-4 text-primary animate-spin-slow" />
-                <span>Painel Admin</span>
+                <span>Painel</span>
               </button>
             )}
 
@@ -238,7 +278,7 @@ export default function Header({ onNavigate, cartCount, onOpenCart, onSearch, on
                 id="mobile-admin-btn"
               >
                 <Settings className="h-4 w-4 animate-spin-slow" />
-                Painel Administrativo
+                Painel
               </button>
             )}
             <button
