@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
+import BlogPage from './pages/BlogPage';
 import AdminPanel from './components/AdminPanel';
 import {
   fetchServices, saveServicesToServer,
@@ -150,6 +151,19 @@ export default function App() {
             onAddSimulatedOrder={handleAddSimulatedOrder}
           />
         }
+      />
+
+      <Route
+        path="/blog"
+        element={<BlogPage homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+      />
+      <Route
+        path="/blog/artigo/:slug"
+        element={<BlogPage homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+      />
+      <Route
+        path="/blog/categoria/:categoria"
+        element={<BlogPage homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
 
       <Route

@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { Instagram, Youtube, Facebook, ShieldAlert, Sparkles } from 'lucide-react';
 import { SocialPlatform } from '../types';
 import { CompanySettings } from '../utils/storage';
@@ -11,6 +12,7 @@ interface FooterProps {
 }
 
 export default function Footer({ onNavigate, onSetPlatformFilter, siteName, company }: FooterProps) {
+  const navigate = useNavigate();
   const brandName = siteName || 'ImpulsioneGram';
 
   const footerDescription = company?.footerDescription
@@ -106,6 +108,7 @@ export default function Footer({ onNavigate, onSetPlatformFilter, siteName, comp
             <h4 className="text-slate-200 text-xs font-black uppercase tracking-widest">Suporte</h4>
             <div className="flex flex-col gap-2.5">
               <button onClick={() => onNavigate('contato')} className="text-left hover:text-white transition-colors cursor-pointer">Fale Conosco</button>
+              <button onClick={() => navigate('/blog')} className="text-left hover:text-white transition-colors cursor-pointer">Nossos Artigos</button>
               <button onClick={() => onNavigate('faq')} className="text-left hover:text-white transition-colors cursor-pointer">Perguntas Frequentes</button>
               <a href="#termos" className="hover:text-white transition-colors">Termos de Serviço</a>
               <a href="#privacidade" className="hover:text-white transition-colors">Política de Privacidade</a>

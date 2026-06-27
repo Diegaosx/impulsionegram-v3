@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Menu, X, ShoppingCart, Search, Sparkles, Settings, ChevronDown } from 'lucide-react';
 import { SocialPlatform } from '../types';
 
@@ -13,6 +14,7 @@ interface HeaderProps {
 }
 
 export default function Header({ onNavigate, cartCount, onOpenCart, onSearch, onOpenAdmin, siteName, logoUrl }: HeaderProps) {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -130,6 +132,13 @@ export default function Header({ onNavigate, cartCount, onOpenCart, onSearch, on
                       {subItem.label}
                     </button>
                   ))}
+                  <button
+                    onClick={() => { setIsDropdownOpen(false); navigate('/blog'); }}
+                    className="w-full text-left text-slate-600 hover:text-primary hover:bg-slate-50 px-4 py-2 text-sm font-semibold transition-colors cursor-pointer block"
+                    id="nav-sub-blog"
+                  >
+                    Blog
+                  </button>
                 </div>
               )}
             </div>
@@ -275,6 +284,13 @@ export default function Header({ onNavigate, cartCount, onOpenCart, onSearch, on
                 {item.label}
               </button>
             ))}
+            <button
+              onClick={() => { setIsOpen(false); navigate('/blog'); }}
+              className="text-left font-semibold text-slate-700 hover:text-primary hover:bg-slate-50 py-3 px-3 rounded-lg text-sm transition-colors cursor-pointer"
+              id="mobile-nav-blog"
+            >
+              Blog
+            </button>
           </div>
 
           <div className="border-t border-slate-100 pt-3 flex flex-col gap-2.5">
