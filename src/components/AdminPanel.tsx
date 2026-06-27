@@ -349,7 +349,7 @@ export default function AdminPanel({
 
   return (
     <div className="min-h-screen bg-slate-100 flex justify-center items-stretch p-0 sm:p-4">
-      <div className="bg-white sm:rounded-2xl w-full max-w-6xl flex flex-col shadow-2xl overflow-hidden border border-slate-200 min-h-screen sm:min-h-0 sm:h-[calc(100vh-2rem)]">
+      <div className="bg-white sm:rounded-2xl w-full flex flex-col shadow-2xl overflow-hidden border border-slate-200 min-h-screen sm:min-h-0 sm:h-[calc(100vh-2rem)]">
 
         {/* UPPER TITLEBAR HEADER */}
         <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center shrink-0">
