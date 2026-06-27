@@ -8,9 +8,11 @@ interface HeaderProps {
   onOpenCart: () => void;
   onSearch: (term: string) => void;
   onOpenAdmin?: () => void;
+  siteName?: string;
+  logoUrl?: string;
 }
 
-export default function Header({ onNavigate, cartCount, onOpenCart, onSearch, onOpenAdmin }: HeaderProps) {
+export default function Header({ onNavigate, cartCount, onOpenCart, onSearch, onOpenAdmin, siteName, logoUrl }: HeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -66,14 +68,22 @@ export default function Header({ onNavigate, cartCount, onOpenCart, onSearch, on
               className="flex items-center gap-2 font-display text-2xl font-black tracking-tight cursor-pointer"
               id="header-logo-btn"
             >
-              <div className="relative flex items-center font-display text-2xl font-extrabold tracking-tight">
-                <span className="text-primary mr-0.5">Impulsione</span>
-                <span className="text-slate-900 font-light">Gram</span>
-                <span className="absolute -top-1 -right-2 flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary/40 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-                </span>
-              </div>
+              {logoUrl ? (
+                <img src={logoUrl} alt={siteName || 'Logo'} className="h-9 w-auto max-w-[200px] object-contain" />
+              ) : siteName && siteName !== 'ImpulsioneGram' ? (
+                <div className="relative flex items-center font-display text-2xl font-extrabold tracking-tight">
+                  <span className="text-primary">{siteName}</span>
+                </div>
+              ) : (
+                <div className="relative flex items-center font-display text-2xl font-extrabold tracking-tight">
+                  <span className="text-primary mr-0.5">Impulsione</span>
+                  <span className="text-slate-900 font-light">Gram</span>
+                  <span className="absolute -top-1 -right-2 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary/40 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                  </span>
+                </div>
+              )}
             </button>
           </div>
 

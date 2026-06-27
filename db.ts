@@ -152,6 +152,14 @@ pool.on('error', (err) => {
   console.error('Unexpected PostgreSQL pool error:', err);
 });
 
+// Default every connection to the Recife/Brazil timezone so timestamp
+// operations on the database side are consistent with the application.
+pool.on('connect', (client) => {
+  client.query("SET TIME ZONE 'America/Recife'").catch((err) => {
+    console.error('Failed to set session timezone:', err);
+  });
+});
+
 export { pool };
 
 // Collections stored as id + JSONB documents, ordered by insertion sequence so
@@ -299,6 +307,45 @@ export const DEFAULT_INTEGRATIONS: IntegrationSettings = {
   smmApiUrl: '',
   smmApiKey: ''
 };
+
+// --- General site settings (branding, SEO, timezone, theme) ---
+export interface GeneralSettings {
+  siteName: string;
+  logoUrl: string;
+  faviconUrl: string;
+  seoTitle: string;
+  seoDescription: string;
+  timezone: string;
+  theme: string;
+}
+
+export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
+  siteName: 'ImpulsioneGram',
+  logoUrl: '',
+  faviconUrl: '',
+  seoTitle: 'ImpulsioneGram | Impulsione suas Redes Sociais',
+  seoDescription:
+    'Plataforma premium para impulsionar suas redes sociais com seguidores, curtidas e visualizações reais e brasileiros.',
+  timezone: 'America/Recife',
+  theme: 'default'
+};
+
+export async function getGeneralSettings(): Promise<GeneralSettings> {
+  const result = await pool.query(`SELECT value FROM settings WHERE key = 'general'`);
+  return { ...DEFAULT_GENERAL_SETTINGS, ...(result.rows[0]?.value || {}) };
+}
+
+export async function saveGeneralSettings(data: Partial<GeneralSettings>): Promise<GeneralSettings> {
+  const current = await getGeneralSettings();
+  const merged: GeneralSettings = { ...current, ...data };
+  await pool.query(
+    `INSERT INTO settings (key, value)
+     VALUES ('general', $1::jsonb)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [JSON.stringify(merged)]
+  );
+  return merged;
+}
 
 export async function getIntegrations(): Promise<IntegrationSettings> {
   const result = await pool.query(`SELECT value FROM settings WHERE key = 'integrations'`);

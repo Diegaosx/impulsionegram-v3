@@ -4,9 +4,11 @@ import { SocialPlatform } from '../types';
 interface FooterProps {
   onNavigate: (sectionId: string) => void;
   onSetPlatformFilter: (platform: SocialPlatform | 'todos') => void;
+  siteName?: string;
 }
 
-export default function Footer({ onNavigate, onSetPlatformFilter }: FooterProps) {
+export default function Footer({ onNavigate, onSetPlatformFilter, siteName }: FooterProps) {
+  const brandName = siteName || 'ImpulsioneGram';
   
   const handleServiceClick = (p: SocialPlatform) => {
     onSetPlatformFilter(p);
@@ -28,8 +30,14 @@ export default function Footer({ onNavigate, onSetPlatformFilter }: FooterProps)
               onClick={() => onNavigate('inicio')}
               className="flex items-center gap-1 font-display text-lg font-bold tracking-tight cursor-pointer"
             >
-              <span className="text-primary font-black">Impulsione</span>
-              <span className="text-white font-light">Gram</span>
+              {siteName && siteName !== 'ImpulsioneGram' ? (
+                <span className="text-primary font-black">{siteName}</span>
+              ) : (
+                <>
+                  <span className="text-primary font-black">Impulsione</span>
+                  <span className="text-white font-light">Gram</span>
+                </>
+              )}
             </button>
             <p className="text-slate-400 text-xs leading-relaxed max-w-sm font-semibold">
               Especialistas em marketing de alta performance de redes sociais desde 2018. Líderes nacionais no provimento de engajamento acelerado estável com contas reais brasileiras.
@@ -137,9 +145,9 @@ export default function Footer({ onNavigate, onSetPlatformFilter }: FooterProps)
       {/* Bottom Footer: Copyright and legal notes */}
       <div className="bg-slate-950 border-t border-slate-800/50 py-6 text-center text-slate-500 text-[10px]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-2">
-          <p>© {currentYear} ImpulsioneGram. Todos os direitos reservados. CNPJ: 00.322.155/0001-99.</p>
+          <p>© {currentYear} {brandName}. Todos os direitos reservados. CNPJ: 00.322.155/0001-99.</p>
           <p className="max-w-3xl mx-auto opacity-75 leading-relaxed font-semibold">
-            Isenção de responsabilidade: ImpulsioneGram é uma assessoria privada independente de engajamento social. Não possuímos representação oficial, patrocínio ou vínculo com as marcas registradas Instagram, TikTok, Facebook, YouTube, Twitter/X ou parentes correlatos. Todas as marcas nominadas servem meramente como caráter descritivo técnico informacional.
+            Isenção de responsabilidade: {brandName} é uma assessoria privada independente de engajamento social. Não possuímos representação oficial, patrocínio ou vínculo com as marcas registradas Instagram, TikTok, Facebook, YouTube, Twitter/X ou parentes correlatos. Todas as marcas nominadas servem meramente como caráter descritivo técnico informacional.
           </p>
         </div>
       </div>

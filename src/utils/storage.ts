@@ -157,6 +157,60 @@ export async function saveHomeContentToServer(content: HomeContent): Promise<voi
   if (!res.ok) throw new Error('Failed to save home content on server');
 }
 
+export interface GeneralSettings {
+  siteName: string;
+  logoUrl: string;
+  faviconUrl: string;
+  seoTitle: string;
+  seoDescription: string;
+  timezone: string;
+  theme: string;
+}
+
+const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
+  siteName: 'ImpulsioneGram',
+  logoUrl: '',
+  faviconUrl: '',
+  seoTitle: 'ImpulsioneGram | Impulsione suas Redes Sociais',
+  seoDescription:
+    'Plataforma premium para impulsionar suas redes sociais com seguidores, curtidas e visualizações reais e brasileiros.',
+  timezone: 'America/Recife',
+  theme: 'default'
+};
+
+export async function fetchGeneralSettings(): Promise<GeneralSettings> {
+  try {
+    const res = await fetch('/api/settings');
+    if (!res.ok) throw new Error('Failed to fetch settings');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching general settings API:', error);
+    return { ...DEFAULT_GENERAL_SETTINGS };
+  }
+}
+
+export async function saveGeneralSettingsToServer(settings: GeneralSettings): Promise<void> {
+  const res = await fetch('/api/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings)
+  });
+  if (!res.ok) throw new Error('Failed to save settings on server');
+}
+
+/** Upload a file to Cloudflare R2 (via the backend) and return its public URL. */
+export async function uploadAsset(file: File, folder: string): Promise<string> {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('folder', folder);
+  const res = await fetch('/api/upload', { method: 'POST', body: form });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || 'Falha no upload do arquivo');
+  }
+  return data.url;
+}
+
 export interface IntegrationSettings {
   mercadoPagoAccessToken: string;
   mercadoPagoPublicKey: string;

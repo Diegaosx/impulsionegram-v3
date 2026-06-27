@@ -1,11 +1,16 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ServiceItem, PlanItem, SocialPlatform } from '../types';
-import { AdminOrder, HomeContent, IntegrationSettings, fetchIntegrations, saveIntegrationsToServer } from '../utils/storage';
+import {
+  AdminOrder, HomeContent, IntegrationSettings, fetchIntegrations, saveIntegrationsToServer,
+  GeneralSettings, fetchGeneralSettings, saveGeneralSettingsToServer, uploadAsset
+} from '../utils/storage';
+import { setAppTimezone, formatDateTime } from '../utils/datetime';
 import {
   X, Plus, Pencil, Trash2, RotateCcw, LayoutDashboard, ShoppingBag,
   BarChart3, Settings, ShieldCheck, HelpCircle, Save, Check, AlertCircle,
   TrendingUp, CircleDollarSign, Compass, Layers, Globe, Filter, Sparkles, MessageCircle,
-  User, Lock, Users, Ban, UserCheck, CreditCard, KeyRound, Eye, EyeOff, Plug
+  User, Lock, Users, Ban, UserCheck, CreditCard, KeyRound, Eye, EyeOff, Plug,
+  Image as ImageIcon, Upload, Clock, Palette, Type, SlidersHorizontal
 } from 'lucide-react';
 import { SOCIAL_PLATFORMS } from '../data';
 
@@ -36,7 +41,7 @@ export default function AdminPanel({
   onLogout,
   onExit
 }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'users' | 'home' | 'integrations' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'users' | 'home' | 'general' | 'integrations' | 'settings'>('dashboard');
   
   // Users management states
   const [users, setUsers] = useState<any[]>([]);
@@ -102,6 +107,69 @@ export default function AdminPanel({
       triggerError('Falha ao salvar as configurações de integração.');
     } finally {
       setIsSavingIntegrations(false);
+    }
+  };
+
+  // General site settings (branding, SEO, timezone, theme)
+  const [generalForm, setGeneralForm] = useState<GeneralSettings>({
+    siteName: '',
+    logoUrl: '',
+    faviconUrl: '',
+    seoTitle: '',
+    seoDescription: '',
+    timezone: 'America/Recife',
+    theme: 'default'
+  });
+  const [generalLoading, setGeneralLoading] = useState(false);
+  const [isSavingGeneral, setIsSavingGeneral] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingFavicon, setUploadingFavicon] = useState(false);
+
+  useEffect(() => {
+    async function loadGeneral() {
+      try {
+        setGeneralLoading(true);
+        const data = await fetchGeneralSettings();
+        setGeneralForm(data);
+      } catch (e) {
+        console.error('Error loading general settings:', e);
+      } finally {
+        setGeneralLoading(false);
+      }
+    }
+    loadGeneral();
+  }, []);
+
+  const handleSaveGeneral = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingGeneral(true);
+    try {
+      await saveGeneralSettingsToServer(generalForm);
+      setAppTimezone(generalForm.timezone);
+      triggerSuccess('Configurações gerais salvas! Recarregue o site para ver as alterações de marca/SEO.');
+    } catch (err) {
+      triggerError('Falha ao salvar as configurações gerais.');
+    } finally {
+      setIsSavingGeneral(false);
+    }
+  };
+
+  const handleUploadAsset = async (
+    file: File | undefined,
+    folder: string,
+    field: 'logoUrl' | 'faviconUrl',
+    setUploading: (v: boolean) => void
+  ) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadAsset(file, folder);
+      setGeneralForm(prev => ({ ...prev, [field]: url }));
+      triggerSuccess('Upload concluído! Clique em "Salvar Configurações" para aplicar.');
+    } catch (err: any) {
+      triggerError(err?.message || 'Falha no upload do arquivo.');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -358,7 +426,7 @@ export default function AdminPanel({
               <Settings className="h-5 w-5 animate-spin-slow" />
             </div>
             <div>
-              <h2 className="font-display font-black text-lg tracking-tight">Painel de Gestão ImpulsioneGram</h2>
+              <h2 className="font-display font-black text-lg tracking-tight">Painel de Gestão {generalForm.siteName || 'ImpulsioneGram'}</h2>
               <p className="text-slate-400 text-[10px] font-semibold tracking-wider uppercase">Área Diretor-Administrativa</p>
             </div>
           </div>
@@ -470,6 +538,18 @@ export default function AdminPanel({
               >
                 <Globe className="h-4 w-4" />
                 <span>Conteúdo da Home</span>
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('general'); setEditingService(null); setIsAddingService(false); setEditingPlan(null); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'general'
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-slate-600 hover:text-primary hover:bg-slate-100'
+                }`}
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+                <span>Configurações Gerais</span>
               </button>
 
               <button
@@ -1074,9 +1154,9 @@ export default function AdminPanel({
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {orders.map(order => {
-                          const orderDateStr = new Date(order.date).toLocaleDateString('pt-BR', {
-                            hour: '2-digit',
-                            minute: '2-digit'
+                          const orderDateStr = formatDateTime(order.date, {
+                            day: '2-digit', month: '2-digit', year: 'numeric',
+                            hour: '2-digit', minute: '2-digit'
                           });
 
                           // Status CSS Config
@@ -1242,9 +1322,9 @@ export default function AdminPanel({
                           </thead>
                           <tbody className="divide-y divide-slate-100 font-medium text-slate-600">
                             {filteredUsers.map(user => {
-                              const createdStr = user.createdAt ? new Date(user.createdAt).toLocaleDateString('pt-BR', {
-                                hour: '2-digit',
-                                minute: '2-digit'
+                              const createdStr = user.createdAt ? formatDateTime(user.createdAt, {
+                                day: '2-digit', month: '2-digit', year: 'numeric',
+                                hour: '2-digit', minute: '2-digit'
                               }) : 'Manual';
 
                               const isBlocked = user.status === 'Bloqueado';
@@ -1320,6 +1400,176 @@ export default function AdminPanel({
                       </div>
                     );
                   })()
+                )}
+              </div>
+            )}
+
+            {/* =================== TAB: CONFIGURAÇÕES GERAIS =================== */}
+            {activeTab === 'general' && (
+              <div className="space-y-6 max-w-3xl">
+                <div>
+                  <h3 className="font-display font-black text-xl text-slate-900">Configurações Gerais</h3>
+                  <p className="text-slate-500 text-xs font-semibold">Identidade do site, marca, SEO, fuso horário e tema. Arquivos são hospedados no Cloudflare R2.</p>
+                </div>
+
+                {generalLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSaveGeneral} className="space-y-6">
+
+                    {/* IDENTITY */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+                      <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+                        <div className="bg-purple-50 text-primary p-2 rounded-lg"><Type className="h-5 w-5" /></div>
+                        <h4 className="font-bold text-slate-800 text-sm">Identidade do Site</h4>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Nome do Site</label>
+                        <input
+                          type="text"
+                          value={generalForm.siteName}
+                          onChange={(e) => setGeneralForm(prev => ({ ...prev, siteName: e.target.value }))}
+                          placeholder="Ex: ImpulsioneGram"
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                        />
+                        <span className="text-[10px] text-slate-400 block font-medium">Usado no cabeçalho, rodapé, título da aba e no painel.</span>
+                      </div>
+                    </div>
+
+                    {/* BRANDING (logo + favicon uploads) */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+                      <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+                        <div className="bg-amber-50 text-amber-600 p-2 rounded-lg"><ImageIcon className="h-5 w-5" /></div>
+                        <h4 className="font-bold text-slate-800 text-sm">Marca (Logo e Favicon)</h4>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        {/* Logo */}
+                        <div className="space-y-2">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Logo</label>
+                          <div className="flex items-center gap-3">
+                            <div className="h-14 w-14 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+                              {generalForm.logoUrl
+                                ? <img src={generalForm.logoUrl} alt="logo" className="max-h-full max-w-full object-contain" />
+                                : <ImageIcon className="h-5 w-5 text-slate-300" />}
+                            </div>
+                            <label className="cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors">
+                              <Upload className="h-3.5 w-3.5" />
+                              {uploadingLogo ? 'Enviando...' : 'Enviar logo'}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                disabled={uploadingLogo}
+                                onChange={(e) => handleUploadAsset(e.target.files?.[0], 'branding', 'logoUrl', setUploadingLogo)}
+                              />
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* Favicon */}
+                        <div className="space-y-2">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Favicon</label>
+                          <div className="flex items-center gap-3">
+                            <div className="h-14 w-14 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+                              {generalForm.faviconUrl
+                                ? <img src={generalForm.faviconUrl} alt="favicon" className="max-h-full max-w-full object-contain" />
+                                : <Compass className="h-5 w-5 text-slate-300" />}
+                            </div>
+                            <label className="cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors">
+                              <Upload className="h-3.5 w-3.5" />
+                              {uploadingFavicon ? 'Enviando...' : 'Enviar favicon'}
+                              <input
+                                type="file"
+                                accept="image/*,.ico"
+                                className="hidden"
+                                disabled={uploadingFavicon}
+                                onChange={(e) => handleUploadAsset(e.target.files?.[0], 'branding', 'faviconUrl', setUploadingFavicon)}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* SEO */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+                      <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+                        <div className="bg-green-50 text-green-600 p-2 rounded-lg"><Globe className="h-5 w-5" /></div>
+                        <h4 className="font-bold text-slate-800 text-sm">SEO</h4>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Título (meta title)</label>
+                        <input
+                          type="text"
+                          value={generalForm.seoTitle}
+                          onChange={(e) => setGeneralForm(prev => ({ ...prev, seoTitle: e.target.value }))}
+                          placeholder="Ex: ImpulsioneGram | Impulsione suas Redes Sociais"
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Descrição (meta description)</label>
+                        <textarea
+                          rows={2}
+                          value={generalForm.seoDescription}
+                          onChange={(e) => setGeneralForm(prev => ({ ...prev, seoDescription: e.target.value }))}
+                          placeholder="Descrição curta exibida nos resultados de busca."
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-y"
+                        />
+                      </div>
+                    </div>
+
+                    {/* REGIONAL + THEME */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+                        <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+                          <div className="bg-sky-50 text-sky-600 p-2 rounded-lg"><Clock className="h-5 w-5" /></div>
+                          <h4 className="font-bold text-slate-800 text-sm">Fuso Horário</h4>
+                        </div>
+                        <select
+                          value={generalForm.timezone}
+                          onChange={(e) => setGeneralForm(prev => ({ ...prev, timezone: e.target.value }))}
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                        >
+                          <option value="America/Recife">Recife (UTC−3) — padrão</option>
+                          <option value="America/Sao_Paulo">São Paulo / Brasília (UTC−3)</option>
+                          <option value="America/Manaus">Manaus (UTC−4)</option>
+                          <option value="America/Rio_Branco">Rio Branco (UTC−5)</option>
+                          <option value="America/Noronha">Fernando de Noronha (UTC−2)</option>
+                        </select>
+                        <span className="text-[10px] text-slate-400 block font-medium">Aplicado na exibição de datas e no banco de dados.</span>
+                      </div>
+
+                      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+                        <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+                          <div className="bg-rose-50 text-rose-600 p-2 rounded-lg"><Palette className="h-5 w-5" /></div>
+                          <h4 className="font-bold text-slate-800 text-sm">Tema</h4>
+                        </div>
+                        <select
+                          value={generalForm.theme}
+                          onChange={(e) => setGeneralForm(prev => ({ ...prev, theme: e.target.value }))}
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                        >
+                          <option value="default">Padrão (Roxo)</option>
+                        </select>
+                        <span className="text-[10px] text-slate-400 block font-medium">Mais temas serão adicionados em breve.</span>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={isSavingGeneral}
+                        className="bg-primary hover:bg-purple-700 disabled:bg-purple-300 text-white font-bold text-xs py-3 px-5 rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-[1.01] active:scale-95 shadow-md"
+                      >
+                        <Save className="h-4 w-4" />
+                        {isSavingGeneral ? 'Salvando...' : 'Salvar Configurações'}
+                      </button>
+                    </div>
+                  </form>
                 )}
               </div>
             )}

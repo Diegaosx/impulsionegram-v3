@@ -20,10 +20,12 @@ interface HomePageProps {
   services: any[];
   plans: any[];
   homeContent: HomeContent | null;
+  siteName?: string;
+  logoUrl?: string;
   onAddSimulatedOrder: (orderInfo: any) => void;
 }
 
-export default function HomePage({ services, plans, homeContent, onAddSimulatedOrder }: HomePageProps) {
+export default function HomePage({ services, plans, homeContent, siteName, logoUrl, onAddSimulatedOrder }: HomePageProps) {
   const navigate = useNavigate();
 
   // Navigation scrolling logic
@@ -75,6 +77,8 @@ export default function HomePage({ services, plans, homeContent, onAddSimulatedO
         onOpenCart={() => handleScrollToSection('calculadora')}
         onSearch={setSearchFilter}
         onOpenAdmin={() => navigate('/login')}
+        siteName={siteName}
+        logoUrl={logoUrl}
       />
 
       {/* Hero Section */}
@@ -129,6 +133,7 @@ export default function HomePage({ services, plans, homeContent, onAddSimulatedO
       <Footer
         onNavigate={handleScrollToSection}
         onSetPlatformFilter={handleSetPlatformFilter}
+        siteName={siteName}
       />
 
       {/* Floating Helpers and Chat BotSofia */}
