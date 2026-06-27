@@ -133,9 +133,13 @@ function resolveSsl(): false | { rejectUnauthorized: boolean } {
   // Explicit override wins.
   if (process.env.DATABASE_SSL === 'true') return { rejectUnauthorized: false };
   if (process.env.DATABASE_SSL === 'false') return false;
-  // Default: enable SSL for remote hosts, disable for local development.
-  const isLocal = /@(localhost|127\.0\.0\.1|\[::1\])/.test(connectionString || '');
-  return isLocal ? false : { rejectUnauthorized: false };
+  const conn = connectionString || '';
+  // Local development hosts never use SSL.
+  const isLocal = /@(localhost|127\.0\.0\.1|\[::1\])/.test(conn);
+  // Railway's private network (e.g. postgres.railway.internal) does not support
+  // SSL, so treat *.internal hosts like local connections.
+  const isInternal = /\.railway\.internal|\.internal[:/]/.test(conn);
+  return isLocal || isInternal ? false : { rejectUnauthorized: false };
 }
 
 const pool = new Pool({

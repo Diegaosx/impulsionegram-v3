@@ -205,10 +205,6 @@ export default function AdminPanel({
     setTimeout(() => setErrorMessage(''), 3500);
   };
 
-  if (!isOpen) return null;
-
-  console.log('AdminPanel: Rendering admin panel. isOpen:', isOpen, 'isAuthenticated:', isAuthenticated);
-
   // --- STATS CALCULATIONS ---
   const stats = useMemo(() => {
     if (!Array.isArray(orders)) {
@@ -233,6 +229,11 @@ export default function AdminPanel({
       platformRevenue
     };
   }, [orders]);
+
+  // Every hook above runs on each render (Rules of Hooks); only bail out now that
+  // all hooks have been called, otherwise toggling isOpen changes the hook count
+  // and React throws (error #310), which previously blocked the panel from opening.
+  if (!isOpen) return null;
 
   // --- SERVICE OPERATIONS ---
   const handleEditServiceInit = (service: ServiceItem) => {
