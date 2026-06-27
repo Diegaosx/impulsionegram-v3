@@ -8,8 +8,11 @@ import {
   fetchPlans, savePlansToServer,
   fetchOrders, saveOrdersToServer,
   addOrderToServer, resetServerDatabase,
-  fetchHomeContent, saveHomeContentToServer, HomeContent
+  fetchHomeContent, saveHomeContentToServer, HomeContent,
+  fetchGeneralSettings
 } from './utils/storage';
+import { applyBrandingToHead } from './utils/branding';
+import { setAppTimezone } from './utils/datetime';
 
 export default function App() {
   const navigate = useNavigate();
@@ -20,6 +23,10 @@ export default function App() {
   const [orders, setOrders] = useState<any[]>([]);
   const [homeContent, setHomeContent] = useState<HomeContent | null>(null);
 
+  // Site branding (applied to header/head)
+  const [siteName, setSiteName] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
+
   // Admin authentication (persisted in localStorage)
   const [isAuthenticated, setIsAuthenticated] = useState(
     () => localStorage.getItem('admin_authenticated') === 'true'
@@ -29,16 +36,23 @@ export default function App() {
   useEffect(() => {
     async function loadBackendData() {
       try {
-        const [loadedServices, loadedPlans, loadedOrders, loadedHome] = await Promise.all([
+        const [loadedServices, loadedPlans, loadedOrders, loadedHome, loadedGeneral] = await Promise.all([
           fetchServices(),
           fetchPlans(),
           fetchOrders(),
-          fetchHomeContent()
+          fetchHomeContent(),
+          fetchGeneralSettings()
         ]);
         setServices(loadedServices);
         setPlans(loadedPlans);
         setOrders(loadedOrders);
         setHomeContent(loadedHome);
+
+        // Apply configurable branding / SEO / timezone
+        setSiteName(loadedGeneral.siteName);
+        setLogoUrl(loadedGeneral.logoUrl);
+        setAppTimezone(loadedGeneral.timezone);
+        applyBrandingToHead(loadedGeneral);
       } catch (err) {
         console.error('Error loading secure REST API endpoints:', err);
       }
@@ -127,6 +141,8 @@ export default function App() {
             services={services}
             plans={plans}
             homeContent={homeContent}
+            siteName={siteName}
+            logoUrl={logoUrl}
             onAddSimulatedOrder={handleAddSimulatedOrder}
           />
         }

@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import multer from 'multer';
 import { createServer as createViteServer } from 'vite';
 
 // PostgreSQL persistence layer (replaces the previous JSON-file storage).
@@ -11,13 +12,22 @@ import {
   DEFAULT_HOME_CONTENT,
   UserItem,
   getIntegrations,
-  saveIntegrations
+  saveIntegrations,
+  getGeneralSettings,
+  saveGeneralSettings
 } from './db';
+import { uploadToR2, isR2Configured } from './r2';
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+
+// In-memory upload handling (files are streamed straight to Cloudflare R2).
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 } // 5 MB
+});
 
 // --- API ROUTES ---
 
@@ -144,6 +154,53 @@ app.post('/api/login', (req, res) => {
     } else {
       res.status(401).json({ success: false, error: 'Usuário ou senha incorretos' });
     }
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 5f-1. Get general site settings (branding, SEO, timezone, theme)
+app.get('/api/settings', async (req, res) => {
+  try {
+    const settings = await getGeneralSettings();
+    res.json(settings);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 5f-2. Update general site settings
+app.put('/api/settings', async (req, res) => {
+  try {
+    const body = req.body;
+    if (!body || typeof body !== 'object') {
+      return res.status(400).json({ error: 'Body must be a valid settings object' });
+    }
+    const saved = await saveGeneralSettings(body);
+    res.json({ success: true, settings: saved });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 5f-3. Upload an asset (logo, favicon, product image...) to Cloudflare R2
+app.post('/api/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!isR2Configured()) {
+      return res.status(503).json({
+        error: 'Upload de arquivos indisponível: o Cloudflare R2 não está configurado no servidor.'
+      });
+    }
+    const file = (req as any).file;
+    if (!file) {
+      return res.status(400).json({ error: 'Nenhum arquivo enviado (campo "file").' });
+    }
+    const folder = typeof req.body.folder === 'string' && req.body.folder ? req.body.folder : 'uploads';
+    const safeFolder = folder.replace(/[^a-zA-Z0-9_-]/g, '');
+    const ext = (file.originalname.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const key = `${safeFolder}/${Date.now()}-${Math.floor(Math.random() * 1e6)}.${ext}`;
+    const url = await uploadToR2(file.buffer, key, file.mimetype || 'application/octet-stream');
+    res.json({ success: true, url });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
