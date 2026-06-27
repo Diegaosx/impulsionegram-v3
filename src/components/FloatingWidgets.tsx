@@ -317,24 +317,6 @@ export default function FloatingWidgets({ onNavigate, ordersCalculatedStat, home
         )}
       </div>
 
-      {/* 4. COOKIE CONSENT GDPR/LGPD FOOTER NOTIFIER */}
-      {showCookie && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 backdrop-blur shadow-md border border-slate-800 rounded p-4 flex flex-col md:flex-row items-center justify-between gap-4 max-w-2xl w-11/12 text-white animate-slide-up">
-          <div className="flex items-start gap-3">
-            <Shield className="h-6 w-6 text-primary mt-0.5 shrink-0" />
-            <p className="text-[11px] text-slate-300 leading-normal font-semibold text-left">
-              Utilizamos cookies e tecnologias semelhantes para melhorar a sua experiência, otimizar a velocidade de carregamento dos planos e personalizar ofertas. Ao continuar navegando você concorda com nossa <a href="#termos" className="text-secondary hover:underline">Política de Privacidade de Dados</a> de acordo com a LGPD.
-            </p>
-          </div>
-          <button
-            onClick={handleCloseCookie}
-            className="bg-primary hover:bg-blue-700 text-white font-bold text-[11px] py-2.5 px-5 rounded uppercase tracking-wider shrink-0 cursor-pointer transition-colors"
-            id="accept-cookies-btn"
-          >
-            Aceitar Todos
-          </button>
-        </div>
-      )}
     </>
   );
 }

@@ -262,11 +262,49 @@ export async function saveCompanySettingsToServer(company: CompanySettings): Pro
   if (!res.ok) throw new Error('Failed to save company settings on server');
 }
 
+export interface CookieChoices {
+  necessary: boolean;
+  analytics: boolean;
+  marketing: boolean;
+}
+
+export interface CookieConsentRecord {
+  id: string;
+  choices: CookieChoices;
+  userAgent: string;
+  createdAt: string;
+}
+
+export async function recordCookieConsent(id: string, choices: CookieChoices): Promise<void> {
+  try {
+    await fetch('/api/cookie-consents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, choices })
+    });
+  } catch (error) {
+    console.error('Error recording cookie consent:', error);
+  }
+}
+
+export async function fetchCookieConsents(): Promise<CookieConsentRecord[]> {
+  try {
+    const res = await fetch('/api/cookie-consents');
+    if (!res.ok) throw new Error('Failed to fetch cookie consents');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching cookie consents:', error);
+    return [];
+  }
+}
+
 export interface IntegrationSettings {
   mercadoPagoAccessToken: string;
   mercadoPagoPublicKey: string;
   smmApiUrl: string;
   smmApiKey: string;
+  emailProvider: 'smtp' | 'resend';
+  resendApiKey: string;
   smtpHost: string;
   smtpPort: string;
   smtpUser: string;
@@ -288,6 +326,8 @@ export async function fetchIntegrations(): Promise<IntegrationSettings> {
       mercadoPagoPublicKey: '',
       smmApiUrl: '',
       smmApiKey: '',
+      emailProvider: 'smtp',
+      resendApiKey: '',
       smtpHost: '',
       smtpPort: '587',
       smtpUser: '',

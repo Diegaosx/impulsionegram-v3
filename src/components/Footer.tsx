@@ -1,6 +1,7 @@
-import { Instagram, Youtube, Twitter, Facebook, Flame, ShieldAlert, Sparkles } from 'lucide-react';
+import { Instagram, Youtube, Twitter, Facebook, ShieldAlert, Sparkles } from 'lucide-react';
 import { SocialPlatform } from '../types';
 import { CompanySettings } from '../utils/storage';
+import { TikTokIcon, KwaiIcon } from './icons/BrandIcons';
 
 interface FooterProps {
   onNavigate: (sectionId: string) => void;
@@ -22,10 +23,10 @@ export default function Footer({ onNavigate, onSetPlatformFilter, siteName, comp
   const socialLinks = [
     { url: company?.socialInstagram, Icon: Instagram, title: 'Instagram' },
     { url: company?.socialYoutube, Icon: Youtube, title: 'YouTube' },
-    { url: company?.socialTiktok, Icon: Flame, title: 'TikTok' },
+    { url: company?.socialTiktok, Icon: TikTokIcon, title: 'TikTok' },
     { url: company?.socialFacebook, Icon: Facebook, title: 'Facebook' },
     { url: company?.socialTwitter, Icon: Twitter, title: 'Twitter/X' },
-    { url: company?.socialKwai, Icon: Flame, title: 'Kwai' }
+    { url: company?.socialKwai, Icon: KwaiIcon, title: 'Kwai' }
   ].filter(s => s.url && s.url.trim());
   
   const handleServiceClick = (p: SocialPlatform) => {

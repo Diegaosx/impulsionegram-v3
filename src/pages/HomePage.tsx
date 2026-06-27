@@ -14,6 +14,7 @@ import ContactForm from '../components/ContactForm';
 import Newsletter from '../components/Newsletter';
 import Footer from '../components/Footer';
 import FloatingWidgets from '../components/FloatingWidgets';
+import CookieConsent from '../components/CookieConsent';
 import { HomeContent, CompanySettings } from '../utils/storage';
 
 interface HomePageProps {
@@ -145,6 +146,9 @@ export default function HomePage({ services, plans, homeContent, siteName, logoU
         homeContent={homeContent}
         company={company}
       />
+
+      {/* LGPD Cookie consent */}
+      <CookieConsent />
 
     </div>
   );

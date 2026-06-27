@@ -3,7 +3,8 @@ import { ServiceItem, PlanItem, SocialPlatform } from '../types';
 import {
   AdminOrder, HomeContent, IntegrationSettings, fetchIntegrations, saveIntegrationsToServer,
   GeneralSettings, fetchGeneralSettings, saveGeneralSettingsToServer, uploadAsset,
-  CompanySettings, fetchCompanySettings, saveCompanySettingsToServer
+  CompanySettings, fetchCompanySettings, saveCompanySettingsToServer,
+  CookieConsentRecord, fetchCookieConsents
 } from '../utils/storage';
 import { setAppTimezone, formatDateTime } from '../utils/datetime';
 import {
@@ -12,7 +13,7 @@ import {
   TrendingUp, CircleDollarSign, Compass, Layers, Globe, Filter, Sparkles, MessageCircle,
   User, Lock, Users, Ban, UserCheck, CreditCard, KeyRound, Eye, EyeOff, Plug,
   Image as ImageIcon, Upload, Clock, Palette, Type, SlidersHorizontal,
-  Mail, Phone, MapPin, Share2, PanelBottom
+  Mail, Phone, MapPin, Share2, PanelBottom, Cookie
 } from 'lucide-react';
 import { SOCIAL_PLATFORMS } from '../data';
 
@@ -43,7 +44,7 @@ export default function AdminPanel({
   onLogout,
   onExit
 }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'users' | 'home' | 'general' | 'contact' | 'integrations' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'users' | 'home' | 'general' | 'contact' | 'integrations' | 'cookies' | 'settings'>('dashboard');
   
   // Users management states
   const [users, setUsers] = useState<any[]>([]);
@@ -227,6 +228,26 @@ export default function AdminPanel({
       setIsSavingCompany(false);
     }
   };
+
+  // Cookie consent (LGPD) records
+  const [cookieConsents, setCookieConsents] = useState<CookieConsentRecord[]>([]);
+  const [cookieConsentsLoading, setCookieConsentsLoading] = useState(false);
+
+  const loadCookieConsents = async () => {
+    try {
+      setCookieConsentsLoading(true);
+      const data = await fetchCookieConsents();
+      setCookieConsents(data);
+    } catch (e) {
+      console.error('Error loading cookie consents:', e);
+    } finally {
+      setCookieConsentsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'cookies') loadCookieConsents();
+  }, [activeTab]);
 
   // Load registered users from the backend when the dashboard mounts
   useEffect(() => {
@@ -629,6 +650,18 @@ export default function AdminPanel({
               >
                 <Plug className="h-4 w-4" />
                 <span>Integrações / API</span>
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('cookies'); setEditingService(null); setIsAddingService(false); setEditingPlan(null); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'cookies'
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-slate-600 hover:text-primary hover:bg-slate-100'
+                }`}
+              >
+                <Cookie className="h-4 w-4" />
+                <span>Cookies / LGPD</span>
               </button>
             </div>
 
@@ -1290,6 +1323,85 @@ export default function AdminPanel({
               </div>
             )}
 
+            {/* =================== TAB: COOKIES / LGPD =================== */}
+            {activeTab === 'cookies' && (
+              <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <h3 className="font-display font-black text-xl text-slate-900">Consentimentos de Cookies (LGPD)</h3>
+                    <p className="text-slate-500 text-xs font-semibold">Registro das escolhas de cookies feitas pelos visitantes do site.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={loadCookieConsents}
+                    className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-primary border border-slate-200 bg-white rounded-lg px-3 py-2 transition-colors shrink-0"
+                  >
+                    <RotateCcw className="h-4 w-4" /> Atualizar
+                  </button>
+                </div>
+
+                {/* Summary */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                    <span className="text-[10px] text-slate-400 uppercase font-black block">Total de registros</span>
+                    <span className="font-display font-black text-lg text-slate-950">{cookieConsents.length}</span>
+                  </div>
+                  <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                    <span className="text-[10px] text-slate-400 uppercase font-black block">Aceitaram análise</span>
+                    <span className="font-display font-black text-lg text-slate-950">{cookieConsents.filter(c => c.choices?.analytics).length}</span>
+                  </div>
+                  <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                    <span className="text-[10px] text-slate-400 uppercase font-black block">Aceitaram marketing</span>
+                    <span className="font-display font-black text-lg text-slate-950">{cookieConsents.filter(c => c.choices?.marketing).length}</span>
+                  </div>
+                </div>
+
+                {cookieConsentsLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : cookieConsents.length === 0 ? (
+                  <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500 text-xs font-semibold">
+                    <Cookie className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                    Nenhum consentimento registrado ainda.
+                  </div>
+                ) : (
+                  <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                    <table className="w-full text-left font-semibold text-xs text-slate-700">
+                      <thead className="bg-slate-50 text-slate-400 font-black text-[10px] uppercase border-b border-slate-100 font-mono tracking-wider">
+                        <tr>
+                          <th className="p-4">Data</th>
+                          <th className="p-4">Análise</th>
+                          <th className="p-4">Marketing</th>
+                          <th className="p-4">Navegador</th>
+                          <th className="p-4">ID</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {cookieConsents.map(rec => (
+                          <tr key={rec.id} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="p-4 font-mono text-slate-600">{formatDateTime(rec.createdAt)}</td>
+                            <td className="p-4">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${rec.choices?.analytics ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
+                                {rec.choices?.analytics ? 'Aceito' : 'Recusado'}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${rec.choices?.marketing ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
+                                {rec.choices?.marketing ? 'Aceito' : 'Recusado'}
+                              </span>
+                            </td>
+                            <td className="p-4 text-[10px] text-slate-400 max-w-xs truncate" title={rec.userAgent}>{rec.userAgent || '—'}</td>
+                            <td className="p-4 font-mono text-[10px] text-slate-400">{rec.id.slice(0, 8)}…</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* =================== TAB 5: RESET / CONFIGS =================== */}
             {activeTab === 'settings' && (
               <div className="space-y-6 max-w-xl">
@@ -1886,50 +1998,78 @@ export default function AdminPanel({
                       </div>
                     </div>
 
-                    {/* SMTP CARD */}
+                    {/* EMAIL CARD (SMTP or Resend) */}
                     <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
                       <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
                         <div className="bg-indigo-50 text-indigo-600 p-2 rounded-lg"><Mail className="h-5 w-5" /></div>
                         <div>
-                          <h4 className="font-bold text-slate-800 text-sm">SMTP (Envio de E-mail)</h4>
+                          <h4 className="font-bold text-slate-800 text-sm">Envio de E-mail</h4>
                           <p className="text-slate-400 text-[11px] font-semibold">Usado depois para confirmações de pagamento e criação de conta.</p>
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-1.5 sm:col-span-2">
-                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Servidor (host)</label>
-                          <input type="text" autoComplete="off" value={integrationsForm.smtpHost}
-                            onChange={(e) => setIntegrationsForm(prev => ({ ...prev, smtpHost: e.target.value }))}
-                            placeholder="smtp.seudominio.com"
-                            className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
-                        </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Método de envio</label>
+                        <select
+                          value={integrationsForm.emailProvider}
+                          onChange={(e) => setIntegrationsForm(prev => ({ ...prev, emailProvider: e.target.value as 'smtp' | 'resend' }))}
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                        >
+                          <option value="smtp">SMTP (padrão)</option>
+                          <option value="resend">Resend (API)</option>
+                        </select>
+                      </div>
+
+                      {integrationsForm.emailProvider === 'resend' ? (
                         <div className="space-y-1.5">
-                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Porta</label>
-                          <input type="text" autoComplete="off" value={integrationsForm.smtpPort}
-                            onChange={(e) => setIntegrationsForm(prev => ({ ...prev, smtpPort: e.target.value.replace(/\D/g, '') }))}
-                            placeholder="587"
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Resend API Key</label>
+                          <input type={showSecrets ? 'text' : 'password'} autoComplete="off" value={integrationsForm.resendApiKey}
+                            onChange={(e) => setIntegrationsForm(prev => ({ ...prev, resendApiKey: e.target.value }))}
+                            placeholder="re_xxxxxxxxxxxxxxxx"
                             className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
+                          <span className="text-[10px] text-slate-400 block font-medium">Crie a chave no painel do Resend (resend.com).</span>
                         </div>
-                        <div className="flex items-center gap-2 pt-6">
-                          <input type="checkbox" id="smtp-secure" checked={integrationsForm.smtpSecure}
-                            onChange={(e) => setIntegrationsForm(prev => ({ ...prev, smtpSecure: e.target.checked }))}
-                            className="h-4 w-4 rounded text-primary focus:ring-primary border-slate-300" />
-                          <label htmlFor="smtp-secure" className="text-xs font-bold text-slate-700 cursor-pointer">Conexão segura (SSL/TLS na porta 465)</label>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-1.5 sm:col-span-2">
+                            <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Servidor (host)</label>
+                            <input type="text" autoComplete="off" value={integrationsForm.smtpHost}
+                              onChange={(e) => setIntegrationsForm(prev => ({ ...prev, smtpHost: e.target.value }))}
+                              placeholder="smtp.seudominio.com"
+                              className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Porta</label>
+                            <input type="text" autoComplete="off" value={integrationsForm.smtpPort}
+                              onChange={(e) => setIntegrationsForm(prev => ({ ...prev, smtpPort: e.target.value.replace(/\D/g, '') }))}
+                              placeholder="587"
+                              className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
+                          </div>
+                          <div className="flex items-center gap-2 pt-6">
+                            <input type="checkbox" id="smtp-secure" checked={integrationsForm.smtpSecure}
+                              onChange={(e) => setIntegrationsForm(prev => ({ ...prev, smtpSecure: e.target.checked }))}
+                              className="h-4 w-4 rounded text-primary focus:ring-primary border-slate-300" />
+                            <label htmlFor="smtp-secure" className="text-xs font-bold text-slate-700 cursor-pointer">Conexão segura (SSL/TLS na porta 465)</label>
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Usuário</label>
+                            <input type="text" autoComplete="off" value={integrationsForm.smtpUser}
+                              onChange={(e) => setIntegrationsForm(prev => ({ ...prev, smtpUser: e.target.value }))}
+                              placeholder="usuario@seudominio.com"
+                              className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Senha</label>
+                            <input type={showSecrets ? 'text' : 'password'} autoComplete="off" value={integrationsForm.smtpPassword}
+                              onChange={(e) => setIntegrationsForm(prev => ({ ...prev, smtpPassword: e.target.value }))}
+                              placeholder="senha do e-mail"
+                              className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
+                          </div>
                         </div>
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Usuário</label>
-                          <input type="text" autoComplete="off" value={integrationsForm.smtpUser}
-                            onChange={(e) => setIntegrationsForm(prev => ({ ...prev, smtpUser: e.target.value }))}
-                            placeholder="usuario@seudominio.com"
-                            className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Senha</label>
-                          <input type={showSecrets ? 'text' : 'password'} autoComplete="off" value={integrationsForm.smtpPassword}
-                            onChange={(e) => setIntegrationsForm(prev => ({ ...prev, smtpPassword: e.target.value }))}
-                            placeholder="senha do e-mail"
-                            className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
-                        </div>
+                      )}
+
+                      {/* Common sender fields */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
                         <div className="space-y-1.5">
                           <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Nome do Remetente</label>
                           <input type="text" autoComplete="off" value={integrationsForm.smtpFromName}
