@@ -341,6 +341,7 @@ export async function writeDB(data: DBStructure): Promise<void> {
 export interface CompanySettings {
   footerDescription: string;
   copyrightText: string; // rendered after "© {year} "
+  footerDisclaimer: string;
   contactEmail: string;
   whatsappNumber: string; // digits only, used in wa.me links
   whatsappDisplay: string; // formatted for display
@@ -357,6 +358,8 @@ export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
   footerDescription:
     'Especialistas em marketing de alta performance de redes sociais desde 2018. Líderes nacionais no provimento de engajamento acelerado estável com contas reais brasileiras.',
   copyrightText: 'ImpulsioneGram. Todos os direitos reservados. CNPJ: 00.322.155/0001-99.',
+  footerDisclaimer:
+    'Isenção de responsabilidade: ImpulsioneGram é uma assessoria privada independente de engajamento social. Não possuímos representação oficial, patrocínio ou vínculo com as marcas registradas Instagram, TikTok, Facebook, YouTube, Twitter/X ou parentes correlatos. Todas as marcas nominadas servem meramente como caráter descritivo técnico informacional.',
   contactEmail: 'contato@impulsionegram.com.br',
   whatsappNumber: '5511999999999',
   whatsappDisplay: '(11) 99999-9999',

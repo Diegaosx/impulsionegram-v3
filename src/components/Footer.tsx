@@ -1,7 +1,7 @@
-import { Instagram, Youtube, Twitter, Facebook, ShieldAlert, Sparkles } from 'lucide-react';
+import { Instagram, Youtube, Facebook, ShieldAlert, Sparkles } from 'lucide-react';
 import { SocialPlatform } from '../types';
 import { CompanySettings } from '../utils/storage';
-import { TikTokIcon, KwaiIcon } from './icons/BrandIcons';
+import { TikTokIcon, KwaiIcon, XIcon } from './icons/BrandIcons';
 
 interface FooterProps {
   onNavigate: (sectionId: string) => void;
@@ -19,13 +19,15 @@ export default function Footer({ onNavigate, onSetPlatformFilter, siteName, comp
   const whatsappNumber = company?.whatsappNumber || '5511999999999';
   const whatsappDisplay = company?.whatsappDisplay || '(11) 99999-9999';
   const copyrightText = company?.copyrightText || 'ImpulsioneGram. Todos os direitos reservados. CNPJ: 00.322.155/0001-99.';
+  const footerDisclaimer = company?.footerDisclaimer
+    || `Isenção de responsabilidade: ${brandName} é uma assessoria privada independente de engajamento social. Não possuímos representação oficial, patrocínio ou vínculo com as marcas registradas Instagram, TikTok, Facebook, YouTube, Twitter/X ou parentes correlatos. Todas as marcas nominadas servem meramente como caráter descritivo técnico informacional.`;
 
   const socialLinks = [
     { url: company?.socialInstagram, Icon: Instagram, title: 'Instagram' },
     { url: company?.socialYoutube, Icon: Youtube, title: 'YouTube' },
     { url: company?.socialTiktok, Icon: TikTokIcon, title: 'TikTok' },
     { url: company?.socialFacebook, Icon: Facebook, title: 'Facebook' },
-    { url: company?.socialTwitter, Icon: Twitter, title: 'Twitter/X' },
+    { url: company?.socialTwitter, Icon: XIcon, title: 'X (Twitter)' },
     { url: company?.socialKwai, Icon: KwaiIcon, title: 'Kwai' }
   ].filter(s => s.url && s.url.trim());
   
@@ -164,7 +166,7 @@ export default function Footer({ onNavigate, onSetPlatformFilter, siteName, comp
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-2">
           <p>© {currentYear} {copyrightText}</p>
           <p className="max-w-3xl mx-auto opacity-75 leading-relaxed font-semibold">
-            Isenção de responsabilidade: {brandName} é uma assessoria privada independente de engajamento social. Não possuímos representação oficial, patrocínio ou vínculo com as marcas registradas Instagram, TikTok, Facebook, YouTube, Twitter/X ou parentes correlatos. Todas as marcas nominadas servem meramente como caráter descritivo técnico informacional.
+            {footerDisclaimer}
           </p>
         </div>
       </div>
