@@ -1,7 +1,16 @@
 import React, { useState } from 'react';
 import { Mail, Phone, MapPin, Send, MessageSquareCode, CheckCircle2 } from 'lucide-react';
+import { CompanySettings } from '../utils/storage';
 
-export default function ContactForm() {
+interface ContactFormProps {
+  company?: CompanySettings | null;
+}
+
+export default function ContactForm({ company }: ContactFormProps) {
+  const contactEmail = company?.contactEmail || 'contato@impulsionegram.com.br';
+  const whatsappNumber = company?.whatsappNumber || '5511999999999';
+  const whatsappDisplay = company?.whatsappDisplay || '(11) 99999-9999';
+  const address = company?.address || 'Av. Paulista, 1000 - Bela Vista - São Paulo / SP';
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [subject, setSubject] = useState('');
@@ -71,8 +80,8 @@ export default function ContactForm() {
                   </div>
                   <div>
                     <span className="text-[10px] uppercase font-black tracking-wider text-slate-500 block font-mono">E-mail Corporativo</span>
-                    <a href="mailto:contato@seguidoresbrasil.com.br" className="text-sm font-bold text-white hover:text-primary block mt-0.5">
-                      contato@seguidoresbrasil.com.br
+                    <a href={`mailto:${contactEmail}`} className="text-sm font-bold text-white hover:text-primary block mt-0.5">
+                      {contactEmail}
                     </a>
                   </div>
                 </div>
@@ -83,8 +92,8 @@ export default function ContactForm() {
                   </div>
                   <div>
                     <span className="text-[10px] uppercase font-black tracking-wider text-slate-500 block font-mono">WhatsApp de Vendas</span>
-                    <a href="https://api.whatsapp.com/send?phone=5511999999999" target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-white hover:text-green-400 block mt-0.5">
-                      (11) 99999-9999
+                    <a href={`https://api.whatsapp.com/send?phone=${whatsappNumber}`} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-white hover:text-green-400 block mt-0.5">
+                      {whatsappDisplay}
                     </a>
                   </div>
                 </div>
@@ -96,7 +105,7 @@ export default function ContactForm() {
                   <div>
                     <span className="text-[10px] uppercase font-black tracking-wider text-slate-500 block font-mono">Escritório Central (Apenas Adm)</span>
                     <p className="text-xs text-slate-300 font-semibold block mt-0.5 leading-relaxed">
-                      Av. Paulista, 1000 - Bela Vista - São Paulo / SP
+                      {address}
                     </p>
                   </div>
                 </div>

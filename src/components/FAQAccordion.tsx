@@ -2,12 +2,15 @@ import { useState, useMemo } from 'react';
 import { FAQS } from '../data';
 import { FAQItem } from '../types';
 import { ChevronDown, ChevronUp, HelpCircle, MessageCircle, AlertTriangle } from 'lucide-react';
+import { CompanySettings } from '../utils/storage';
 
 interface FAQAccordionProps {
   onNavigate: (sectionId: string) => void;
+  company?: CompanySettings | null;
 }
 
-export default function FAQAccordion({ onNavigate }: FAQAccordionProps) {
+export default function FAQAccordion({ onNavigate, company }: FAQAccordionProps) {
+  const waPhone = company?.whatsappNumber || '5511999999999';
   const [activeId, setActiveId] = useState<string | null>('faq-1'); // Keep first one open by default!
   const [activeCategory, setActiveCategory] = useState<'todos' | 'geral' | 'seguranca' | 'entrega' | 'pagamento'>('todos');
 
@@ -146,7 +149,7 @@ export default function FAQAccordion({ onNavigate }: FAQAccordionProps) {
               Fale Conosco E-mail
             </button>
             <a
-              href="https://api.whatsapp.com/send?phone=5511999999999&text=Ol%C3%A1%21+Estou+com+uma+d%C3%BAvida+sobre+o+pedido+de+seguidores."
+              href={`https://api.whatsapp.com/send?phone=${waPhone}&text=Ol%C3%A1%21+Estou+com+uma+d%C3%BAvida+sobre+o+pedido+de+seguidores.`}
               target="_blank"
               rel="noopener noreferrer"
               className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-5 py-3 rounded flex items-center justify-center gap-1.5 shadow-sm"

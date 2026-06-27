@@ -14,7 +14,9 @@ import {
   getIntegrations,
   saveIntegrations,
   getGeneralSettings,
-  saveGeneralSettings
+  saveGeneralSettings,
+  getCompanySettings,
+  saveCompanySettings
 } from './db';
 import { uploadToR2, isR2Configured } from './r2';
 
@@ -201,6 +203,30 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     const key = `${safeFolder}/${Date.now()}-${Math.floor(Math.random() * 1e6)}.${ext}`;
     const url = await uploadToR2(file.buffer, key, file.mimetype || 'application/octet-stream');
     res.json({ success: true, url });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 5f-4. Get company/contact/footer settings
+app.get('/api/company', async (req, res) => {
+  try {
+    const company = await getCompanySettings();
+    res.json(company);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 5f-5. Update company/contact/footer settings
+app.put('/api/company', async (req, res) => {
+  try {
+    const body = req.body;
+    if (!body || typeof body !== 'object') {
+      return res.status(400).json({ error: 'Body must be a valid company settings object' });
+    }
+    const saved = await saveCompanySettings(body);
+    res.json({ success: true, company: saved });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

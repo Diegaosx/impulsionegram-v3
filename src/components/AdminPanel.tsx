@@ -2,7 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { ServiceItem, PlanItem, SocialPlatform } from '../types';
 import {
   AdminOrder, HomeContent, IntegrationSettings, fetchIntegrations, saveIntegrationsToServer,
-  GeneralSettings, fetchGeneralSettings, saveGeneralSettingsToServer, uploadAsset
+  GeneralSettings, fetchGeneralSettings, saveGeneralSettingsToServer, uploadAsset,
+  CompanySettings, fetchCompanySettings, saveCompanySettingsToServer
 } from '../utils/storage';
 import { setAppTimezone, formatDateTime } from '../utils/datetime';
 import {
@@ -10,7 +11,8 @@ import {
   BarChart3, Settings, ShieldCheck, HelpCircle, Save, Check, AlertCircle,
   TrendingUp, CircleDollarSign, Compass, Layers, Globe, Filter, Sparkles, MessageCircle,
   User, Lock, Users, Ban, UserCheck, CreditCard, KeyRound, Eye, EyeOff, Plug,
-  Image as ImageIcon, Upload, Clock, Palette, Type, SlidersHorizontal
+  Image as ImageIcon, Upload, Clock, Palette, Type, SlidersHorizontal,
+  Mail, Phone, MapPin, Share2, PanelBottom
 } from 'lucide-react';
 import { SOCIAL_PLATFORMS } from '../data';
 
@@ -41,7 +43,7 @@ export default function AdminPanel({
   onLogout,
   onExit
 }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'users' | 'home' | 'general' | 'integrations' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'users' | 'home' | 'general' | 'contact' | 'integrations' | 'settings'>('dashboard');
   
   // Users management states
   const [users, setUsers] = useState<any[]>([]);
@@ -75,7 +77,14 @@ export default function AdminPanel({
     mercadoPagoAccessToken: '',
     mercadoPagoPublicKey: '',
     smmApiUrl: '',
-    smmApiKey: ''
+    smmApiKey: '',
+    smtpHost: '',
+    smtpPort: '587',
+    smtpUser: '',
+    smtpPassword: '',
+    smtpFromName: '',
+    smtpFromEmail: '',
+    smtpSecure: false
   });
   const [integrationsLoading, setIntegrationsLoading] = useState(false);
   const [isSavingIntegrations, setIsSavingIntegrations] = useState(false);
@@ -170,6 +179,52 @@ export default function AdminPanel({
       triggerError(err?.message || 'Falha no upload do arquivo.');
     } finally {
       setUploading(false);
+    }
+  };
+
+  // Company / contact / footer settings
+  const [companyForm, setCompanyForm] = useState<CompanySettings>({
+    footerDescription: '',
+    copyrightText: '',
+    contactEmail: '',
+    whatsappNumber: '',
+    whatsappDisplay: '',
+    address: '',
+    socialInstagram: '',
+    socialYoutube: '',
+    socialTiktok: '',
+    socialFacebook: '',
+    socialTwitter: '',
+    socialKwai: ''
+  });
+  const [companyLoading, setCompanyLoading] = useState(false);
+  const [isSavingCompany, setIsSavingCompany] = useState(false);
+
+  useEffect(() => {
+    async function loadCompany() {
+      try {
+        setCompanyLoading(true);
+        const data = await fetchCompanySettings();
+        setCompanyForm(data);
+      } catch (e) {
+        console.error('Error loading company settings:', e);
+      } finally {
+        setCompanyLoading(false);
+      }
+    }
+    loadCompany();
+  }, []);
+
+  const handleSaveCompany = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingCompany(true);
+    try {
+      await saveCompanySettingsToServer(companyForm);
+      triggerSuccess('Dados de contato/rodapé salvos! Recarregue o site para ver as alterações.');
+    } catch (err) {
+      triggerError('Falha ao salvar os dados de contato.');
+    } finally {
+      setIsSavingCompany(false);
     }
   };
 
@@ -550,6 +605,18 @@ export default function AdminPanel({
               >
                 <SlidersHorizontal className="h-4 w-4" />
                 <span>Configurações Gerais</span>
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('contact'); setEditingService(null); setIsAddingService(false); setEditingPlan(null); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'contact'
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-slate-600 hover:text-primary hover:bg-slate-100'
+                }`}
+              >
+                <PanelBottom className="h-4 w-4" />
+                <span>Contato & Rodapé</span>
               </button>
 
               <button
@@ -1574,6 +1641,151 @@ export default function AdminPanel({
               </div>
             )}
 
+            {/* =================== TAB: CONTATO & RODAPÉ =================== */}
+            {activeTab === 'contact' && (
+              <div className="space-y-6 max-w-3xl">
+                <div>
+                  <h3 className="font-display font-black text-xl text-slate-900">Contato, Atendimento & Rodapé</h3>
+                  <p className="text-slate-500 text-xs font-semibold">Estes dados aparecem no rodapé, na seção "Fale Conosco" e no botão flutuante de WhatsApp.</p>
+                </div>
+
+                {companyLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSaveCompany} className="space-y-6">
+
+                    {/* CONTACT */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+                      <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+                        <div className="bg-green-50 text-green-600 p-2 rounded-lg"><Phone className="h-5 w-5" /></div>
+                        <div>
+                          <h4 className="font-bold text-slate-800 text-sm">Atendimento & Contato</h4>
+                          <p className="text-slate-400 text-[11px] font-semibold">Reflete no rodapé, no "Fale Conosco" e no WhatsApp flutuante.</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider flex items-center gap-1.5"><Mail className="h-3 w-3" /> E-mail de Contato</label>
+                          <input
+                            type="email"
+                            value={companyForm.contactEmail}
+                            onChange={(e) => setCompanyForm(prev => ({ ...prev, contactEmail: e.target.value }))}
+                            placeholder="contato@suaempresa.com.br"
+                            className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider flex items-center gap-1.5"><MapPin className="h-3 w-3" /> Endereço</label>
+                          <input
+                            type="text"
+                            value={companyForm.address}
+                            onChange={(e) => setCompanyForm(prev => ({ ...prev, address: e.target.value }))}
+                            placeholder="Av. Paulista, 1000 - São Paulo / SP"
+                            className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">WhatsApp (somente números, com DDI/DDD)</label>
+                          <input
+                            type="text"
+                            value={companyForm.whatsappNumber}
+                            onChange={(e) => setCompanyForm(prev => ({ ...prev, whatsappNumber: e.target.value.replace(/\D/g, '') }))}
+                            placeholder="5511999999999"
+                            className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                          />
+                          <span className="text-[10px] text-slate-400 block font-medium">Usado nos links wa.me (55 + DDD + número).</span>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">WhatsApp (exibição)</label>
+                          <input
+                            type="text"
+                            value={companyForm.whatsappDisplay}
+                            onChange={(e) => setCompanyForm(prev => ({ ...prev, whatsappDisplay: e.target.value }))}
+                            placeholder="(11) 99999-9999"
+                            className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* FOOTER */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+                      <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+                        <div className="bg-slate-100 text-slate-600 p-2 rounded-lg"><PanelBottom className="h-5 w-5" /></div>
+                        <h4 className="font-bold text-slate-800 text-sm">Rodapé</h4>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Descrição (coluna da marca)</label>
+                        <textarea
+                          rows={3}
+                          value={companyForm.footerDescription}
+                          onChange={(e) => setCompanyForm(prev => ({ ...prev, footerDescription: e.target.value }))}
+                          placeholder="Breve descrição da empresa exibida no rodapé."
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-y"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Texto de Copyright (após "© {new Date().getFullYear()}")</label>
+                        <input
+                          type="text"
+                          value={companyForm.copyrightText}
+                          onChange={(e) => setCompanyForm(prev => ({ ...prev, copyrightText: e.target.value }))}
+                          placeholder="SuaEmpresa. Todos os direitos reservados. CNPJ: 00.000.000/0001-00."
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    {/* SOCIAL */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+                      <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+                        <div className="bg-pink-50 text-pink-600 p-2 rounded-lg"><Share2 className="h-5 w-5" /></div>
+                        <div>
+                          <h4 className="font-bold text-slate-800 text-sm">Redes Sociais</h4>
+                          <p className="text-slate-400 text-[11px] font-semibold">Deixe em branco para ocultar o ícone no rodapé.</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {([
+                          ['socialInstagram', 'Instagram', 'https://instagram.com/seu_perfil'],
+                          ['socialYoutube', 'YouTube', 'https://youtube.com/@seu_canal'],
+                          ['socialTiktok', 'TikTok', 'https://tiktok.com/@seu_perfil'],
+                          ['socialFacebook', 'Facebook', 'https://facebook.com/sua_pagina'],
+                          ['socialTwitter', 'Twitter / X', 'https://x.com/seu_perfil'],
+                          ['socialKwai', 'Kwai', 'https://kwai.com/@seu_perfil']
+                        ] as const).map(([field, label, ph]) => (
+                          <div key={field} className="space-y-1.5">
+                            <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">{label}</label>
+                            <input
+                              type="text"
+                              value={companyForm[field]}
+                              onChange={(e) => setCompanyForm(prev => ({ ...prev, [field]: e.target.value }))}
+                              placeholder={ph}
+                              className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={isSavingCompany}
+                        className="bg-primary hover:bg-purple-700 disabled:bg-purple-300 text-white font-bold text-xs py-3 px-5 rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-[1.01] active:scale-95 shadow-md"
+                      >
+                        <Save className="h-4 w-4" />
+                        {isSavingCompany ? 'Salvando...' : 'Salvar Configurações'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            )}
+
             {/* =================== TAB: INTEGRAÇÕES / API =================== */}
             {activeTab === 'integrations' && (
               <div className="space-y-6 max-w-2xl">
@@ -1674,9 +1886,70 @@ export default function AdminPanel({
                       </div>
                     </div>
 
+                    {/* SMTP CARD */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+                      <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+                        <div className="bg-indigo-50 text-indigo-600 p-2 rounded-lg"><Mail className="h-5 w-5" /></div>
+                        <div>
+                          <h4 className="font-bold text-slate-800 text-sm">SMTP (Envio de E-mail)</h4>
+                          <p className="text-slate-400 text-[11px] font-semibold">Usado depois para confirmações de pagamento e criação de conta.</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Servidor (host)</label>
+                          <input type="text" autoComplete="off" value={integrationsForm.smtpHost}
+                            onChange={(e) => setIntegrationsForm(prev => ({ ...prev, smtpHost: e.target.value }))}
+                            placeholder="smtp.seudominio.com"
+                            className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Porta</label>
+                          <input type="text" autoComplete="off" value={integrationsForm.smtpPort}
+                            onChange={(e) => setIntegrationsForm(prev => ({ ...prev, smtpPort: e.target.value.replace(/\D/g, '') }))}
+                            placeholder="587"
+                            className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
+                        </div>
+                        <div className="flex items-center gap-2 pt-6">
+                          <input type="checkbox" id="smtp-secure" checked={integrationsForm.smtpSecure}
+                            onChange={(e) => setIntegrationsForm(prev => ({ ...prev, smtpSecure: e.target.checked }))}
+                            className="h-4 w-4 rounded text-primary focus:ring-primary border-slate-300" />
+                          <label htmlFor="smtp-secure" className="text-xs font-bold text-slate-700 cursor-pointer">Conexão segura (SSL/TLS na porta 465)</label>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Usuário</label>
+                          <input type="text" autoComplete="off" value={integrationsForm.smtpUser}
+                            onChange={(e) => setIntegrationsForm(prev => ({ ...prev, smtpUser: e.target.value }))}
+                            placeholder="usuario@seudominio.com"
+                            className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Senha</label>
+                          <input type={showSecrets ? 'text' : 'password'} autoComplete="off" value={integrationsForm.smtpPassword}
+                            onChange={(e) => setIntegrationsForm(prev => ({ ...prev, smtpPassword: e.target.value }))}
+                            placeholder="senha do e-mail"
+                            className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Nome do Remetente</label>
+                          <input type="text" autoComplete="off" value={integrationsForm.smtpFromName}
+                            onChange={(e) => setIntegrationsForm(prev => ({ ...prev, smtpFromName: e.target.value }))}
+                            placeholder="Ex: ImpulsioneGram"
+                            className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">E-mail do Remetente</label>
+                          <input type="email" autoComplete="off" value={integrationsForm.smtpFromEmail}
+                            onChange={(e) => setIntegrationsForm(prev => ({ ...prev, smtpFromEmail: e.target.value }))}
+                            placeholder="no-reply@seudominio.com"
+                            className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-[11px] text-amber-800 font-semibold flex items-start gap-2">
                       <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                      <span>As chaves são salvas no servidor. A ativação de cada integração (cobrança real e entrega automática) será ligada e testada em seguida, uma de cada vez.</span>
+                      <span>As chaves são salvas no servidor. A ativação de cada integração (cobrança real, entrega automática e envio de e-mail) será ligada e testada em seguida, uma de cada vez.</span>
                     </div>
 
                     <div className="flex justify-end">
@@ -1740,31 +2013,9 @@ export default function AdminPanel({
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">WhatsApp de Suporte (Apenas Números)</label>
-                      <input
-                        type="text"
-                        required
-                        value={homeForm.companyWhatsApp}
-                        onChange={(e) => setHomeForm(prev => ({ ...prev, companyWhatsApp: e.target.value.replace(/\D/g, '') }))}
-                        placeholder="Ex: 5511999999999"
-                        className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
-                      />
-                      <span className="text-[9px] text-slate-400 block font-semibold">Inclua código do país (55) + DDD + celular.</span>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">E-mail de Contato Comercial</label>
-                      <input
-                        type="email"
-                        required
-                        value={homeForm.companyEmail}
-                        onChange={(e) => setHomeForm(prev => ({ ...prev, companyEmail: e.target.value }))}
-                        placeholder="suporte@impulsionegram.com"
-                        className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
-                      />
-                    </div>
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-[11px] text-slate-500 font-semibold flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-slate-400" />
+                    <span>WhatsApp e e-mail de contato agora ficam em <strong className="text-primary">Contato &amp; Rodapé</strong> (refletem no rodapé, no "Fale Conosco" e no botão flutuante).</span>
                   </div>
 
                   <div className="pt-3 border-t border-slate-100 flex justify-end">

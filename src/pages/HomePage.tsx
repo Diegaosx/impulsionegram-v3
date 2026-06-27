@@ -14,7 +14,7 @@ import ContactForm from '../components/ContactForm';
 import Newsletter from '../components/Newsletter';
 import Footer from '../components/Footer';
 import FloatingWidgets from '../components/FloatingWidgets';
-import { HomeContent } from '../utils/storage';
+import { HomeContent, CompanySettings } from '../utils/storage';
 
 interface HomePageProps {
   services: any[];
@@ -22,10 +22,11 @@ interface HomePageProps {
   homeContent: HomeContent | null;
   siteName?: string;
   logoUrl?: string;
+  company?: CompanySettings | null;
   onAddSimulatedOrder: (orderInfo: any) => void;
 }
 
-export default function HomePage({ services, plans, homeContent, siteName, logoUrl, onAddSimulatedOrder }: HomePageProps) {
+export default function HomePage({ services, plans, homeContent, siteName, logoUrl, company, onAddSimulatedOrder }: HomePageProps) {
   const navigate = useNavigate();
 
   // Navigation scrolling logic
@@ -121,10 +122,10 @@ export default function HomePage({ services, plans, homeContent, siteName, logoU
       <Testimonials />
 
       {/* FAQ Accorion Collapsible Block */}
-      <FAQAccordion onNavigate={handleScrollToSection} />
+      <FAQAccordion onNavigate={handleScrollToSection} company={company} />
 
       {/* Customer Contact forms */}
-      <ContactForm />
+      <ContactForm company={company} />
 
       {/* Newsletter Block */}
       <Newsletter />
@@ -134,6 +135,7 @@ export default function HomePage({ services, plans, homeContent, siteName, logoU
         onNavigate={handleScrollToSection}
         onSetPlatformFilter={handleSetPlatformFilter}
         siteName={siteName}
+        company={company}
       />
 
       {/* Floating Helpers and Chat BotSofia */}
@@ -141,6 +143,7 @@ export default function HomePage({ services, plans, homeContent, siteName, logoU
         onNavigate={handleScrollToSection}
         ordersCalculatedStat={statsCount - 15482}
         homeContent={homeContent}
+        company={company}
       />
 
     </div>

@@ -1,14 +1,32 @@
 import { Instagram, Youtube, Twitter, Facebook, Flame, ShieldAlert, Sparkles } from 'lucide-react';
 import { SocialPlatform } from '../types';
+import { CompanySettings } from '../utils/storage';
 
 interface FooterProps {
   onNavigate: (sectionId: string) => void;
   onSetPlatformFilter: (platform: SocialPlatform | 'todos') => void;
   siteName?: string;
+  company?: CompanySettings | null;
 }
 
-export default function Footer({ onNavigate, onSetPlatformFilter, siteName }: FooterProps) {
+export default function Footer({ onNavigate, onSetPlatformFilter, siteName, company }: FooterProps) {
   const brandName = siteName || 'ImpulsioneGram';
+
+  const footerDescription = company?.footerDescription
+    || 'Especialistas em marketing de alta performance de redes sociais desde 2018. Líderes nacionais no provimento de engajamento acelerado estável com contas reais brasileiras.';
+  const contactEmail = company?.contactEmail || 'contato@impulsionegram.com.br';
+  const whatsappNumber = company?.whatsappNumber || '5511999999999';
+  const whatsappDisplay = company?.whatsappDisplay || '(11) 99999-9999';
+  const copyrightText = company?.copyrightText || 'ImpulsioneGram. Todos os direitos reservados. CNPJ: 00.322.155/0001-99.';
+
+  const socialLinks = [
+    { url: company?.socialInstagram, Icon: Instagram, title: 'Instagram' },
+    { url: company?.socialYoutube, Icon: Youtube, title: 'YouTube' },
+    { url: company?.socialTiktok, Icon: Flame, title: 'TikTok' },
+    { url: company?.socialFacebook, Icon: Facebook, title: 'Facebook' },
+    { url: company?.socialTwitter, Icon: Twitter, title: 'Twitter/X' },
+    { url: company?.socialKwai, Icon: Flame, title: 'Kwai' }
+  ].filter(s => s.url && s.url.trim());
   
   const handleServiceClick = (p: SocialPlatform) => {
     onSetPlatformFilter(p);
@@ -40,20 +58,18 @@ export default function Footer({ onNavigate, onSetPlatformFilter, siteName }: Fo
               )}
             </button>
             <p className="text-slate-400 text-xs leading-relaxed max-w-sm font-semibold">
-              Especialistas em marketing de alta performance de redes sociais desde 2018. Líderes nacionais no provimento de engajamento acelerado estável com contas reais brasileiras.
+              {footerDescription}
             </p>
             {/* Quick social links */}
-            <div className="flex gap-2 pt-2">
-              <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white p-2 rounded transition-colors" title="Instagram">
-                <Instagram className="h-4 w-4" />
-              </a>
-              <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" className="bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white p-2 rounded transition-colors" title="YouTube">
-                <Youtube className="h-4 w-4" />
-              </a>
-              <a href="https://tiktok.com" target="_blank" rel="noopener noreferrer" className="bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white p-2 rounded transition-colors" title="TikTok">
-                <Flame className="h-4 w-4" />
-              </a>
-            </div>
+            {socialLinks.length > 0 && (
+              <div className="flex gap-2 pt-2">
+                {socialLinks.map(({ url, Icon, title }) => (
+                  <a key={title} href={url} target="_blank" rel="noopener noreferrer" className="bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white p-2 rounded transition-colors" title={title}>
+                    <Icon className="h-4 w-4" />
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Column 2: Quick Links (2 columns) */}
@@ -100,14 +116,14 @@ export default function Footer({ onNavigate, onSetPlatformFilter, siteName }: Fo
             <div className="space-y-4">
               <div>
                 <span className="text-slate-500 font-bold block mb-1">E-mail:</span>
-                <a href="mailto:contato@impulsionegram.com.br" className="text-slate-300 hover:text-white block font-bold break-all">
-                  contato@impulsionegram.com.br
+                <a href={`mailto:${contactEmail}`} className="text-slate-300 hover:text-white block font-bold break-all">
+                  {contactEmail}
                 </a>
               </div>
               <div>
                 <span className="text-slate-500 font-bold block mb-1">WhatsApp:</span>
-                <a href="https://api.whatsapp.com/send?phone=5511999999999" target="_blank" rel="noopener noreferrer" className="text-slate-300 hover:text-white block font-bold">
-                  (11) 99999-9999
+                <a href={`https://api.whatsapp.com/send?phone=${whatsappNumber}`} target="_blank" rel="noopener noreferrer" className="text-slate-300 hover:text-white block font-bold">
+                  {whatsappDisplay}
                 </a>
               </div>
             </div>
@@ -145,7 +161,7 @@ export default function Footer({ onNavigate, onSetPlatformFilter, siteName }: Fo
       {/* Bottom Footer: Copyright and legal notes */}
       <div className="bg-slate-950 border-t border-slate-800/50 py-6 text-center text-slate-500 text-[10px]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-2">
-          <p>© {currentYear} {brandName}. Todos os direitos reservados. CNPJ: 00.322.155/0001-99.</p>
+          <p>© {currentYear} {copyrightText}</p>
           <p className="max-w-3xl mx-auto opacity-75 leading-relaxed font-semibold">
             Isenção de responsabilidade: {brandName} é uma assessoria privada independente de engajamento social. Não possuímos representação oficial, patrocínio ou vínculo com as marcas registradas Instagram, TikTok, Facebook, YouTube, Twitter/X ou parentes correlatos. Todas as marcas nominadas servem meramente como caráter descritivo técnico informacional.
           </p>
