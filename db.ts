@@ -145,19 +145,15 @@ function resolveSsl(): false | { rejectUnauthorized: boolean } {
 const pool = new Pool({
   connectionString,
   ssl: resolveSsl(),
-  max: 10
+  max: 10,
+  // Default every connection to the Recife/Brazil timezone at startup so
+  // timestamp operations on the database side are consistent with the app.
+  // Using the startup parameter avoids an extra per-connection query.
+  options: '-c timezone=America/Recife'
 });
 
 pool.on('error', (err) => {
   console.error('Unexpected PostgreSQL pool error:', err);
-});
-
-// Default every connection to the Recife/Brazil timezone so timestamp
-// operations on the database side are consistent with the application.
-pool.on('connect', (client) => {
-  client.query("SET TIME ZONE 'America/Recife'").catch((err) => {
-    console.error('Failed to set session timezone:', err);
-  });
 });
 
 export { pool };
