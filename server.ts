@@ -227,7 +227,10 @@ app.post('/api/reset', async (req, res) => {
 
 // --- VITE DEV MIDDLEWARE / STATIC FILES ---
 async function mountFrontend() {
-  if (process.env.NODE_ENV !== 'production') {
+  // Production (serving the compiled "dist" bundle) is the default. The Vite dev
+  // server is only mounted when explicitly running in development (npm run dev),
+  // so deployments — e.g. Railway — work without setting any extra variable.
+  if (process.env.NODE_ENV === 'development') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa'
