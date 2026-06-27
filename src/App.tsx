@@ -9,7 +9,7 @@ import {
   fetchOrders, saveOrdersToServer,
   addOrderToServer, resetServerDatabase,
   fetchHomeContent, saveHomeContentToServer, HomeContent,
-  fetchGeneralSettings
+  fetchGeneralSettings, fetchCompanySettings, CompanySettings
 } from './utils/storage';
 import { applyBrandingToHead } from './utils/branding';
 import { setAppTimezone } from './utils/datetime';
@@ -26,6 +26,7 @@ export default function App() {
   // Site branding (applied to header/head)
   const [siteName, setSiteName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
+  const [company, setCompany] = useState<CompanySettings | null>(null);
 
   // Admin authentication (persisted in localStorage)
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -36,17 +37,19 @@ export default function App() {
   useEffect(() => {
     async function loadBackendData() {
       try {
-        const [loadedServices, loadedPlans, loadedOrders, loadedHome, loadedGeneral] = await Promise.all([
+        const [loadedServices, loadedPlans, loadedOrders, loadedHome, loadedGeneral, loadedCompany] = await Promise.all([
           fetchServices(),
           fetchPlans(),
           fetchOrders(),
           fetchHomeContent(),
-          fetchGeneralSettings()
+          fetchGeneralSettings(),
+          fetchCompanySettings()
         ]);
         setServices(loadedServices);
         setPlans(loadedPlans);
         setOrders(loadedOrders);
         setHomeContent(loadedHome);
+        setCompany(loadedCompany);
 
         // Apply configurable branding / SEO / timezone
         setSiteName(loadedGeneral.siteName);
@@ -143,6 +146,7 @@ export default function App() {
             homeContent={homeContent}
             siteName={siteName}
             logoUrl={logoUrl}
+            company={company}
             onAddSimulatedOrder={handleAddSimulatedOrder}
           />
         }

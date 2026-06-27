@@ -291,7 +291,58 @@ export async function writeDB(data: DBStructure): Promise<void> {
   }
 }
 
-// --- Integration settings (payment gateway + SMM delivery panel) ---
+// --- Company / contact / footer settings ---
+// Single source of truth for contact info shown across the site (footer,
+// contact section, floating WhatsApp button, FAQ).
+export interface CompanySettings {
+  footerDescription: string;
+  copyrightText: string; // rendered after "© {year} "
+  contactEmail: string;
+  whatsappNumber: string; // digits only, used in wa.me links
+  whatsappDisplay: string; // formatted for display
+  address: string;
+  socialInstagram: string;
+  socialYoutube: string;
+  socialTiktok: string;
+  socialFacebook: string;
+  socialTwitter: string;
+  socialKwai: string;
+}
+
+export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
+  footerDescription:
+    'Especialistas em marketing de alta performance de redes sociais desde 2018. Líderes nacionais no provimento de engajamento acelerado estável com contas reais brasileiras.',
+  copyrightText: 'ImpulsioneGram. Todos os direitos reservados. CNPJ: 00.322.155/0001-99.',
+  contactEmail: 'contato@impulsionegram.com.br',
+  whatsappNumber: '5511999999999',
+  whatsappDisplay: '(11) 99999-9999',
+  address: 'Av. Paulista, 1000 - Bela Vista - São Paulo / SP',
+  socialInstagram: 'https://instagram.com',
+  socialYoutube: 'https://youtube.com',
+  socialTiktok: 'https://tiktok.com',
+  socialFacebook: '',
+  socialTwitter: '',
+  socialKwai: ''
+};
+
+export async function getCompanySettings(): Promise<CompanySettings> {
+  const result = await pool.query(`SELECT value FROM settings WHERE key = 'company'`);
+  return { ...DEFAULT_COMPANY_SETTINGS, ...(result.rows[0]?.value || {}) };
+}
+
+export async function saveCompanySettings(data: Partial<CompanySettings>): Promise<CompanySettings> {
+  const current = await getCompanySettings();
+  const merged: CompanySettings = { ...current, ...data };
+  await pool.query(
+    `INSERT INTO settings (key, value)
+     VALUES ('company', $1::jsonb)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [JSON.stringify(merged)]
+  );
+  return merged;
+}
+
+// --- Integration settings (payment gateway + SMM delivery panel + SMTP) ---
 // Stored as a single JSONB row in the settings table so they can be configured
 // from the admin panel instead of environment variables.
 export interface IntegrationSettings {
@@ -299,13 +350,27 @@ export interface IntegrationSettings {
   mercadoPagoPublicKey: string;
   smmApiUrl: string;
   smmApiKey: string;
+  smtpHost: string;
+  smtpPort: string;
+  smtpUser: string;
+  smtpPassword: string;
+  smtpFromName: string;
+  smtpFromEmail: string;
+  smtpSecure: boolean;
 }
 
 export const DEFAULT_INTEGRATIONS: IntegrationSettings = {
   mercadoPagoAccessToken: '',
   mercadoPagoPublicKey: '',
   smmApiUrl: '',
-  smmApiKey: ''
+  smmApiKey: '',
+  smtpHost: '',
+  smtpPort: '587',
+  smtpUser: '',
+  smtpPassword: '',
+  smtpFromName: '',
+  smtpFromEmail: '',
+  smtpSecure: false
 };
 
 // --- General site settings (branding, SEO, timezone, theme) ---

@@ -211,11 +211,69 @@ export async function uploadAsset(file: File, folder: string): Promise<string> {
   return data.url;
 }
 
+export interface CompanySettings {
+  footerDescription: string;
+  copyrightText: string;
+  contactEmail: string;
+  whatsappNumber: string;
+  whatsappDisplay: string;
+  address: string;
+  socialInstagram: string;
+  socialYoutube: string;
+  socialTiktok: string;
+  socialFacebook: string;
+  socialTwitter: string;
+  socialKwai: string;
+}
+
+const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
+  footerDescription:
+    'Especialistas em marketing de alta performance de redes sociais desde 2018. Líderes nacionais no provimento de engajamento acelerado estável com contas reais brasileiras.',
+  copyrightText: 'ImpulsioneGram. Todos os direitos reservados. CNPJ: 00.322.155/0001-99.',
+  contactEmail: 'contato@impulsionegram.com.br',
+  whatsappNumber: '5511999999999',
+  whatsappDisplay: '(11) 99999-9999',
+  address: 'Av. Paulista, 1000 - Bela Vista - São Paulo / SP',
+  socialInstagram: 'https://instagram.com',
+  socialYoutube: 'https://youtube.com',
+  socialTiktok: 'https://tiktok.com',
+  socialFacebook: '',
+  socialTwitter: '',
+  socialKwai: ''
+};
+
+export async function fetchCompanySettings(): Promise<CompanySettings> {
+  try {
+    const res = await fetch('/api/company');
+    if (!res.ok) throw new Error('Failed to fetch company settings');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching company settings API:', error);
+    return { ...DEFAULT_COMPANY_SETTINGS };
+  }
+}
+
+export async function saveCompanySettingsToServer(company: CompanySettings): Promise<void> {
+  const res = await fetch('/api/company', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(company)
+  });
+  if (!res.ok) throw new Error('Failed to save company settings on server');
+}
+
 export interface IntegrationSettings {
   mercadoPagoAccessToken: string;
   mercadoPagoPublicKey: string;
   smmApiUrl: string;
   smmApiKey: string;
+  smtpHost: string;
+  smtpPort: string;
+  smtpUser: string;
+  smtpPassword: string;
+  smtpFromName: string;
+  smtpFromEmail: string;
+  smtpSecure: boolean;
 }
 
 export async function fetchIntegrations(): Promise<IntegrationSettings> {
@@ -229,7 +287,14 @@ export async function fetchIntegrations(): Promise<IntegrationSettings> {
       mercadoPagoAccessToken: '',
       mercadoPagoPublicKey: '',
       smmApiUrl: '',
-      smmApiKey: ''
+      smmApiKey: '',
+      smtpHost: '',
+      smtpPort: '587',
+      smtpUser: '',
+      smtpPassword: '',
+      smtpFromName: '',
+      smtpFromEmail: '',
+      smtpSecure: false
     };
   }
 }

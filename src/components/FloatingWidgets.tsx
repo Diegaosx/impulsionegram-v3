@@ -4,6 +4,7 @@ import {
   HelpCircle, Check, ArrowRight, Bot, MessageSquare, Flame 
 } from 'lucide-react';
 import { ChatMessage } from '../types';
+import { CompanySettings } from '../utils/storage';
 
 interface FloatingWidgetsProps {
   onNavigate: (sectionId: string) => void;
@@ -15,9 +16,10 @@ interface FloatingWidgetsProps {
     companyWhatsApp: string;
     companyEmail: string;
   } | null;
+  company?: CompanySettings | null;
 }
 
-export default function FloatingWidgets({ onNavigate, ordersCalculatedStat, homeContent }: FloatingWidgetsProps) {
+export default function FloatingWidgets({ onNavigate, ordersCalculatedStat, homeContent, company }: FloatingWidgetsProps) {
   
   // Sticky Top Promo Countdown State
   const [promoTime, setPromoTime] = useState(899); // 14 min 59 sec
@@ -141,7 +143,7 @@ export default function FloatingWidgets({ onNavigate, ordersCalculatedStat, home
       return;
     }
     if (quest.includes('WhatsApp')) {
-      const waPhone = homeContent?.companyWhatsApp || '5511999999999';
+      const waPhone = company?.whatsappNumber || homeContent?.companyWhatsApp || '5511999999999';
       window.open(`https://api.whatsapp.com/send?phone=${waPhone}&text=Falar+com+atendente`, '_blank');
       return;
     }
@@ -153,7 +155,7 @@ export default function FloatingWidgets({ onNavigate, ordersCalculatedStat, home
     setShowCookie(false);
   };
 
-  const waPhone = homeContent?.companyWhatsApp || '5511999999999';
+  const waPhone = company?.whatsappNumber || homeContent?.companyWhatsApp || '5511999999999';
 
   return (
     <>
