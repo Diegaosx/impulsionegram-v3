@@ -10,8 +10,6 @@ import {
 import { SOCIAL_PLATFORMS } from '../data';
 
 interface AdminPanelProps {
-  isOpen: boolean;
-  onClose: () => void;
   services: ServiceItem[];
   plans: PlanItem[];
   orders: AdminOrder[];
@@ -21,11 +19,11 @@ interface AdminPanelProps {
   onUpdateOrders: (orders: AdminOrder[]) => void;
   onUpdateHomeContent: (content: HomeContent) => void;
   onResetAll: () => void;
+  onLogout: () => void;
+  onExit: () => void;
 }
 
 export default function AdminPanel({
-  isOpen,
-  onClose,
   services,
   plans,
   orders,
@@ -34,19 +32,12 @@ export default function AdminPanel({
   onUpdatePlans,
   onUpdateOrders,
   onUpdateHomeContent,
-  onResetAll
+  onResetAll,
+  onLogout,
+  onExit
 }: AdminPanelProps) {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'users' | 'home' | 'settings'>('dashboard');
   
-  // Login & Authentication States
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem('admin_authenticated') === 'true';
-  });
-  const [loginUsername, setLoginUsername] = useState('admin');
-  const [loginPassword, setLoginPassword] = useState('admin');
-  const [loginError, setLoginError] = useState('');
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
-
   // Users management states
   const [users, setUsers] = useState<any[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -74,50 +65,24 @@ export default function AdminPanel({
     }
   }, [homeContent]);
 
-  // Load registered users from client database on active authentication
+  // Load registered users from the backend when the dashboard mounts
   useEffect(() => {
-    if (isOpen && isAuthenticated) {
-      async function loadUsersData() {
-        try {
-          setUsersLoading(true);
-          const res = await fetch('/api/users');
-          if (res.ok) {
-            const data = await res.json();
-            setUsers(data);
-          }
-        } catch (e) {
-          console.error('Error loading users:', e);
-        } finally {
-          setUsersLoading(false);
+    async function loadUsersData() {
+      try {
+        setUsersLoading(true);
+        const res = await fetch('/api/users');
+        if (res.ok) {
+          const data = await res.json();
+          setUsers(data);
         }
+      } catch (e) {
+        console.error('Error loading users:', e);
+      } finally {
+        setUsersLoading(false);
       }
-      loadUsersData();
     }
-  }, [isOpen, isAuthenticated]);
-
-  const handleAdminLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError('');
-    setIsLoggingIn(true);
-    try {
-      const response = await loginAdminToServer({ username: loginUsername, password: loginPassword });
-      if (response.success) {
-        setIsAuthenticated(true);
-        localStorage.setItem('admin_authenticated', 'true');
-      } else {
-        setLoginError(response.error || 'Autenticação recusada pelo servidor.');
-      }
-    } catch (err) {
-      setLoginError('Falha de conexão com a API.');
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
-
-  const handleAdminLogout = () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem('admin_authenticated');
-  };
+    loadUsersData();
+  }, []);
 
   const handleToggleUserStatus = async (user: any) => {
     const updatedStatus = user.status === 'Ativo' ? 'Bloqueado' : 'Ativo';
@@ -229,11 +194,6 @@ export default function AdminPanel({
       platformRevenue
     };
   }, [orders]);
-
-  // Every hook above runs on each render (Rules of Hooks); only bail out now that
-  // all hooks have been called, otherwise toggling isOpen changes the hook count
-  // and React throws (error #310), which previously blocked the panel from opening.
-  if (!isOpen) return null;
 
   // --- SERVICE OPERATIONS ---
   const handleEditServiceInit = (service: ServiceItem) => {
@@ -348,9 +308,9 @@ export default function AdminPanel({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-md z-50 flex justify-center items-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
-        
+    <div className="min-h-screen bg-slate-100 flex justify-center items-stretch p-0 sm:p-4">
+      <div className="bg-white sm:rounded-2xl w-full max-w-6xl flex flex-col shadow-2xl overflow-hidden border border-slate-200 min-h-screen sm:min-h-0 sm:h-[calc(100vh-2rem)]">
+
         {/* UPPER TITLEBAR HEADER */}
         <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center shrink-0">
           <div className="flex items-center gap-3">
@@ -362,13 +322,14 @@ export default function AdminPanel({
               <p className="text-slate-400 text-[10px] font-semibold tracking-wider uppercase">Área Diretor-Administrativa</p>
             </div>
           </div>
-          <button 
-            onClick={onClose}
-            className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
+          <button
+            onClick={onExit}
+            className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold"
             id="close-admin-panel"
-            title="Sair do Painel"
+            title="Voltar ao site"
           >
             <X className="h-5 w-5" />
+            <span className="hidden sm:inline">Voltar ao site</span>
           </button>
         </div>
 
@@ -386,79 +347,8 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* MAIN BODY AREA & LOGIN CHECK */}
-        {!isAuthenticated ? (
-          <div className="flex-grow flex items-center justify-center bg-slate-50 p-6 relative">
-            <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px] pointer-events-none" />
-            
-            <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-8 w-full max-w-md space-y-6 relative z-10 transition-all duration-200">
-              <div className="text-center space-y-2">
-                <div className="inline-flex p-3 bg-purple-50 rounded-xl text-primary border border-primary/10">
-                  <Lock className="h-6 w-6" />
-                </div>
-                <h3 className="font-display font-black text-xl text-slate-900">Autenticação Requerida</h3>
-                <p className="text-slate-500 text-xs font-semibold">Insira suas credenciais de administrador para prosseguir</p>
-              </div>
-
-              {loginError && (
-                <div className="bg-red-50 text-red-600 border border-red-200 rounded-xl p-3 text-xs font-bold flex items-center gap-2 animate-shake">
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  <span>{loginError}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Usuário</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                      <User className="h-4 w-4" />
-                    </span>
-                    <input
-                      type="text"
-                      required
-                      value={loginUsername}
-                      onChange={(e) => setLoginUsername(e.target.value)}
-                      placeholder="admin"
-                      className="w-full bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-primary text-slate-805"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Senha</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                      <Lock className="h-4 w-4" />
-                    </span>
-                    <input
-                      type="password"
-                      required
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-primary text-slate-805"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoggingIn}
-                  className="w-full bg-primary hover:bg-purple-700 disabled:bg-purple-400 text-white font-bold text-xs py-3.5 rounded-lg shadow-md hover:scale-[1.01] transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  {isLoggingIn ? 'Autenticando...' : 'Acessar Painel'}
-                </button>
-              </form>
-
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 text-[10px] text-slate-400 font-semibold text-center leading-relaxed">
-                Acesso de demonstração pré-configurado.<br />
-                Usuário: <strong className="text-slate-600">admin</strong> • Senha: <strong className="text-slate-600">admin</strong>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="flex-grow flex overflow-hidden">
+        {/* MAIN DASHBOARD BODY */}
+        <div className="flex-grow flex overflow-hidden">
             
             {/* SIDEBAR NAVIGATION COLUMN */}
             <div className="w-56 bg-slate-50 border-r border-slate-200 p-4 flex flex-col justify-between shrink-0">
@@ -557,7 +447,7 @@ export default function AdminPanel({
               </button>
 
               <button
-                onClick={handleAdminLogout}
+                onClick={onLogout}
                 className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-bold text-red-500 hover:text-red-700 hover:bg-red-50 transition-all"
               >
                 <Lock className="h-4 w-4" />
@@ -1470,7 +1360,6 @@ export default function AdminPanel({
 
           </div>
         </div>
-      )}
 
       </div>
     </div>
