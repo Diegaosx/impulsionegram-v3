@@ -11,11 +11,20 @@ export function TikTokIcon({ className }: IconProps) {
   );
 }
 
-export function KwaiIcon({ className }: IconProps) {
-  // Kwai's mark is a rounded smiley; rendered monochrome via currentColor.
+// X (formerly Twitter) logo.
+export function XIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-      <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zM8.6 8.9a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8zm6.8 0a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8zM12 17.6c-2.41 0-4.43-1.52-5.2-3.66a.7.7 0 0 1 .66-.94h9.08a.7.7 0 0 1 .66.94c-.77 2.14-2.79 3.66-5.2 3.66z" />
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  );
+}
+
+// Kwai's mark is a stylized video camera; rendered monochrome via currentColor.
+export function KwaiIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M7.2 3.6a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm0 1.8a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zM15 4.2a2.7 2.7 0 1 1 0 5.4 2.7 2.7 0 0 1 0-5.4zm0 1.7a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM5 11.4h8.2a3 3 0 0 1 3 3v.46l3.05-1.76a1 1 0 0 1 1.5.87v5.86a1 1 0 0 1-1.5.86L16.2 19.4v.2a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-5.2a3 3 0 0 1 3-3z" />
     </svg>
   );
 }

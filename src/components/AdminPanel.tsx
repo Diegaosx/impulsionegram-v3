@@ -187,6 +187,7 @@ export default function AdminPanel({
   const [companyForm, setCompanyForm] = useState<CompanySettings>({
     footerDescription: '',
     copyrightText: '',
+    footerDisclaimer: '',
     contactEmail: '',
     whatsappNumber: '',
     whatsappDisplay: '',
@@ -1645,6 +1646,16 @@ export default function AdminPanel({
                                 onChange={(e) => handleUploadAsset(e.target.files?.[0], 'branding', 'logoUrl', setUploadingLogo)}
                               />
                             </label>
+                            {generalForm.logoUrl && (
+                              <button
+                                type="button"
+                                onClick={() => setGeneralForm(prev => ({ ...prev, logoUrl: '' }))}
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50 text-xs font-bold px-2 py-2 rounded-lg flex items-center gap-1 transition-colors"
+                                title="Remover logo"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" /> Remover
+                              </button>
+                            )}
                           </div>
                         </div>
 
@@ -1668,6 +1679,16 @@ export default function AdminPanel({
                                 onChange={(e) => handleUploadAsset(e.target.files?.[0], 'branding', 'faviconUrl', setUploadingFavicon)}
                               />
                             </label>
+                            {generalForm.faviconUrl && (
+                              <button
+                                type="button"
+                                onClick={() => setGeneralForm(prev => ({ ...prev, faviconUrl: '' }))}
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50 text-xs font-bold px-2 py-2 rounded-lg flex items-center gap-1 transition-colors"
+                                title="Remover favicon"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" /> Remover
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1847,6 +1868,16 @@ export default function AdminPanel({
                           onChange={(e) => setCompanyForm(prev => ({ ...prev, copyrightText: e.target.value }))}
                           placeholder="SuaEmpresa. Todos os direitos reservados. CNPJ: 00.000.000/0001-00."
                           className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Isenção de Responsabilidade (texto legal)</label>
+                        <textarea
+                          rows={4}
+                          value={companyForm.footerDisclaimer}
+                          onChange={(e) => setCompanyForm(prev => ({ ...prev, footerDisclaimer: e.target.value }))}
+                          placeholder="Texto de isenção de responsabilidade exibido no rodapé."
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-y"
                         />
                       </div>
                     </div>
