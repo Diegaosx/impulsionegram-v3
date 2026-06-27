@@ -157,6 +157,38 @@ export async function saveHomeContentToServer(content: HomeContent): Promise<voi
   if (!res.ok) throw new Error('Failed to save home content on server');
 }
 
+export interface IntegrationSettings {
+  mercadoPagoAccessToken: string;
+  mercadoPagoPublicKey: string;
+  smmApiUrl: string;
+  smmApiKey: string;
+}
+
+export async function fetchIntegrations(): Promise<IntegrationSettings> {
+  try {
+    const res = await fetch('/api/integrations');
+    if (!res.ok) throw new Error('Failed to fetch integrations');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching integrations API:', error);
+    return {
+      mercadoPagoAccessToken: '',
+      mercadoPagoPublicKey: '',
+      smmApiUrl: '',
+      smmApiKey: ''
+    };
+  }
+}
+
+export async function saveIntegrationsToServer(integrations: IntegrationSettings): Promise<void> {
+  const res = await fetch('/api/integrations', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(integrations)
+  });
+  if (!res.ok) throw new Error('Failed to save integrations on server');
+}
+
 export async function loginAdminToServer(credentials: { username: string; password: string }): Promise<{ success: boolean; token?: string; error?: string }> {
   const res = await fetch('/api/login', {
     method: 'POST',

@@ -282,3 +282,37 @@ export async function writeDB(data: DBStructure): Promise<void> {
     client.release();
   }
 }
+
+// --- Integration settings (payment gateway + SMM delivery panel) ---
+// Stored as a single JSONB row in the settings table so they can be configured
+// from the admin panel instead of environment variables.
+export interface IntegrationSettings {
+  mercadoPagoAccessToken: string;
+  mercadoPagoPublicKey: string;
+  smmApiUrl: string;
+  smmApiKey: string;
+}
+
+export const DEFAULT_INTEGRATIONS: IntegrationSettings = {
+  mercadoPagoAccessToken: '',
+  mercadoPagoPublicKey: '',
+  smmApiUrl: '',
+  smmApiKey: ''
+};
+
+export async function getIntegrations(): Promise<IntegrationSettings> {
+  const result = await pool.query(`SELECT value FROM settings WHERE key = 'integrations'`);
+  return { ...DEFAULT_INTEGRATIONS, ...(result.rows[0]?.value || {}) };
+}
+
+export async function saveIntegrations(data: Partial<IntegrationSettings>): Promise<IntegrationSettings> {
+  const current = await getIntegrations();
+  const merged: IntegrationSettings = { ...current, ...data };
+  await pool.query(
+    `INSERT INTO settings (key, value)
+     VALUES ('integrations', $1::jsonb)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [JSON.stringify(merged)]
+  );
+  return merged;
+}
