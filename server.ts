@@ -16,7 +16,9 @@ import {
   getGeneralSettings,
   saveGeneralSettings,
   getCompanySettings,
-  saveCompanySettings
+  saveCompanySettings,
+  saveCookieConsent,
+  listCookieConsents
 } from './db';
 import { uploadToR2, isR2Configured } from './r2';
 
@@ -227,6 +229,36 @@ app.put('/api/company', async (req, res) => {
     }
     const saved = await saveCompanySettings(body);
     res.json({ success: true, company: saved });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 5f-6. Record a cookie consent choice (LGPD)
+app.post('/api/cookie-consents', async (req, res) => {
+  try {
+    const { id, choices } = req.body || {};
+    if (!id || !choices || typeof choices !== 'object') {
+      return res.status(400).json({ error: 'id and choices are required' });
+    }
+    const normalized = {
+      necessary: true,
+      analytics: Boolean(choices.analytics),
+      marketing: Boolean(choices.marketing)
+    };
+    const userAgent = String(req.headers['user-agent'] || '').slice(0, 400);
+    await saveCookieConsent(String(id), normalized, userAgent);
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 5f-7. List cookie consent records (admin)
+app.get('/api/cookie-consents', async (req, res) => {
+  try {
+    const records = await listCookieConsents();
+    res.json(records);
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

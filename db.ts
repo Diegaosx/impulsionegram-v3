@@ -178,6 +178,54 @@ async function createSchema(client: PoolClient) {
       value JSONB NOT NULL
     )`
   );
+  await client.query(
+    `CREATE TABLE IF NOT EXISTS cookie_consents (
+      id         TEXT PRIMARY KEY,
+      choices    JSONB NOT NULL,
+      user_agent TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`
+  );
+}
+
+// --- Cookie consent (LGPD) records ---
+export interface CookieChoices {
+  necessary: boolean;
+  analytics: boolean;
+  marketing: boolean;
+}
+
+export interface CookieConsentRecord {
+  id: string;
+  choices: CookieChoices;
+  userAgent: string;
+  createdAt: string;
+}
+
+export async function saveCookieConsent(
+  id: string,
+  choices: CookieChoices,
+  userAgent: string
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO cookie_consents (id, choices, user_agent)
+     VALUES ($1, $2::jsonb, $3)
+     ON CONFLICT (id) DO UPDATE SET choices = EXCLUDED.choices, user_agent = EXCLUDED.user_agent, created_at = now()`,
+    [id, JSON.stringify(choices), userAgent]
+  );
+}
+
+export async function listCookieConsents(limit = 300): Promise<CookieConsentRecord[]> {
+  const result = await pool.query(
+    `SELECT id, choices, user_agent, created_at FROM cookie_consents ORDER BY created_at DESC LIMIT $1`,
+    [limit]
+  );
+  return result.rows.map((r) => ({
+    id: r.id,
+    choices: r.choices,
+    userAgent: r.user_agent || '',
+    createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at)
+  }));
 }
 
 async function replaceCollection(client: PoolClient, table: string, items: any[]) {
@@ -346,6 +394,8 @@ export interface IntegrationSettings {
   mercadoPagoPublicKey: string;
   smmApiUrl: string;
   smmApiKey: string;
+  emailProvider: 'smtp' | 'resend';
+  resendApiKey: string;
   smtpHost: string;
   smtpPort: string;
   smtpUser: string;
@@ -360,6 +410,8 @@ export const DEFAULT_INTEGRATIONS: IntegrationSettings = {
   mercadoPagoPublicKey: '',
   smmApiUrl: '',
   smmApiKey: '',
+  emailProvider: 'smtp',
+  resendApiKey: '',
   smtpHost: '',
   smtpPort: '587',
   smtpUser: '',
