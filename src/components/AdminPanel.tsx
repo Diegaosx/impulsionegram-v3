@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ServiceItem, PlanItem, SocialPlatform } from '../types';
-import { AdminOrder, HomeContent, loginAdminToServer } from '../utils/storage';
-import { 
-  X, Plus, Pencil, Trash2, RotateCcw, LayoutDashboard, ShoppingBag, 
+import { AdminOrder, HomeContent, IntegrationSettings, fetchIntegrations, saveIntegrationsToServer } from '../utils/storage';
+import {
+  X, Plus, Pencil, Trash2, RotateCcw, LayoutDashboard, ShoppingBag,
   BarChart3, Settings, ShieldCheck, HelpCircle, Save, Check, AlertCircle,
   TrendingUp, CircleDollarSign, Compass, Layers, Globe, Filter, Sparkles, MessageCircle,
-  User, Lock, Users, Ban, UserCheck
+  User, Lock, Users, Ban, UserCheck, CreditCard, KeyRound, Eye, EyeOff, Plug
 } from 'lucide-react';
 import { SOCIAL_PLATFORMS } from '../data';
 
@@ -36,7 +36,7 @@ export default function AdminPanel({
   onLogout,
   onExit
 }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'users' | 'home' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'users' | 'home' | 'integrations' | 'settings'>('dashboard');
   
   // Users management states
   const [users, setUsers] = useState<any[]>([]);
@@ -64,6 +64,46 @@ export default function AdminPanel({
       });
     }
   }, [homeContent]);
+
+  // Integration settings (payment gateway + SMM delivery panel)
+  const [integrationsForm, setIntegrationsForm] = useState<IntegrationSettings>({
+    mercadoPagoAccessToken: '',
+    mercadoPagoPublicKey: '',
+    smmApiUrl: '',
+    smmApiKey: ''
+  });
+  const [integrationsLoading, setIntegrationsLoading] = useState(false);
+  const [isSavingIntegrations, setIsSavingIntegrations] = useState(false);
+  const [showSecrets, setShowSecrets] = useState(false);
+
+  // Load integration settings when the dashboard mounts
+  useEffect(() => {
+    async function loadIntegrations() {
+      try {
+        setIntegrationsLoading(true);
+        const data = await fetchIntegrations();
+        setIntegrationsForm(data);
+      } catch (e) {
+        console.error('Error loading integrations:', e);
+      } finally {
+        setIntegrationsLoading(false);
+      }
+    }
+    loadIntegrations();
+  }, []);
+
+  const handleSaveIntegrations = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingIntegrations(true);
+    try {
+      await saveIntegrationsToServer(integrationsForm);
+      triggerSuccess('Configurações de integração salvas com sucesso!');
+    } catch (err) {
+      triggerError('Falha ao salvar as configurações de integração.');
+    } finally {
+      setIsSavingIntegrations(false);
+    }
+  };
 
   // Load registered users from the backend when the dashboard mounts
   useEffect(() => {
@@ -430,6 +470,18 @@ export default function AdminPanel({
               >
                 <Globe className="h-4 w-4" />
                 <span>Conteúdo da Home</span>
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('integrations'); setEditingService(null); setIsAddingService(false); setEditingPlan(null); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'integrations'
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-slate-600 hover:text-primary hover:bg-slate-100'
+                }`}
+              >
+                <Plug className="h-4 w-4" />
+                <span>Integrações / API</span>
               </button>
             </div>
 
@@ -1268,6 +1320,126 @@ export default function AdminPanel({
                       </div>
                     );
                   })()
+                )}
+              </div>
+            )}
+
+            {/* =================== TAB: INTEGRAÇÕES / API =================== */}
+            {activeTab === 'integrations' && (
+              <div className="space-y-6 max-w-2xl">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div>
+                    <h3 className="font-display font-black text-xl text-slate-900">Integrações & Chaves de API</h3>
+                    <p className="text-slate-500 text-xs font-semibold">Configure o gateway de pagamento e o painel de entrega (SMM). As chaves ficam salvas com segurança no banco de dados.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowSecrets(s => !s)}
+                    className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-primary border border-slate-200 bg-white rounded-lg px-3 py-2 transition-colors shrink-0"
+                  >
+                    {showSecrets ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showSecrets ? 'Ocultar chaves' : 'Mostrar chaves'}
+                  </button>
+                </div>
+
+                {integrationsLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSaveIntegrations} className="space-y-6">
+
+                    {/* MERCADO PAGO CARD */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+                      <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+                        <div className="bg-sky-50 text-sky-600 p-2 rounded-lg">
+                          <CreditCard className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-slate-800 text-sm">Mercado Pago (Pagamento PIX)</h4>
+                          <p className="text-slate-400 text-[11px] font-semibold">Gera cobranças PIX reais no checkout.</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Access Token</label>
+                        <input
+                          type={showSecrets ? 'text' : 'password'}
+                          autoComplete="off"
+                          value={integrationsForm.mercadoPagoAccessToken}
+                          onChange={(e) => setIntegrationsForm(prev => ({ ...prev, mercadoPagoAccessToken: e.target.value }))}
+                          placeholder="APP_USR-... ou TEST-... (token de teste)"
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                        />
+                        <span className="text-[10px] text-slate-400 block font-medium">Recomendado iniciar com o token de teste (sandbox) para validar sem cobrança real.</span>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Public Key <span className="text-slate-300 normal-case">(opcional, para cartão)</span></label>
+                        <input
+                          type="text"
+                          autoComplete="off"
+                          value={integrationsForm.mercadoPagoPublicKey}
+                          onChange={(e) => setIntegrationsForm(prev => ({ ...prev, mercadoPagoPublicKey: e.target.value }))}
+                          placeholder="APP_USR-xxxx-xxxx (usada no checkout de cartão)"
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    {/* SMM PANEL CARD */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+                      <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+                        <div className="bg-purple-50 text-primary p-2 rounded-lg">
+                          <KeyRound className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-slate-800 text-sm">Painel SMM (Entrega)</h4>
+                          <p className="text-slate-400 text-[11px] font-semibold">Provedor que entrega seguidores/curtidas após o pagamento.</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">API URL</label>
+                        <input
+                          type="text"
+                          autoComplete="off"
+                          value={integrationsForm.smmApiUrl}
+                          onChange={(e) => setIntegrationsForm(prev => ({ ...prev, smmApiUrl: e.target.value }))}
+                          placeholder="https://seupainel.com/api/v2"
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">API Key</label>
+                        <input
+                          type={showSecrets ? 'text' : 'password'}
+                          autoComplete="off"
+                          value={integrationsForm.smmApiKey}
+                          onChange={(e) => setIntegrationsForm(prev => ({ ...prev, smmApiKey: e.target.value }))}
+                          placeholder="sua chave de API do painel"
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-[11px] text-amber-800 font-semibold flex items-start gap-2">
+                      <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span>As chaves são salvas no servidor. A ativação de cada integração (cobrança real e entrega automática) será ligada e testada em seguida, uma de cada vez.</span>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={isSavingIntegrations}
+                        className="bg-primary hover:bg-purple-700 disabled:bg-purple-300 text-white font-bold text-xs py-3 px-5 rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-[1.01] active:scale-95 shadow-md"
+                      >
+                        <Save className="h-4 w-4" />
+                        {isSavingIntegrations ? 'Salvando...' : 'Salvar Configurações'}
+                      </button>
+                    </div>
+                  </form>
                 )}
               </div>
             )}

@@ -9,7 +9,9 @@ import {
   initDB,
   getDefaultData,
   DEFAULT_HOME_CONTENT,
-  UserItem
+  UserItem,
+  getIntegrations,
+  saveIntegrations
 } from './db';
 
 const app = express();
@@ -142,6 +144,32 @@ app.post('/api/login', (req, res) => {
     } else {
       res.status(401).json({ success: false, error: 'Usuário ou senha incorretos' });
     }
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 5g. Get integration settings (payment gateway + SMM panel)
+// NOTE: these values include secret API keys. The admin panel is the only
+// intended consumer; protect this route once real admin auth is in place.
+app.get('/api/integrations', async (req, res) => {
+  try {
+    const integrations = await getIntegrations();
+    res.json(integrations);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 5h. Update integration settings
+app.put('/api/integrations', async (req, res) => {
+  try {
+    const body = req.body;
+    if (!body || typeof body !== 'object') {
+      return res.status(400).json({ error: 'Body must be a valid integrations object' });
+    }
+    const saved = await saveIntegrations(body);
+    res.json({ success: true, integrations: saved });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
