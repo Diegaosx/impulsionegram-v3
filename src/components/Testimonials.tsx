@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { SocialPlatform } from '../types';
 import { TestimonialItem, fetchTestimonials, submitTestimonial } from '../utils/storage';
 import { getRecaptchaToken } from '../utils/recaptcha';
-import { Star, Plus, CheckCircle2 } from 'lucide-react';
+import { Star, Plus, CheckCircle2, X } from 'lucide-react';
 
 // Fallback avatar for testimonials without a custom photo.
 const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80';
@@ -182,33 +182,68 @@ export default function Testimonials() {
           ))}
         </div>
 
-        {/* --- DYNAMIC ADD TESTIMONIAL TRIGGER --- */}
+        {/* --- ADD TESTIMONIAL TRIGGER --- */}
         <div className="mt-12 text-center" id="reviews-form-injector-panel">
-          {showForm ? (
-            <div className="bg-slate-50 rounded-xl p-6 sm:p-8 border border-slate-200 shadow-md text-left max-w-xl mx-auto animate-scale-up">
+          <button
+            onClick={() => { setShowForm(true); setSubmittedReview(false); setValidationError(''); }}
+            className="inline-flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-200 font-bold text-slate-700 text-xs rounded py-3 px-6 cursor-pointer transition-all active:scale-95 shadow-sm"
+            id="active-review-form-btn"
+          >
+            <Plus className="h-4 w-4 text-primary" />
+            Deixar Meu Depoimento Verificado
+          </button>
+        </div>
 
+      </div>
+
+      {/* --- WRITE TESTIMONIAL MODAL --- */}
+      {showForm && (
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 cursor-pointer"
+          id="testimonial-modal-overlay"
+          onClick={() => setShowForm(false)}
+        >
+          <div
+            className="bg-white text-slate-900 rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden relative animate-fade-in cursor-default my-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-slate-900 text-white p-6 pb-5 relative flex items-center gap-3">
+              <button
+                onClick={() => setShowForm(false)}
+                className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-full transition-all cursor-pointer z-10 flex items-center justify-center"
+                aria-label="Fechar Modal"
+                id="close-testimonial-modal"
+              >
+                <X className="h-4 w-4" />
+              </button>
+
+              <div className="bg-primary/20 p-2.5 rounded-xl text-primary">
+                <Star className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-display font-black text-base tracking-tight">Escreva Seu Depoimento</h3>
+                <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mt-0.5">Sua opinião é muito importante</p>
+              </div>
+            </div>
+
+            <div className="p-6">
               {submittedReview ? (
-                <div className="text-center py-6 space-y-3">
-                  <div className="mx-auto bg-green-50 text-green-600 p-2 rounded-full inline-block">
-                    <CheckCircle2 className="h-10 w-10 text-green-500 fill-current text-white rounded-full" />
+                <div className="text-center py-8 space-y-3">
+                  <div className="h-12 w-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto">
+                    <CheckCircle2 className="h-6 w-6" />
                   </div>
-                  <h4 className="font-bold text-slate-800 text-lg">Depoimento Enviado!</h4>
+                  <h4 className="font-display font-black text-lg text-slate-900">Depoimento Enviado!</h4>
                   <p className="text-slate-500 text-xs font-semibold">Obrigado! Seu depoimento foi enviado e aparecerá no site após a aprovação da nossa equipe.</p>
                 </div>
               ) : (
                 <form onSubmit={handleSubmitReview} className="space-y-4">
-                  <div className="flex justify-between items-center pb-2 border-b border-slate-200">
-                    <h3 className="font-display font-bold text-slate-900 text-sm">Escreva Seu Depoimento</h3>
-                    <button type="button" onClick={() => setShowForm(false)} className="text-xs text-slate-500 underline font-semibold cursor-pointer">Cancelar</button>
-                  </div>
-
                   {validationError && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded p-2.5 font-bold">
+                    <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl p-2.5 font-bold flex items-center gap-2">
                       ⚠ {validationError}
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase block">Seu Nome completo</label>
                       <input
@@ -216,7 +251,7 @@ export default function Testimonials() {
                         placeholder="Ex: Amanda Santos"
                         value={newName}
                         onChange={(e) => setNewName(e.target.value)}
-                        className="w-full bg-white border border-slate-200 text-xs font-semibold rounded py-2 px-3 focus:outline-none focus:border-primary text-slate-800"
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white text-slate-800"
                         id="new-rev-name"
                       />
                     </div>
@@ -227,19 +262,19 @@ export default function Testimonials() {
                         placeholder="Ex: @amanda ou Empreendedora"
                         value={newRole}
                         onChange={(e) => setNewRole(e.target.value)}
-                        className="w-full bg-white border border-slate-200 text-xs font-semibold rounded py-2 px-3 focus:outline-none focus:border-primary text-slate-800"
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white text-slate-800"
                         id="new-rev-role"
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase block">Rede Social Utilizada</label>
                       <select
                         value={newPlatform}
                         onChange={(e) => setNewPlatform(e.target.value as SocialPlatform)}
-                        className="w-full bg-white border border-slate-200 text-xs font-bold rounded py-2.5 px-3 focus:outline-none focus:border-primary text-slate-600"
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white text-slate-600"
                       >
                         <option value="instagram">Instagram</option>
                         <option value="tiktok">TikTok</option>
@@ -274,7 +309,7 @@ export default function Testimonials() {
                       rows={3}
                       value={newText}
                       onChange={(e) => setNewText(e.target.value)}
-                      className="w-full bg-white border border-slate-200 text-xs font-semibold rounded py-2 px-3 focus:outline-none focus:border-primary text-slate-800"
+                      className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white text-slate-800"
                       id="new-rev-text"
                     />
                   </div>
@@ -282,7 +317,7 @@ export default function Testimonials() {
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full bg-primary hover:bg-blue-700 disabled:opacity-60 text-white font-bold py-3 text-xs uppercase tracking-wider cursor-pointer rounded"
+                    className="w-full bg-primary hover:bg-purple-700 disabled:opacity-60 text-white font-bold py-3 text-xs uppercase tracking-wider cursor-pointer rounded-lg"
                     id="submit-custom-review-btn"
                   >
                     {isSubmitting ? 'Enviando...' : 'Enviar Meu Depoimento'}
@@ -293,21 +328,10 @@ export default function Testimonials() {
                   </p>
                 </form>
               )}
-
             </div>
-          ) : (
-            <button
-              onClick={() => setShowForm(true)}
-              className="inline-flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-200 font-bold text-slate-700 text-xs rounded py-3 px-6 cursor-pointer transition-all active:scale-95 shadow-sm"
-              id="active-review-form-btn"
-            >
-              <Plus className="h-4 w-4 text-primary" />
-              Deixar Meu Depoimento Verificado
-            </button>
-          )}
+          </div>
         </div>
-
-      </div>
+      )}
     </section>
   );
 }

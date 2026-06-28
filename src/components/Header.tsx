@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu, X, ShoppingCart, Search, Sparkles, Settings, ChevronDown } from 'lucide-react';
 import { SocialPlatform } from '../types';
+import { useHideOnScroll } from '../utils/useHideOnScroll';
 
 interface HeaderProps {
   onNavigate: (sectionId: string) => void;
@@ -20,6 +21,7 @@ export default function Header({ onNavigate, cartCount, onOpenCart, onSearch, on
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const hidden = useHideOnScroll();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -59,7 +61,10 @@ export default function Header({ onNavigate, cartCount, onOpenCart, onSearch, on
   };
 
   return (
-    <header className={`fixed top-12 left-0 right-0 z-40 transition-all duration-300 ${scrolled ? 'bg-white/95 backdrop-blur-md shadow-md py-3' : 'bg-white/80 backdrop-blur-sm py-4'}`}>
+    <header
+      className={`fixed top-12 left-0 right-0 z-40 transition-all duration-300 will-change-transform ${scrolled ? 'bg-white/95 backdrop-blur-md shadow-md py-3' : 'bg-white/80 backdrop-blur-sm py-4'}`}
+      style={{ transform: (hidden && !isOpen) ? 'translateY(calc(-100% - 3rem))' : 'translateY(0)' }}
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           
