@@ -19,6 +19,9 @@ import {
   getOffer,
   saveOffer,
   isOfferActive,
+  getPage,
+  savePage,
+  isValidPageSlug,
   getCompanySettings,
   saveCompanySettings,
   saveCookieConsent,
@@ -107,6 +110,7 @@ const PUBLIC_API: { method: string; re: RegExp }[] = [
   { method: 'GET', re: /^\/company\/?$/ },
   { method: 'GET', re: /^\/public-config\/?$/ },
   { method: 'GET', re: /^\/offer\/?$/ },
+  { method: 'GET', re: /^\/pages\/[a-z]+\/?$/ },
   { method: 'GET', re: /^\/analytics\/?$/ },
   { method: 'POST', re: /^\/cookie-consents\/?$/ },
   { method: 'GET', re: /^\/blog\/posts\/?$/ },
@@ -1291,6 +1295,26 @@ app.put('/api/offer', async (req, res) => {
       return res.status(400).json({ error: 'Body must be a valid offer object' });
     }
     res.json({ success: true, offer: await saveOffer(body) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Editable site pages (privacy / terms / warranty). GET is public; PUT admin.
+app.get('/api/pages/:slug', async (req, res) => {
+  try {
+    if (!isValidPageSlug(req.params.slug)) return res.status(404).json({ error: 'Página não encontrada.' });
+    res.json(await getPage(req.params.slug));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/pages/:slug', async (req, res) => {
+  try {
+    if (!isValidPageSlug(req.params.slug)) return res.status(404).json({ error: 'Página não encontrada.' });
+    const { title, html } = req.body || {};
+    res.json({ success: true, page: await savePage(req.params.slug, { title, html }) });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

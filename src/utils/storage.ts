@@ -219,6 +219,36 @@ export async function saveOffer(data: OfferSettings): Promise<{ ok: boolean; err
   return res.ok ? { ok: true } : { ok: false, error: out.error || 'Falha ao salvar a oferta.' };
 }
 
+// --- Editable site pages (privacy / terms / warranty) ---
+export type PageSlug = 'privacy' | 'terms' | 'warranty';
+
+export interface SitePage {
+  slug: PageSlug;
+  title: string;
+  html: string;
+  updatedAt: string;
+}
+
+export async function fetchPage(slug: PageSlug): Promise<SitePage | null> {
+  try {
+    const res = await fetch(`/api/pages/${slug}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function savePageContent(slug: PageSlug, data: { title: string; html: string }): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(`/api/pages/${slug}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  const out = await res.json().catch(() => ({}));
+  return res.ok ? { ok: true } : { ok: false, error: out.error || 'Falha ao salvar a página.' };
+}
+
 // Create an order for the logged-in client (status starts awaiting payment).
 export async function createMyOrder(input: NewOrderInput): Promise<{ ok: boolean; order?: AdminOrder; error?: string }> {
   try {

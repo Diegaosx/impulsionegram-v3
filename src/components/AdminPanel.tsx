@@ -9,8 +9,10 @@ import {
   fetchSmmBalance, fetchSmmServices,
   AdminAccount, fetchAdminAccounts, createAdminAccount, updateAdminAccount,
   resetAdminAccountPassword, deleteAdminAccount,
-  OfferSettings, fetchOfferAdmin, saveOffer
+  OfferSettings, fetchOfferAdmin, saveOffer,
+  PageSlug, fetchPage, savePageContent
 } from '../utils/storage';
+import RichTextEditor from './RichTextEditor';
 import { setAppTimezone, formatDateTime } from '../utils/datetime';
 import BlogAdmin from './BlogAdmin';
 import TestimonialsAdmin from './TestimonialsAdmin';
@@ -19,7 +21,7 @@ import {
   X, Plus, Pencil, Trash2, RotateCcw, LayoutDashboard, ShoppingBag,
   BarChart3, Settings, ShieldCheck, HelpCircle, Save, Check, AlertCircle,
   TrendingUp, CircleDollarSign, Compass, Layers, Globe, Filter, MessageCircle,
-  User, Lock, Users, Ban, UserCheck, CreditCard, KeyRound, Eye, EyeOff, Plug, Flame,
+  User, Lock, Users, Ban, UserCheck, CreditCard, KeyRound, Eye, EyeOff, Plug, Flame, ArrowLeftCircle,
   Image as ImageIcon, Upload, Clock, Palette, Type, SlidersHorizontal,
   Mail, Phone, MapPin, Share2, PanelBottom, Cookie, Newspaper, Code2, Quote, Inbox
 } from 'lucide-react';
@@ -58,6 +60,12 @@ export default function AdminPanel({
   });
   const [offerLoading, setOfferLoading] = useState(false);
   const [offerSaving, setOfferSaving] = useState(false);
+
+  // "Conteúdo Principal" hub: which area is open + the legal-page editor state.
+  const [contentView, setContentView] = useState<'menu' | 'home' | PageSlug>('menu');
+  const [pageEditor, setPageEditor] = useState<{ slug: PageSlug; title: string; html: string }>({ slug: 'privacy', title: '', html: '' });
+  const [pageLoading, setPageLoading] = useState(false);
+  const [pageSaving, setPageSaving] = useState(false);
 
   // Users management states (real registered accounts)
   const [users, setUsers] = useState<AdminAccount[]>([]);
@@ -361,6 +369,25 @@ export default function AdminPanel({
     setOfferSaving(false);
     if (res.ok) triggerSuccess('Oferta atualizada com sucesso!');
     else triggerError(res.error || 'Falha ao salvar a oferta.');
+  };
+
+  // Open a legal/policy page in the rich editor.
+  const openPageEditor = (slug: PageSlug) => {
+    setContentView(slug);
+    setPageLoading(true);
+    setPageEditor({ slug, title: '', html: '' });
+    fetchPage(slug)
+      .then((p) => { if (p) setPageEditor({ slug, title: p.title, html: p.html }); })
+      .finally(() => setPageLoading(false));
+  };
+
+  const handleSavePage = async () => {
+    if (!pageEditor.title.trim()) { triggerError('Informe o título da página.'); return; }
+    setPageSaving(true);
+    const res = await savePageContent(pageEditor.slug, { title: pageEditor.title, html: pageEditor.html });
+    setPageSaving(false);
+    if (res.ok) triggerSuccess('Página salva com sucesso!');
+    else triggerError(res.error || 'Falha ao salvar a página.');
   };
 
   const openCreateAccount = () => {
@@ -754,15 +781,15 @@ export default function AdminPanel({
               </button>
 
               <button
-                onClick={() => { setActiveTab('home'); setEditingService(null); setIsAddingService(false); setEditingPlan(null); }}
+                onClick={() => { setActiveTab('home'); setContentView('menu'); setEditingService(null); setIsAddingService(false); setEditingPlan(null); }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
-                  activeTab === 'home' 
-                    ? 'bg-primary text-white shadow-sm' 
+                  activeTab === 'home'
+                    ? 'bg-primary text-white shadow-sm'
                     : 'text-slate-600 hover:text-primary hover:bg-slate-100'
                 }`}
               >
                 <Globe className="h-4 w-4" />
-                <span>Conteúdo da Home</span>
+                <span>Conteúdo Principal</span>
               </button>
 
               <button
@@ -2463,9 +2490,79 @@ export default function AdminPanel({
               </div>
             )}
 
-            {/* =================== TAB 7: EDITAR CONTEÚDO DA HOME =================== */}
+            {/* =================== TAB 7: CONTEÚDO PRINCIPAL =================== */}
             {activeTab === 'home' && (
-              <div className="space-y-6 max-w-2xl">
+              <div className="space-y-6">
+                {/* Hub menu: pick which content area to edit */}
+                {contentView === 'menu' && (
+                  <div className="space-y-6 max-w-3xl">
+                    <div>
+                      <h3 className="font-display font-black text-xl text-slate-900">Conteúdo Principal</h3>
+                      <p className="text-slate-500 text-xs font-semibold">Escolha a área para editar. As páginas legais aparecem no rodapé do site.</p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {[
+                        { key: 'home' as const, title: 'Página Inicial (Home)', desc: 'Banners e textos do topo da home', icon: <Globe className="h-5 w-5" />, tone: 'bg-purple-50 text-primary' },
+                        { key: 'privacy' as const, title: 'Política de Privacidade', desc: 'Conteúdo da página /privacidade', icon: <ShieldCheck className="h-5 w-5" />, tone: 'bg-sky-50 text-sky-600' },
+                        { key: 'terms' as const, title: 'Termos de Uso', desc: 'Conteúdo da página /termos', icon: <Newspaper className="h-5 w-5" />, tone: 'bg-amber-50 text-amber-600' },
+                        { key: 'warranty' as const, title: 'Garantia / Devolução', desc: 'Conteúdo da página /garantia', icon: <Check className="h-5 w-5" />, tone: 'bg-green-50 text-green-600' }
+                      ].map((card) => (
+                        <button
+                          key={card.key}
+                          onClick={() => card.key === 'home' ? setContentView('home') : openPageEditor(card.key)}
+                          className="text-left bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:border-primary/40 hover:shadow transition-all flex items-start gap-3"
+                        >
+                          <div className={`inline-flex p-2.5 rounded-xl shrink-0 ${card.tone}`}>{card.icon}</div>
+                          <div>
+                            <h4 className="font-bold text-slate-800 text-sm">{card.title}</h4>
+                            <p className="text-[11px] text-slate-400 font-semibold mt-0.5">{card.desc}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Legal/policy page editor (rich text) */}
+                {(contentView === 'privacy' || contentView === 'terms' || contentView === 'warranty') && (
+                  <div className="space-y-5 max-w-3xl">
+                    <button onClick={() => setContentView('menu')} className="text-xs font-bold text-slate-500 hover:text-primary inline-flex items-center gap-1">
+                      <ArrowLeftCircle className="h-4 w-4" /> Voltar
+                    </button>
+                    {pageLoading ? (
+                      <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>
+                    ) : (
+                      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Título da página</label>
+                          <input type="text" value={pageEditor.title}
+                            onChange={(e) => setPageEditor(p => ({ ...p, title: e.target.value }))}
+                            className="w-full bg-slate-50 border border-slate-200 text-sm font-bold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Conteúdo</label>
+                          <RichTextEditor value={pageEditor.html} onChange={(html) => setPageEditor(p => ({ ...p, html }))} />
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <a href={`/${contentView === 'privacy' ? 'privacidade' : contentView === 'terms' ? 'termos' : 'garantia'}`} target="_blank" rel="noreferrer"
+                            className="text-xs font-bold text-slate-500 hover:text-primary inline-flex items-center gap-1">
+                            <Eye className="h-4 w-4" /> Ver página
+                          </a>
+                          <button onClick={handleSavePage} disabled={pageSaving}
+                            className="bg-primary hover:bg-purple-700 disabled:opacity-60 text-white font-bold text-xs py-3 px-5 rounded-lg flex items-center gap-2 cursor-pointer transition-all shadow-md">
+                            <Save className="h-4 w-4" /> {pageSaving ? 'Salvando...' : 'Salvar página'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {contentView === 'home' && (
+                <div className="space-y-6 max-w-2xl">
+                <button onClick={() => setContentView('menu')} className="text-xs font-bold text-slate-500 hover:text-primary inline-flex items-center gap-1">
+                  <ArrowLeftCircle className="h-4 w-4" /> Voltar
+                </button>
                 <div>
                   <h3 className="font-display font-black text-xl text-slate-900">Gestão de Conteúdo da Página Inicial</h3>
                   <p className="text-slate-500 text-xs font-semibold">Modifique os banners e os textos dinâmicos da plataforma instantaneamente</p>
@@ -2524,6 +2621,8 @@ export default function AdminPanel({
                     </button>
                   </div>
                 </form>
+                </div>
+                )}
               </div>
             )}
 

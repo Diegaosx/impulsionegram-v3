@@ -7,6 +7,7 @@ import ProfilePage from './pages/ProfilePage';
 import ClientDashboard from './pages/ClientDashboard';
 import OrderConfirmationPage from './pages/OrderConfirmationPage';
 import HelpPage from './pages/HelpPage';
+import SitePage from './pages/SitePage';
 import BlogPage from './pages/BlogPage';
 import AdminPanel from './components/AdminPanel';
 import {
@@ -199,6 +200,19 @@ export default function App() {
       <Route
         path="/ajuda"
         element={<HelpPage homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+      />
+
+      <Route
+        path="/privacidade"
+        element={<SitePage slug="privacy" homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+      />
+      <Route
+        path="/termos"
+        element={<SitePage slug="terms" homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+      />
+      <Route
+        path="/garantia"
+        element={<SitePage slug="warranty" homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
 
       <Route

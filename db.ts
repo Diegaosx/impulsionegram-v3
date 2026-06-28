@@ -1256,6 +1256,53 @@ export async function saveOffer(data: Partial<OfferSettings>): Promise<OfferSett
   return merged;
 }
 
+// --- Editable site pages (legal/policy content, rich HTML like the blog) ---
+export type PageSlug = 'privacy' | 'terms' | 'warranty';
+export const PAGE_SLUGS: PageSlug[] = ['privacy', 'terms', 'warranty'];
+const PAGE_DEFAULT_TITLE: Record<PageSlug, string> = {
+  privacy: 'Política de Privacidade',
+  terms: 'Termos de Uso',
+  warranty: 'Garantia / Devolução'
+};
+
+export interface SitePage {
+  slug: PageSlug;
+  title: string;
+  html: string;
+  updatedAt: string;
+}
+
+export function isValidPageSlug(slug: string): slug is PageSlug {
+  return (PAGE_SLUGS as string[]).includes(slug);
+}
+
+export async function getPage(slug: PageSlug): Promise<SitePage> {
+  const r = await pool.query(`SELECT value FROM settings WHERE key = $1`, [`page:${slug}`]);
+  const v = r.rows[0]?.value || {};
+  return {
+    slug,
+    title: String(v.title || PAGE_DEFAULT_TITLE[slug]),
+    html: String(v.html || ''),
+    updatedAt: String(v.updatedAt || '')
+  };
+}
+
+export async function savePage(slug: PageSlug, data: { title?: string; html?: string }): Promise<SitePage> {
+  const current = await getPage(slug);
+  const merged = {
+    title: data.title !== undefined ? String(data.title) : current.title,
+    html: data.html !== undefined ? String(data.html) : current.html,
+    updatedAt: new Date().toISOString()
+  };
+  await pool.query(
+    `INSERT INTO settings (key, value)
+     VALUES ($1, $2::jsonb)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [`page:${slug}`, JSON.stringify(merged)]
+  );
+  return { slug, ...merged };
+}
+
 // An offer is active when enabled and not past its end time.
 export function isOfferActive(o: OfferSettings): boolean {
   if (!o.enabled) return false;
