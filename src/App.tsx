@@ -4,6 +4,7 @@ import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
+import ClientDashboard from './pages/ClientDashboard';
 import BlogPage from './pages/BlogPage';
 import AdminPanel from './components/AdminPanel';
 import {
@@ -222,7 +223,7 @@ export default function App() {
         path="/login"
         element={
           currentUser
-            ? <Navigate to={isAdmin ? '/dashboard' : '/perfil'} replace />
+            ? <Navigate to={isAdmin ? '/dashboard' : '/minha-conta'} replace />
             : <LoginPage onAuthSuccess={handleAuthSuccess} siteName={siteName} />
         }
       />
@@ -231,8 +232,22 @@ export default function App() {
         path="/cadastro"
         element={
           currentUser
-            ? <Navigate to={isAdmin ? '/dashboard' : '/perfil'} replace />
+            ? <Navigate to={isAdmin ? '/dashboard' : '/minha-conta'} replace />
             : <RegisterPage onAuthSuccess={handleAuthSuccess} siteName={siteName} />
+        }
+      />
+
+      <Route
+        path="/minha-conta"
+        element={
+          currentUser
+            ? <ClientDashboard
+                user={currentUser}
+                onLogout={handleLogout}
+                siteName={siteName}
+                logoUrl={logoUrl}
+              />
+            : <Navigate to="/login" replace />
         }
       />
 
@@ -269,7 +284,7 @@ export default function App() {
               onExit={() => navigate('/')}
             />
           ) : currentUser ? (
-            <Navigate to="/perfil" replace />
+            <Navigate to="/minha-conta" replace />
           ) : (
             <Navigate to="/login" replace />
           )

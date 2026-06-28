@@ -48,7 +48,8 @@ import {
   findAccountByEmailOrPhone,
   updateAccountProfile,
   updateAccountPassword,
-  checkAccountPassword
+  checkAccountPassword,
+  listOrdersForAccount
 } from './db';
 import { uploadToR2, isR2Configured } from './r2';
 import { verifyRecaptcha } from './recaptcha';
@@ -359,6 +360,19 @@ app.put('/api/auth/profile', async (req, res) => {
     // Re-issue the token so the name/email in it stay current.
     const token = signAccountToken(updated);
     res.json({ success: true, token, user: publicUser(updated) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Orders belonging to the logged-in user (client area).
+app.get('/api/my/orders', async (req, res) => {
+  try {
+    const payload = getPayload(req)!;
+    const account = await getAccountById(payload.sub);
+    if (!account) return res.json([]);
+    const orders = await listOrdersForAccount(account.id, account.email);
+    res.json(orders);
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

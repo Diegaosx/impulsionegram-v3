@@ -38,7 +38,7 @@ export default function RegisterPage({ onAuthSuccess, siteName }: RegisterPagePr
       const result = await registerAccount({ name: name.trim(), email: email.trim(), phone: phone.trim(), password });
       if (result.ok && result.user) {
         onAuthSuccess(result.user);
-        navigate('/perfil', { replace: true });
+        navigate('/minha-conta', { replace: true });
       } else {
         setError(result.error || 'Não foi possível criar a conta.');
       }
