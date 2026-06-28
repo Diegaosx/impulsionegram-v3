@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SERVICES, SOCIAL_PLATFORMS } from '../data';
 import { SocialPlatform, ServiceItem } from '../types';
-import { AuthUser, checkAccountExists, registerAccount, createMyOrder } from '../utils/storage';
+import { AuthUser, AdminOrder, checkAccountExists, registerAccount, createMyOrder } from '../utils/storage';
+import OrderConfirmation from './OrderConfirmation';
 import {
   Instagram, Youtube, Twitter, Facebook, Flame, Zap, Shield,
   Lock, Sparkles, Smartphone, Mail, User, Compass, ShoppingCart, Loader2, ArrowRight, X, LogIn
@@ -38,7 +39,8 @@ export default function InteractiveCalculator({
   
   // Checkout Modal State
   const [showCheckout, setShowCheckout] = useState(false);
-  const [checkoutStep, setCheckoutStep] = useState<'info' | 'account' | 'login_prompt' | 'processing'>('info');
+  const [checkoutStep, setCheckoutStep] = useState<'info' | 'account' | 'login_prompt' | 'processing' | 'done'>('info');
+  const [createdOrder, setCreatedOrder] = useState<AdminOrder | null>(null);
 
   // User Form Inputs
   const [fullName, setFullName] = useState('');
@@ -174,6 +176,7 @@ export default function InteractiveCalculator({
   const handleOpenCheckout = () => {
     setFormErrors({});
     setAccountError('');
+    setCreatedOrder(null);
     setPostUrl('');
     setPassword('');
     setConfirmPassword('');
@@ -194,7 +197,8 @@ export default function InteractiveCalculator({
 
   const targetProfile = () => (username.trim().startsWith('@') || !username.trim() ? username.trim() : '@' + username.trim());
 
-  // Create the order (client is authenticated by now) and go to confirmation.
+  // Create the order (client is authenticated by now) and show the confirmation
+  // (with the Mercado Pago PIX QR code, when configured) inside the modal.
   const createOrderAndRedirect = async () => {
     setCheckoutStep('processing');
     setAccountError('');
@@ -210,8 +214,8 @@ export default function InteractiveCalculator({
     });
     if (res.ok && res.order) {
       onAddOrderToStats();
-      setShowCheckout(false);
-      navigate(`/pedido/${res.order.id}`);
+      setCreatedOrder(res.order);
+      setCheckoutStep('done');
     } else {
       setAccountError(res.error || 'Falha ao criar o pedido.');
       setCheckoutStep(currentUser ? 'info' : 'account');
@@ -555,7 +559,7 @@ export default function InteractiveCalculator({
             <div className="bg-slate-50 border-b border-slate-200 px-6 py-2.5 flex justify-between text-[11px] font-black text-slate-500">
               <span className={checkoutStep === 'info' ? 'text-blue-600 font-bold' : ''}>1. Seus dados</span>
               <span className={(checkoutStep === 'account' || checkoutStep === 'login_prompt') ? 'text-blue-600 font-bold' : ''}>2. Sua conta</span>
-              <span className={checkoutStep === 'processing' ? 'text-blue-600 font-bold' : ''}>3. Pedido</span>
+              <span className={(checkoutStep === 'processing' || checkoutStep === 'done') ? 'text-blue-600 font-bold' : ''}>3. Pedido</span>
             </div>
 
             {/* MODAL MAIN CONTENTS */}
@@ -700,6 +704,14 @@ export default function InteractiveCalculator({
                   <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
                   <p className="text-slate-600 text-sm font-semibold">Processando seu pedido...</p>
                 </div>
+              )}
+
+              {/* --- STEP 4: DONE (confirmation + PIX QR) --- */}
+              {checkoutStep === 'done' && createdOrder && (
+                <OrderConfirmation
+                  order={createdOrder}
+                  onGoToOrders={() => { setShowCheckout(false); navigate('/minha-conta'); }}
+                />
               )}
 
             </div>

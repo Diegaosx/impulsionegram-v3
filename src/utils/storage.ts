@@ -17,6 +17,28 @@ export interface AdminOrder {
   accountId?: string;
   serviceType?: string;
   postUrl?: string;
+  // Mercado Pago PIX fields.
+  mpPaymentId?: string;
+  pixQrCode?: string;
+  pixQrCodeBase64?: string;
+  pixTicketUrl?: string;
+  paymentStatus?: string;
+}
+
+export interface PaymentStatusResult {
+  status: string;
+  paid: boolean;
+  pix: { qrCode: string; qrCodeBase64: string; ticketUrl: string };
+}
+
+export async function fetchOrderPayment(orderId: string): Promise<PaymentStatusResult | null> {
+  try {
+    const res = await fetch(`/api/my/orders/${encodeURIComponent(orderId)}/payment`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
 }
 
 // REST Backend API calls

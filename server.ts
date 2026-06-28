@@ -50,11 +50,14 @@ import {
   updateAccountPassword,
   checkAccountPassword,
   listOrdersForAccount,
+  getOrderById,
+  patchOrderData,
   addContactMessage,
   listContactMessages,
   updateContactMessageStatus,
   deleteContactMessage
 } from './db';
+import { isMercadoPagoConfigured, createPixPayment, getPaymentStatus } from './mercadopago';
 import { uploadToR2, isR2Configured } from './r2';
 import { verifyRecaptcha } from './recaptcha';
 import { stripLinks } from './sanitize';
@@ -106,7 +109,8 @@ const PUBLIC_API: { method: string; re: RegExp }[] = [
   { method: 'GET', re: /^\/testimonials\/?$/ },
   { method: 'POST', re: /^\/testimonials\/?$/ },
   { method: 'POST', re: /^\/contact\/?$/ },
-  { method: 'POST', re: /^\/orders\/?$/ }
+  { method: 'POST', re: /^\/orders\/?$/ },
+  { method: 'POST', re: /^\/mercadopago\/webhook\/?$/ }
 ];
 
 // Routes any authenticated user (admin OR cliente) may access.
@@ -418,10 +422,114 @@ app.post('/api/my/orders', async (req, res) => {
     const db = await readDB();
     db.orders = [newOrder, ...db.orders];
     await writeDB(db);
+
+    // Generate a real Mercado Pago PIX charge when configured (PIX orders only).
+    if (newOrder.paymentMethod === 'PIX') {
+      try {
+        const integ = await getIntegrations();
+        if (isMercadoPagoConfigured(integ.mercadoPagoAccessToken)) {
+          const pay = await createPixPayment(integ.mercadoPagoAccessToken, {
+            amount: newOrder.price,
+            description: `${newOrder.serviceLabel} (${newOrder.id})`,
+            email: account.email,
+            firstName: account.name,
+            orderId: newOrder.id,
+            notificationUrl: `${publicBaseUrl(req)}/api/mercadopago/webhook`
+          });
+          const patch = {
+            mpPaymentId: pay.id,
+            pixQrCode: pay.qrCode,
+            pixQrCodeBase64: pay.qrCodeBase64,
+            pixTicketUrl: pay.ticketUrl,
+            pixExpiresAt: pay.expiresAt,
+            paymentStatus: pay.status
+          };
+          await patchOrderData(newOrder.id, patch);
+          Object.assign(newOrder, patch);
+        }
+      } catch (mpErr: any) {
+        // The order is still created; the PIX can be retried/checked later.
+        console.error('Mercado Pago PIX creation failed:', mpErr?.message || mpErr);
+      }
+    }
+
     res.json({ success: true, order: newOrder });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// Poll the payment status of one of the logged-in user's orders. Queries
+// Mercado Pago and flips the order to "pago" when approved.
+app.get('/api/my/orders/:id/payment', async (req, res) => {
+  try {
+    const payload = getPayload(req)!;
+    const account = await getAccountById(payload.sub);
+    const order = await getOrderById(req.params.id);
+    if (!order) return res.status(404).json({ error: 'Pedido não encontrado.' });
+    const owns = account && (order.accountId === account.id || String(order.email || '').toLowerCase() === account.email);
+    if (!owns) return res.status(403).json({ error: 'Acesso negado.' });
+
+    let status = order.status;
+    if (order.mpPaymentId && order.status !== 'pago' && order.status !== 'entregue') {
+      const integ = await getIntegrations();
+      if (isMercadoPagoConfigured(integ.mercadoPagoAccessToken)) {
+        try {
+          const pay = await getPaymentStatus(integ.mercadoPagoAccessToken, order.mpPaymentId);
+          if (pay.status === 'approved') {
+            await patchOrderData(order.id, { status: 'pago', paymentStatus: 'approved' });
+            status = 'pago';
+          } else if (pay.status === 'cancelled' || pay.status === 'rejected') {
+            await patchOrderData(order.id, { paymentStatus: pay.status });
+          } else {
+            await patchOrderData(order.id, { paymentStatus: pay.status });
+          }
+        } catch (e: any) {
+          console.error('MP status check failed:', e?.message || e);
+        }
+      }
+    }
+
+    res.json({
+      status,
+      paid: status === 'pago' || status === 'entregue',
+      pix: {
+        qrCode: order.pixQrCode || '',
+        qrCodeBase64: order.pixQrCodeBase64 || '',
+        ticketUrl: order.pixTicketUrl || ''
+      }
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Mercado Pago payment webhook (public). Updates the order when a payment is
+// approved. MP sends ?type=payment&data.id=... (or a JSON body).
+app.post('/api/mercadopago/webhook', async (req, res) => {
+  try {
+    const type = String(req.query.type || req.query.topic || (req.body && req.body.type) || '');
+    const paymentId = String(
+      req.query['data.id'] || req.query.id || (req.body && req.body.data && req.body.data.id) || ''
+    );
+    if (paymentId && (type === 'payment' || type === '')) {
+      const integ = await getIntegrations();
+      if (isMercadoPagoConfigured(integ.mercadoPagoAccessToken)) {
+        const pay = await getPaymentStatus(integ.mercadoPagoAccessToken, paymentId);
+        if (pay.externalReference) {
+          if (pay.status === 'approved') {
+            await patchOrderData(pay.externalReference, { status: 'pago', paymentStatus: 'approved' });
+          } else {
+            await patchOrderData(pay.externalReference, { paymentStatus: pay.status });
+          }
+        }
+      }
+    }
+  } catch (e: any) {
+    console.error('MP webhook error:', e?.message || e);
+  }
+  // Always 200 so Mercado Pago doesn't keep retrying.
+  res.sendStatus(200);
 });
 
 // Change the current user's password.
