@@ -49,7 +49,11 @@ import {
   updateAccountProfile,
   updateAccountPassword,
   checkAccountPassword,
-  listOrdersForAccount
+  listOrdersForAccount,
+  addContactMessage,
+  listContactMessages,
+  updateContactMessageStatus,
+  deleteContactMessage
 } from './db';
 import { uploadToR2, isR2Configured } from './r2';
 import { verifyRecaptcha } from './recaptcha';
@@ -101,6 +105,7 @@ const PUBLIC_API: { method: string; re: RegExp }[] = [
   { method: 'GET', re: /^\/blog\/tags\/?$/ },
   { method: 'GET', re: /^\/testimonials\/?$/ },
   { method: 'POST', re: /^\/testimonials\/?$/ },
+  { method: 'POST', re: /^\/contact\/?$/ },
   { method: 'POST', re: /^\/orders\/?$/ }
 ];
 
@@ -781,6 +786,62 @@ app.put('/api/testimonials/:id', async (req, res) => {
 app.delete('/api/testimonials/:id', async (req, res) => {
   try {
     await deleteTestimonial(req.params.id);
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- Contact messages (help / "Fale Conosco") ---
+
+// Submit a contact message (public). Protected by reCAPTCHA v3 and URL stripping.
+app.post('/api/contact', async (req, res) => {
+  try {
+    const { name, email, subject, message, recaptchaToken } = req.body || {};
+    if (!name || !email || !message) {
+      return res.status(400).json({ error: 'Nome, e-mail e mensagem são obrigatórios.' });
+    }
+    const verification = await verifyRecaptcha(recaptchaToken, req.ip);
+    if (!verification.ok) {
+      return res.status(400).json({ error: 'Falha na verificação de segurança. Tente novamente.' });
+    }
+    const id = `msg_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+    const created = await addContactMessage(
+      id,
+      stripLinks(String(name)).slice(0, 120),
+      String(email).trim().slice(0, 160),
+      stripLinks(String(subject || '')).slice(0, 160),
+      stripLinks(String(message)).slice(0, 4000)
+    );
+    res.json({ success: true, message: created });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// List contact messages (admin).
+app.get('/api/contact', async (req, res) => {
+  try {
+    res.json(await listContactMessages());
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Update a message status: read | unread (admin).
+app.put('/api/contact/:id', async (req, res) => {
+  try {
+    await updateContactMessageStatus(req.params.id, String(req.body?.status || ''));
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Delete a message (admin).
+app.delete('/api/contact/:id', async (req, res) => {
+  try {
+    await deleteContactMessage(req.params.id);
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });

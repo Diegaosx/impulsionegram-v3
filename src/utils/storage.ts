@@ -567,6 +567,60 @@ export async function unblockIpFromServer(ip: string): Promise<void> {
   if (!res.ok) throw new Error('Failed to unblock IP');
 }
 
+// --- Contact messages ---
+export interface ContactMessage {
+  id: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  status: 'unread' | 'read';
+  createdAt: string;
+}
+
+export async function submitContactMessage(
+  payload: { name: string; email: string; subject: string; message: string },
+  recaptchaToken?: string | null
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch('/api/contact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, recaptchaToken })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data.error || 'Falha ao enviar a mensagem.' };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: 'Erro de conexão ao enviar a mensagem.' };
+  }
+}
+
+export async function fetchContactMessages(): Promise<ContactMessage[]> {
+  try {
+    const res = await fetch('/api/contact');
+    if (!res.ok) throw new Error('Failed to fetch contact messages');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching contact messages:', error);
+    return [];
+  }
+}
+
+export async function setContactMessageStatus(id: string, status: 'read' | 'unread'): Promise<void> {
+  const res = await fetch(`/api/contact/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status })
+  });
+  if (!res.ok) throw new Error('Failed to update message');
+}
+
+export async function deleteContactMessage(id: string): Promise<void> {
+  const res = await fetch(`/api/contact/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to delete message');
+}
+
 export interface CookieChoices {
   necessary: boolean;
   analytics: boolean;

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Mail, Phone, MapPin, Send, MessageSquareCode, CheckCircle2 } from 'lucide-react';
-import { CompanySettings } from '../utils/storage';
+import { CompanySettings, submitContactMessage } from '../utils/storage';
+import { getRecaptchaToken } from '../utils/recaptcha';
 
 interface ContactFormProps {
   company?: CompanySettings | null;
@@ -20,7 +21,7 @@ export default function ContactForm({ company }: ContactFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  const handleContactSubmit = (e: React.FormEvent) => {
+  const handleContactSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     if (!name.trim() || !email.trim() || !message.trim()) {
@@ -29,17 +30,23 @@ export default function ContactForm({ company }: ContactFormProps) {
     }
 
     setSubmitting(true);
-    setTimeout(() => {
-      setSubmitting(false);
+    const token = await getRecaptchaToken('contact');
+    const res = await submitContactMessage(
+      { name: name.trim(), email: email.trim(), subject: subject.trim(), message: message.trim() },
+      token
+    );
+    setSubmitting(false);
+    if (res.ok) {
       setSubmitted(true);
       setName('');
       setEmail('');
       setSubject('');
       setMessage('');
       setErrorMsg('');
-      
       setTimeout(() => setSubmitted(false), 3500);
-    }, 1500);
+    } else {
+      setErrorMsg(res.error || 'Falha ao enviar a mensagem. Tente novamente.');
+    }
   };
 
   return (

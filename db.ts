@@ -245,6 +245,67 @@ async function createSchema(client: PoolClient) {
       created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
     )`
   );
+  await client.query(
+    `CREATE TABLE IF NOT EXISTS contact_messages (
+      id         TEXT PRIMARY KEY,
+      name       TEXT NOT NULL,
+      email      TEXT NOT NULL,
+      subject    TEXT,
+      message    TEXT NOT NULL,
+      status     TEXT NOT NULL DEFAULT 'unread',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`
+  );
+}
+
+// --- Contact messages (help / "Fale Conosco" form) ---
+export interface ContactMessageRecord {
+  id: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  status: 'unread' | 'read';
+  createdAt: string;
+}
+
+function mapContactMessage(r: any): ContactMessageRecord {
+  return {
+    id: r.id,
+    name: r.name || '',
+    email: r.email || '',
+    subject: r.subject || '',
+    message: r.message || '',
+    status: r.status === 'read' ? 'read' : 'unread',
+    createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at)
+  };
+}
+
+export async function addContactMessage(
+  id: string,
+  name: string,
+  email: string,
+  subject: string,
+  message: string
+): Promise<ContactMessageRecord> {
+  const r = await pool.query(
+    `INSERT INTO contact_messages (id, name, email, subject, message) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [id, name, email, subject, message]
+  );
+  return mapContactMessage(r.rows[0]);
+}
+
+export async function listContactMessages(limit = 500): Promise<ContactMessageRecord[]> {
+  const r = await pool.query(`SELECT * FROM contact_messages ORDER BY created_at DESC LIMIT $1`, [limit]);
+  return r.rows.map(mapContactMessage);
+}
+
+export async function updateContactMessageStatus(id: string, status: string): Promise<void> {
+  await pool.query(`UPDATE contact_messages SET status = $2 WHERE id = $1`, [id, status === 'read' ? 'read' : 'unread']);
+}
+
+export async function deleteContactMessage(id: string): Promise<void> {
+  await pool.query(`DELETE FROM contact_messages WHERE id = $1`, [id]);
 }
 
 // --- User accounts (multi-user auth: admin + cliente) ---
