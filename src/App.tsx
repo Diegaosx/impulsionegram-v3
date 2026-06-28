@@ -56,7 +56,9 @@ export default function App() {
         setSiteName(loadedGeneral.siteName);
         setLogoUrl(loadedGeneral.logoUrl);
         setAppTimezone(loadedGeneral.timezone);
-        applyBrandingToHead(loadedGeneral);
+        applyBrandingToHead(loadedGeneral, {
+          skipTitle: window.location.pathname.startsWith('/blog')
+        });
       } catch (err) {
         console.error('Error loading secure REST API endpoints:', err);
       }
