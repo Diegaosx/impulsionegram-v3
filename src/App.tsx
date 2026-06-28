@@ -16,6 +16,7 @@ import {
 import { applyBrandingToHead } from './utils/branding';
 import { setAppTimezone } from './utils/datetime';
 import { applySiteCode, clearSiteCode } from './utils/codeInjection';
+import { clearAdminToken } from './utils/authFetch';
 
 export default function App() {
   const navigate = useNavigate();
@@ -44,10 +45,9 @@ export default function App() {
   useEffect(() => {
     async function loadBackendData() {
       try {
-        const [loadedServices, loadedPlans, loadedOrders, loadedHome, loadedGeneral, loadedCompany, loadedAnalytics] = await Promise.all([
+        const [loadedServices, loadedPlans, loadedHome, loadedGeneral, loadedCompany, loadedAnalytics] = await Promise.all([
           fetchServices(),
           fetchPlans(),
-          fetchOrders(),
           fetchHomeContent(),
           fetchGeneralSettings(),
           fetchCompanySettings(),
@@ -55,7 +55,6 @@ export default function App() {
         ]);
         setServices(loadedServices);
         setPlans(loadedPlans);
-        setOrders(loadedOrders);
         setHomeContent(loadedHome);
         setCompany(loadedCompany);
         setAnalytics(loadedAnalytics);
@@ -73,6 +72,16 @@ export default function App() {
     }
     loadBackendData();
   }, []);
+
+  // Orders are admin-only data (contain customer details), so they're fetched
+  // only once the admin is authenticated — and refetched when that changes.
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setOrders([]);
+      return;
+    }
+    fetchOrders().then(setOrders).catch((e) => console.error('Failed to load orders:', e));
+  }, [isAuthenticated]);
 
   // Inject the site-wide custom code on public pages only. The admin dashboard
   // and login screen are excluded so analytics/ads don't run inside the panel.
@@ -95,6 +104,7 @@ export default function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('admin_authenticated');
+    clearAdminToken();
     setIsAuthenticated(false);
     navigate('/login', { replace: true });
   };
