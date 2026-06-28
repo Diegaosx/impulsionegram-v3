@@ -40,13 +40,23 @@ import {
   updateTestimonialStatus,
   deleteTestimonial,
   listBlockedIps,
-  unblockIp
+  unblockIp,
+  createAccount,
+  getAccountById,
+  getAccountByEmail,
+  verifyAccountCredentials,
+  findAccountByEmailOrPhone,
+  updateAccountProfile,
+  updateAccountPassword,
+  checkAccountPassword
 } from './db';
 import { uploadToR2, isR2Configured } from './r2';
 import { verifyRecaptcha } from './recaptcha';
 import { stripLinks } from './sanitize';
 import { checkSubmissionRate, initRateLimiter } from './rateLimit';
-import { signAdminToken, getAdminCredentials, requireAdmin } from './auth';
+import {
+  signAdminToken, signAccountToken, getAdminCredentials, requireAdmin, requireAuth, getPayload
+} from './auth';
 
 const app = express();
 const PORT = 3000;
@@ -72,6 +82,9 @@ function rateLimitMessage(reason?: string, retryAfterSeconds?: number): string {
 // relative to the /api mount (e.g. "/services").
 const PUBLIC_API: { method: string; re: RegExp }[] = [
   { method: 'POST', re: /^\/login\/?$/ },
+  { method: 'POST', re: /^\/auth\/login\/?$/ },
+  { method: 'POST', re: /^\/auth\/register\/?$/ },
+  { method: 'POST', re: /^\/auth\/check\/?$/ },
   { method: 'GET', re: /^\/services\/?$/ },
   { method: 'GET', re: /^\/plans\/?$/ },
   { method: 'GET', re: /^\/home\/?$/ },
@@ -90,6 +103,15 @@ const PUBLIC_API: { method: string; re: RegExp }[] = [
   { method: 'POST', re: /^\/orders\/?$/ }
 ];
 
+// Routes any authenticated user (admin OR cliente) may access.
+const AUTH_API: { method: string; re: RegExp }[] = [
+  { method: 'GET', re: /^\/auth\/me\/?$/ },
+  { method: 'PUT', re: /^\/auth\/profile\/?$/ },
+  { method: 'PUT', re: /^\/auth\/password\/?$/ },
+  { method: 'GET', re: /^\/my\// },
+  { method: 'POST', re: /^\/my\// }
+];
+
 app.use('/api', (req, res, next) => {
   const path = req.path; // relative to the /api mount
   const isPublic = PUBLIC_API.some((r) => r.method === req.method && r.re.test(path));
@@ -98,6 +120,11 @@ app.use('/api', (req, res, next) => {
   // requires authentication.
   const adminOnlyVariant = (path === '/blog/comments' || path === '/testimonials') && req.query.all === '1';
   if (isPublic && !adminOnlyVariant) return next();
+  // Authenticated-user (any role) routes.
+  if (AUTH_API.some((r) => r.method === req.method && r.re.test(path))) {
+    return requireAuth(req, res, next);
+  }
+  // Everything else is admin-only.
   return requireAdmin(req, res, next);
 });
 
@@ -224,16 +251,130 @@ app.put('/api/home', async (req, res) => {
 });
 
 // 5f. Auth Admin Login
-app.post('/api/login', (req, res) => {
+// Legacy admin login (username/password). Resolves to the bootstrap admin
+// account so the issued token carries the account id; falls back to the env
+// credentials for safety.
+app.post('/api/login', async (req, res) => {
   try {
     const { username, password } = req.body || {};
     const creds = getAdminCredentials();
-    if (username === creds.username && password === creds.password) {
-      const token = signAdminToken(String(username));
-      res.json({ success: true, token, message: 'Autenticado com sucesso' });
-    } else {
-      res.status(401).json({ success: false, error: 'Usuário ou senha incorretos' });
+    const email = String(username || '').includes('@')
+      ? String(username)
+      : (process.env.ADMIN_EMAIL || `${creds.username}@admin.local`);
+    const account = await verifyAccountCredentials(email, String(password || ''));
+    if (account) {
+      return res.json({ success: true, token: signAccountToken(account), message: 'Autenticado com sucesso' });
     }
+    if (username === creds.username && password === creds.password) {
+      return res.json({ success: true, token: signAdminToken(String(username)), message: 'Autenticado com sucesso' });
+    }
+    return res.status(401).json({ success: false, error: 'Usuário ou senha incorretos' });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- ACCOUNTS / AUTH ---
+
+function publicUser(a: any) {
+  return { id: a.id, name: a.name, email: a.email, phone: a.phone, role: a.role, avatar: a.avatar, createdAt: a.createdAt };
+}
+
+// Register a new client account.
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { name, email, phone, password } = req.body || {};
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Nome, e-mail e senha são obrigatórios.' });
+    }
+    if (String(password).length < 6) {
+      return res.status(400).json({ error: 'A senha deve ter ao menos 6 caracteres.' });
+    }
+    const existing = await getAccountByEmail(String(email));
+    if (existing) {
+      return res.status(409).json({ error: 'Já existe uma conta com este e-mail. Faça login.' });
+    }
+    const account = await createAccount({ name, email, phone, password, role: 'cliente' });
+    const token = signAccountToken(account);
+    res.json({ success: true, token, user: publicUser(account) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Login with email + password (admin or cliente).
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    const account = await verifyAccountCredentials(String(email || ''), String(password || ''));
+    if (!account) return res.status(401).json({ error: 'E-mail ou senha incorretos.' });
+    const token = signAccountToken(account);
+    res.json({ success: true, token, user: publicUser(account) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Check whether an email/phone already belongs to an account (used at checkout).
+app.post('/api/auth/check', async (req, res) => {
+  try {
+    const { email, phone } = req.body || {};
+    const { emailMatch, phoneMatch } = await findAccountByEmailOrPhone(String(email || ''), String(phone || ''));
+    res.json({ emailExists: !!emailMatch, phoneExists: !!phoneMatch, exists: !!(emailMatch || phoneMatch) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Current authenticated user.
+app.get('/api/auth/me', async (req, res) => {
+  try {
+    const payload = getPayload(req)!;
+    const account = await getAccountById(payload.sub);
+    if (!account) {
+      // Env-admin token without a backing account row.
+      return res.json({ user: { id: payload.sub, name: payload.name || 'Administrador', email: payload.email || '', phone: '', role: payload.role, avatar: '', createdAt: '' } });
+    }
+    res.json({ user: publicUser(account) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Update the current user's profile (name, email, phone, avatar).
+app.put('/api/auth/profile', async (req, res) => {
+  try {
+    const payload = getPayload(req)!;
+    const { name, email, phone, avatar } = req.body || {};
+    if (email !== undefined) {
+      const normalized = String(email).trim().toLowerCase();
+      const other = await getAccountByEmail(normalized);
+      if (other && other.id !== payload.sub) {
+        return res.status(409).json({ error: 'Este e-mail já está em uso por outra conta.' });
+      }
+    }
+    const updated = await updateAccountProfile(payload.sub, { name, email, phone, avatar });
+    if (!updated) return res.status(404).json({ error: 'Conta não encontrada.' });
+    // Re-issue the token so the name/email in it stay current.
+    const token = signAccountToken(updated);
+    res.json({ success: true, token, user: publicUser(updated) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Change the current user's password.
+app.put('/api/auth/password', async (req, res) => {
+  try {
+    const payload = getPayload(req)!;
+    const { currentPassword, newPassword } = req.body || {};
+    if (!newPassword || String(newPassword).length < 6) {
+      return res.status(400).json({ error: 'A nova senha deve ter ao menos 6 caracteres.' });
+    }
+    const ok = await checkAccountPassword(payload.sub, String(currentPassword || ''));
+    if (!ok) return res.status(400).json({ error: 'Senha atual incorreta.' });
+    await updateAccountPassword(payload.sub, String(newPassword));
+    res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

@@ -1,4 +1,6 @@
 import { Pool, PoolClient } from 'pg';
+import bcrypt from 'bcryptjs';
+import { randomUUID } from 'crypto';
 
 // Initial catalog data is bundled so a fresh database can be seeded on first run.
 import { SERVICES, PREBUILT_PLANS, TESTIMONIALS } from './src/data';
@@ -231,6 +233,163 @@ async function createSchema(client: PoolClient) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`
   );
+  await client.query(
+    `CREATE TABLE IF NOT EXISTS accounts (
+      id            TEXT PRIMARY KEY,
+      name          TEXT NOT NULL,
+      email         TEXT UNIQUE NOT NULL,
+      phone         TEXT,
+      password_hash TEXT NOT NULL,
+      role          TEXT NOT NULL DEFAULT 'cliente',
+      avatar        TEXT,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`
+  );
+}
+
+// --- User accounts (multi-user auth: admin + cliente) ---
+export type AccountRole = 'admin' | 'cliente';
+
+export interface AccountRecord {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: AccountRole;
+  avatar: string;
+  createdAt: string;
+}
+
+const BCRYPT_ROUNDS = 10;
+
+function normalizeEmail(email: string): string {
+  return String(email || '').trim().toLowerCase();
+}
+
+function normalizePhoneDigits(phone: string): string {
+  return String(phone || '').replace(/\D/g, '');
+}
+
+function mapAccount(r: any): AccountRecord {
+  return {
+    id: r.id,
+    name: r.name || '',
+    email: r.email || '',
+    phone: r.phone || '',
+    role: (r.role === 'admin' ? 'admin' : 'cliente'),
+    avatar: r.avatar || '',
+    createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at)
+  };
+}
+
+export async function createAccount(input: {
+  name: string;
+  email: string;
+  phone?: string;
+  password: string;
+  role?: AccountRole;
+}): Promise<AccountRecord> {
+  const email = normalizeEmail(input.email);
+  const hash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
+  const id = randomUUID();
+  const role: AccountRole = input.role === 'admin' ? 'admin' : 'cliente';
+  const result = await pool.query(
+    `INSERT INTO accounts (id, name, email, phone, password_hash, role, avatar)
+     VALUES ($1, $2, $3, $4, $5, $6, '') RETURNING *`,
+    [id, String(input.name || '').trim(), email, String(input.phone || '').trim(), hash, role]
+  );
+  return mapAccount(result.rows[0]);
+}
+
+export async function getAccountById(id: string): Promise<AccountRecord | null> {
+  const r = await pool.query(`SELECT * FROM accounts WHERE id = $1`, [id]);
+  return r.rows[0] ? mapAccount(r.rows[0]) : null;
+}
+
+export async function getAccountByEmail(email: string): Promise<AccountRecord | null> {
+  const r = await pool.query(`SELECT * FROM accounts WHERE email = $1`, [normalizeEmail(email)]);
+  return r.rows[0] ? mapAccount(r.rows[0]) : null;
+}
+
+// Verify credentials; returns the public account on success, null otherwise.
+export async function verifyAccountCredentials(email: string, password: string): Promise<AccountRecord | null> {
+  const r = await pool.query(`SELECT * FROM accounts WHERE email = $1`, [normalizeEmail(email)]);
+  const row = r.rows[0];
+  if (!row) return null;
+  const ok = await bcrypt.compare(String(password || ''), row.password_hash);
+  return ok ? mapAccount(row) : null;
+}
+
+// Check whether an email and/or phone already belong to an account.
+export async function findAccountByEmailOrPhone(email: string, phone: string): Promise<{
+  emailMatch: AccountRecord | null;
+  phoneMatch: AccountRecord | null;
+}> {
+  const e = normalizeEmail(email);
+  const p = normalizePhoneDigits(phone);
+  const emailRes = e ? await pool.query(`SELECT * FROM accounts WHERE email = $1`, [e]) : { rows: [] as any[] };
+  const phoneRes = p
+    ? await pool.query(`SELECT * FROM accounts WHERE regexp_replace(coalesce(phone,''), '\\D', '', 'g') = $1`, [p])
+    : { rows: [] as any[] };
+  return {
+    emailMatch: emailRes.rows[0] ? mapAccount(emailRes.rows[0]) : null,
+    phoneMatch: phoneRes.rows[0] ? mapAccount(phoneRes.rows[0]) : null
+  };
+}
+
+export async function updateAccountProfile(id: string, data: {
+  name?: string;
+  email?: string;
+  phone?: string;
+  avatar?: string;
+}): Promise<AccountRecord | null> {
+  const current = await pool.query(`SELECT * FROM accounts WHERE id = $1`, [id]);
+  if (!current.rows[0]) return null;
+  const cur = current.rows[0];
+  const name = data.name !== undefined ? String(data.name).trim() : cur.name;
+  const email = data.email !== undefined ? normalizeEmail(data.email) : cur.email;
+  const phone = data.phone !== undefined ? String(data.phone).trim() : cur.phone;
+  const avatar = data.avatar !== undefined ? String(data.avatar).trim() : cur.avatar;
+  const r = await pool.query(
+    `UPDATE accounts SET name = $2, email = $3, phone = $4, avatar = $5 WHERE id = $1 RETURNING *`,
+    [id, name, email, phone, avatar]
+  );
+  return mapAccount(r.rows[0]);
+}
+
+export async function updateAccountPassword(id: string, newPassword: string): Promise<void> {
+  const hash = await bcrypt.hash(String(newPassword), BCRYPT_ROUNDS);
+  await pool.query(`UPDATE accounts SET password_hash = $2 WHERE id = $1`, [id, hash]);
+}
+
+// Verify a specific account's current password (used when changing password).
+export async function checkAccountPassword(id: string, password: string): Promise<boolean> {
+  const r = await pool.query(`SELECT password_hash FROM accounts WHERE id = $1`, [id]);
+  if (!r.rows[0]) return false;
+  return bcrypt.compare(String(password || ''), r.rows[0].password_hash);
+}
+
+export async function listAccounts(): Promise<AccountRecord[]> {
+  const r = await pool.query(`SELECT * FROM accounts ORDER BY created_at DESC LIMIT 1000`);
+  return r.rows.map(mapAccount);
+}
+
+// Seed a bootstrap admin account from env on first run so the admin can use the
+// profile/password screens like any other user.
+async function seedAdminAccount(client: PoolClient) {
+  const username = process.env.ADMIN_USERNAME || 'admin';
+  const password = process.env.ADMIN_PASSWORD || 'admin';
+  const email = normalizeEmail(process.env.ADMIN_EMAIL || `${username}@admin.local`);
+  const { rows } = await client.query(`SELECT COUNT(*)::int AS count FROM accounts WHERE role = 'admin'`);
+  if (rows[0]?.count > 0) return;
+  const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+  await client.query(
+    `INSERT INTO accounts (id, name, email, phone, password_hash, role, avatar)
+     VALUES ($1, $2, $3, '', $4, 'admin', '')
+     ON CONFLICT (email) DO NOTHING`,
+    [randomUUID(), 'Administrador', email, hash]
+  );
+  console.log(`Seeded bootstrap admin account (${email}).`);
 }
 
 // --- Blocked IPs (antispam permanent bans) ---
@@ -703,6 +862,8 @@ export async function initDB(): Promise<void> {
     await backfillCategoriesAndTags(client);
     // Seed home testimonials on a fresh testimonials table.
     await seedTestimonialsIfEmpty(client);
+    // Ensure a bootstrap admin account exists for the profile/login system.
+    await seedAdminAccount(client);
 
     console.log('PostgreSQL database initialized successfully.');
   } finally {
