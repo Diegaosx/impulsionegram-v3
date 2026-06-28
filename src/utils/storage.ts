@@ -67,6 +67,18 @@ export async function fetchOrders(): Promise<AdminOrder[]> {
   }
 }
 
+// Orders belonging to the logged-in client.
+export async function fetchMyOrders(): Promise<AdminOrder[]> {
+  try {
+    const res = await fetch('/api/my/orders');
+    if (!res.ok) throw new Error('Failed to fetch my orders');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching my orders:', error);
+    return [];
+  }
+}
+
 export async function saveOrdersToServer(orders: AdminOrder[]): Promise<void> {
   const res = await fetch('/api/orders', {
     method: 'PUT',

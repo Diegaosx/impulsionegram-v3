@@ -374,6 +374,20 @@ export async function listAccounts(): Promise<AccountRecord[]> {
   return r.rows.map(mapAccount);
 }
 
+// Orders that belong to a given account — matched by linked accountId or by the
+// account's e-mail (for orders placed before the account existed / guest flow).
+export async function listOrdersForAccount(accountId: string, email: string): Promise<any[]> {
+  const e = normalizeEmail(email);
+  const r = await pool.query(
+    `SELECT data FROM orders
+     WHERE data->>'accountId' = $1
+        OR ($2 <> '' AND lower(coalesce(data->>'email','')) = $2)
+     ORDER BY seq DESC`,
+    [accountId, e]
+  );
+  return r.rows.map((x) => x.data);
+}
+
 // Seed a bootstrap admin account from env on first run so the admin can use the
 // profile/password screens like any other user.
 async function seedAdminAccount(client: PoolClient) {

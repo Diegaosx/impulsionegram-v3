@@ -90,9 +90,13 @@ export default function ProfilePage({ user, onUserUpdate, onLogout, siteName, lo
             )}
           </button>
           <div className="flex items-center gap-2">
-            {user.role === 'admin' && (
+            {user.role === 'admin' ? (
               <button onClick={() => navigate('/dashboard')} className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-primary border border-slate-200 rounded-lg px-3 py-2">
                 <LayoutDashboard className="h-4 w-4" /> Painel
+              </button>
+            ) : (
+              <button onClick={() => navigate('/minha-conta')} className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-primary border border-slate-200 rounded-lg px-3 py-2">
+                <LayoutDashboard className="h-4 w-4" /> Minha Conta
               </button>
             )}
             <button onClick={() => navigate('/')} className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-primary border border-slate-200 rounded-lg px-3 py-2">

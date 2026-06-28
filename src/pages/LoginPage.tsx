@@ -23,7 +23,7 @@ export default function LoginPage({ onAuthSuccess, siteName }: LoginPageProps) {
       const result = await loginUser(identifier.trim(), password);
       if (result.ok && result.user) {
         onAuthSuccess(result.user);
-        navigate(result.user.role === 'admin' ? '/dashboard' : '/perfil', { replace: true });
+        navigate(result.user.role === 'admin' ? '/dashboard' : '/minha-conta', { replace: true });
       } else {
         setLoginError(result.error || 'Autenticação recusada pelo servidor.');
       }

@@ -1,0 +1,199 @@
+import { useEffect, useMemo, useState, ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  LayoutDashboard, ShoppingBag, User as UserIcon, LogOut, ArrowLeft, Sparkles,
+  Package, CircleDollarSign, Clock, CheckCircle2, ShoppingCart
+} from 'lucide-react';
+import { AuthUser, AdminOrder, fetchMyOrders } from '../utils/storage';
+import { orderStatusInfo } from '../utils/orderStatus';
+import { formatDateTime } from '../utils/datetime';
+
+interface ClientDashboardProps {
+  user: AuthUser;
+  onLogout: () => void;
+  siteName?: string;
+  logoUrl?: string;
+}
+
+type Tab = 'overview' | 'orders';
+
+export default function ClientDashboard({ user, onLogout, siteName, logoUrl }: ClientDashboardProps) {
+  const navigate = useNavigate();
+  const [tab, setTab] = useState<Tab>('overview');
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchMyOrders().then(setOrders).finally(() => setLoading(false));
+  }, []);
+
+  const metrics = useMemo(() => {
+    const total = orders.length;
+    const spent = orders.reduce((sum, o) => sum + (Number(o.price) || 0), 0);
+    const pending = orders.filter((o) => ['aguardando_pagamento', 'processando'].includes(orderStatusInfo(o.status).key)).length;
+    const delivered = orders.filter((o) => orderStatusInfo(o.status).key === 'entregue').length;
+    return { total, spent, pending, delivered };
+  }, [orders]);
+
+  const money = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const firstName = (user.name || 'Cliente').split(' ')[0];
+  const initials = (user.name || user.email || '?').trim().slice(0, 2).toUpperCase();
+
+  const NavBtn = ({ id, icon, label }: { id: Tab; icon: ReactNode; label: string }) => (
+    <button
+      onClick={() => setTab(id)}
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
+        tab === id ? 'bg-primary text-white shadow-sm' : 'text-slate-600 hover:text-primary hover:bg-slate-100'
+      }`}
+    >
+      {icon}<span>{label}</span>
+    </button>
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800">
+      {/* Top bar */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+          <button onClick={() => navigate('/')} className="flex items-center gap-2 cursor-pointer">
+            {logoUrl ? (
+              <img src={logoUrl} alt={siteName || 'Logo'} className="h-8 w-auto object-contain" />
+            ) : (
+              <span className="font-display text-xl font-black text-primary">{siteName || 'ImpulsioneGram'}</span>
+            )}
+          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => navigate('/#servicos')} className="hidden sm:flex items-center gap-1.5 bg-primary hover:bg-purple-700 text-white text-xs font-bold rounded-lg px-3 py-2 transition-colors">
+              <ShoppingCart className="h-4 w-4" /> Comprar
+            </button>
+            <button onClick={() => navigate('/perfil')} className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-primary border border-slate-200 rounded-lg px-3 py-2">
+              <UserIcon className="h-4 w-4" /> Perfil
+            </button>
+            <button onClick={() => navigate('/')} className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-primary border border-slate-200 rounded-lg px-3 py-2">
+              <ArrowLeft className="h-4 w-4" /> Site
+            </button>
+            <button onClick={onLogout} className="flex items-center gap-1.5 text-xs font-bold text-red-600 hover:bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <LogOut className="h-4 w-4" /> Sair
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Sidebar */}
+        <aside className="lg:col-span-3">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-4">
+            <div className="flex items-center gap-3">
+              {user.avatar ? (
+                <img src={user.avatar} alt="" className="w-11 h-11 rounded-full object-cover border border-slate-200" referrerPolicy="no-referrer" />
+              ) : (
+                <div className="w-11 h-11 rounded-full bg-purple-100 text-primary flex items-center justify-center font-black">{initials}</div>
+              )}
+              <div className="min-w-0">
+                <p className="font-bold text-slate-800 text-sm truncate">{firstName}</p>
+                <p className="text-[11px] text-slate-400 font-semibold truncate">{user.email}</p>
+              </div>
+            </div>
+            <nav className="space-y-1">
+              <NavBtn id="overview" icon={<LayoutDashboard className="h-4 w-4" />} label="Visão Geral" />
+              <NavBtn id="orders" icon={<ShoppingBag className="h-4 w-4" />} label="Meus Pedidos" />
+            </nav>
+          </div>
+        </aside>
+
+        {/* Content */}
+        <main className="lg:col-span-9 space-y-6">
+          {tab === 'overview' && (
+            <>
+              <div className="bg-gradient-to-br from-primary to-purple-700 text-white rounded-2xl p-6 shadow-sm flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <h1 className="font-display font-black text-2xl">Olá, {firstName}! 👋</h1>
+                  <p className="text-white/80 text-sm font-semibold mt-1">Acompanhe seus pedidos e impulsione seu perfil.</p>
+                </div>
+                <button onClick={() => navigate('/#servicos')} className="flex items-center gap-1.5 bg-white text-primary font-bold text-xs rounded-lg px-4 py-2.5 hover:scale-[1.02] transition-transform shadow">
+                  <Sparkles className="h-4 w-4" /> Comprar serviços
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <MetricCard icon={<Package className="h-5 w-5" />} label="Pedidos" value={String(metrics.total)} tone="text-primary bg-purple-50" />
+                <MetricCard icon={<CircleDollarSign className="h-5 w-5" />} label="Total gasto" value={money(metrics.spent)} tone="text-green-600 bg-green-50" />
+                <MetricCard icon={<Clock className="h-5 w-5" />} label="Em andamento" value={String(metrics.pending)} tone="text-amber-600 bg-amber-50" />
+                <MetricCard icon={<CheckCircle2 className="h-5 w-5" />} label="Entregues" value={String(metrics.delivered)} tone="text-emerald-600 bg-emerald-50" />
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="font-bold text-slate-800 text-sm">Pedidos recentes</h2>
+                  {orders.length > 3 && (
+                    <button onClick={() => setTab('orders')} className="text-xs font-bold text-primary hover:underline">Ver todos</button>
+                  )}
+                </div>
+                <OrdersList orders={orders.slice(0, 3)} loading={loading} onBuy={() => navigate('/#servicos')} />
+              </div>
+            </>
+          )}
+
+          {tab === 'orders' && (
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <h1 className="font-display font-black text-xl text-slate-900 mb-4">Meus Pedidos</h1>
+              <OrdersList orders={orders} loading={loading} onBuy={() => navigate('/#servicos')} />
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ icon, label, value, tone }: { icon: ReactNode; label: string; value: string; tone: string }) {
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+      <div className={`inline-flex p-2 rounded-lg ${tone}`}>{icon}</div>
+      <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mt-3">{label}</p>
+      <p className="font-display font-black text-xl text-slate-900 mt-0.5">{value}</p>
+    </div>
+  );
+}
+
+function OrdersList({ orders, loading, onBuy }: { orders: AdminOrder[]; loading: boolean; onBuy: () => void }) {
+  if (loading) {
+    return <div className="flex items-center justify-center py-10"><div className="animate-spin rounded-full h-7 w-7 border-b-2 border-primary"></div></div>;
+  }
+  if (orders.length === 0) {
+    return (
+      <div className="text-center py-10 space-y-3">
+        <ShoppingBag className="h-9 w-9 text-slate-300 mx-auto" />
+        <p className="text-slate-500 text-sm font-semibold">Você ainda não tem pedidos.</p>
+        <button onClick={onBuy} className="inline-flex items-center gap-1.5 bg-primary hover:bg-purple-700 text-white text-xs font-bold rounded-lg px-4 py-2.5 transition-colors">
+          <ShoppingCart className="h-4 w-4" /> Fazer meu primeiro pedido
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2.5">
+      {orders.map((o) => {
+        const st = orderStatusInfo(o.status);
+        return (
+          <div key={o.id} className="flex items-center justify-between gap-3 border border-slate-100 rounded-xl p-3 hover:border-slate-200 transition-colors">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-slate-800 text-sm">{o.serviceLabel || 'Pedido'}</span>
+                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${st.badge}`}>{st.label}</span>
+              </div>
+              <p className="text-[11px] text-slate-400 font-semibold mt-0.5">
+                {o.quantity ? `${Number(o.quantity).toLocaleString('pt-BR')} • ` : ''}{o.platform || ''} • #{o.id}
+              </p>
+              <p className="text-[10px] text-slate-300 font-mono mt-0.5">{o.date ? formatDateTime(o.date) : ''}</p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="font-display font-black text-slate-900 text-sm">{(Number(o.price) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+              <p className="text-[10px] text-slate-400 font-semibold">{o.paymentMethod || ''}</p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
