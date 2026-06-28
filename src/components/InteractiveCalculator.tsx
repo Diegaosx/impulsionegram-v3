@@ -50,7 +50,7 @@ export default function InteractiveCalculator({
   const [postUrl, setPostUrl] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'PIX' | 'Card'>('PIX');
+  const paymentMethod: 'PIX' | 'Card' = 'PIX'; // PIX only for now
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [accountError, setAccountError] = useState('');
 
@@ -488,7 +488,7 @@ export default function InteractiveCalculator({
                   )}
                 </div>
                 <span className="text-[10px] text-slate-400 font-semibold block pt-1">
-                  Ou em até 12x de R$ {(bulkMetrics.finalPrice / 12 * 1.15).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} no cartão de crédito
+                  Pagamento via PIX com aprovação e processamento instantâneo
                 </span>
               </div>
             </div>
@@ -522,9 +522,9 @@ export default function InteractiveCalculator({
           onClick={() => setShowCheckout(false)}
         >
           
-          <div 
-            onClick={(e) => e.stopPropagation()} 
-            className="bg-white text-slate-900 rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden relative animate-scale-up cursor-default"
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white text-slate-900 rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full max-h-[92vh] overflow-y-auto relative animate-scale-up cursor-default"
           >
             
             {/* Checkout Stage Title Banner */}
@@ -635,11 +635,8 @@ export default function InteractiveCalculator({
 
                   <div>
                     <label className="text-xs font-black uppercase text-slate-500 block mb-1">Forma de pagamento</label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button type="button" onClick={() => setPaymentMethod('PIX')}
-                        className={`py-2.5 rounded-xl border font-bold text-sm transition-all ${paymentMethod === 'PIX' ? 'border-green-500 bg-green-50 text-green-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>🇧🇷 PIX</button>
-                      <button type="button" onClick={() => setPaymentMethod('Card')}
-                        className={`py-2.5 rounded-xl border font-bold text-sm transition-all ${paymentMethod === 'Card' ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>💳 Cartão</button>
+                    <div className="py-2.5 px-4 rounded-xl border border-green-500 bg-green-50 text-green-800 font-bold text-sm flex items-center justify-center gap-2">
+                      🇧🇷 PIX — aprovação instantânea
                     </div>
                   </div>
 

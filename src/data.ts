@@ -334,8 +334,8 @@ export const BENEFITS = [
     icon: 'Lock'
   },
   {
-    title: 'Pagamento Seguro por Pix ou Cartão',
-    description: 'Infraestrutura blindada criptografada integrada com os principais processadores do país (Mercado Pago, ASAAS). Garantia de sigilo e devolução facilitada.',
+    title: 'Pagamento Seguro por Pix',
+    description: 'Infraestrutura blindada criptografada integrada com os principais processadores do país (Mercado Pago). Garantia de sigilo e devolução facilitada.',
     icon: 'CreditCard'
   }
 ];
@@ -421,7 +421,7 @@ export const FAQS: FAQItem[] = [
   {
     id: 'faq-6',
     question: 'Quais são as formas de pagamento aceitas?',
-    answer: 'Aceitamos Pix (com aprovação e processamento instantâneo), Cartões de Crédito (com parcelamento em até 12x) e boleto bancário estruturado. Todos os pagamentos são assegurados pelos gateways Mercado Pago e ASAAS, com reembolso total em caso de não entrega.',
+    answer: 'No momento aceitamos Pix, com aprovação e processamento instantâneo. O pagamento é assegurado pelo gateway Mercado Pago, com reembolso total em caso de não entrega.',
     category: 'pagamento'
   }
 ];
@@ -442,7 +442,7 @@ export const STEP_PROCESS = [
   {
     step: '03',
     title: 'Pagamento Seguro',
-    description: 'Realize o pagamento rapidamente através de Pix ou Cartão com os melhores e mais seguros intermediadores do Brasil.',
+    description: 'Realize o pagamento rapidamente através de Pix com os melhores e mais seguros intermediadores do Brasil.',
     icon: 'Shield'
   },
   {

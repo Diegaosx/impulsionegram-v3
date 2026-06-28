@@ -109,7 +109,7 @@ export default function OrderConfirmation({ order, onGoToOrders, onBuyMore }: Or
             <img
               src={`data:image/png;base64,${pix.qrCodeBase64}`}
               alt="QR Code PIX"
-              className="mx-auto w-48 h-48 rounded-lg border border-slate-200 bg-white p-2"
+              className="mx-auto w-64 h-64 sm:w-72 sm:h-72 rounded-lg border border-slate-200 bg-white p-2"
             />
           )}
           {pix.qrCode && (
