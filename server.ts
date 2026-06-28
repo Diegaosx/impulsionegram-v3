@@ -26,7 +26,12 @@ import {
   listAllComments,
   addComment,
   updateCommentStatus,
-  deleteComment
+  deleteComment,
+  listBlogCategories,
+  addBlogCategory,
+  deleteBlogCategory,
+  listBlogTags,
+  deleteBlogTag
 } from './db';
 import { uploadToR2, isR2Configured } from './r2';
 
@@ -290,17 +295,20 @@ app.post('/api/blog/posts', async (req, res) => {
     if (!post || !post.slug || !post.title) {
       return res.status(400).json({ error: 'slug and title are required' });
     }
+    const categories = Array.isArray(post.categories)
+      ? post.categories.map((c: any) => String(c).trim()).filter(Boolean)
+      : (post.category ? [String(post.category).trim()] : []);
     const saved = await saveBlogPost({
       slug: String(post.slug),
       title: String(post.title),
       description: String(post.description || ''),
       content: Array.isArray(post.content) ? post.content : [],
-      category: String(post.category || 'Dicas'),
+      categories,
       image: String(post.image || ''),
       author: String(post.author || ''),
       date: String(post.date || ''),
       readTime: String(post.readTime || ''),
-      tags: Array.isArray(post.tags) ? post.tags : []
+      tags: Array.isArray(post.tags) ? post.tags.map((t: any) => String(t).trim()).filter(Boolean) : []
     }, post.publishedAt);
     res.json({ success: true, post: saved });
   } catch (e: any) {
@@ -366,6 +374,50 @@ app.put('/api/blog/comments/:id', async (req, res) => {
 app.delete('/api/blog/comments/:id', async (req, res) => {
   try {
     await deleteComment(req.params.id);
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Blog categories
+app.get('/api/blog/categories', async (req, res) => {
+  try {
+    res.json(await listBlogCategories());
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+app.post('/api/blog/categories', async (req, res) => {
+  try {
+    const name = String(req.body?.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    await addBlogCategory(name);
+    res.json({ success: true, categories: await listBlogCategories() });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+app.delete('/api/blog/categories/:name', async (req, res) => {
+  try {
+    await deleteBlogCategory(req.params.name);
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Blog tags
+app.get('/api/blog/tags', async (req, res) => {
+  try {
+    res.json(await listBlogTags());
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+app.delete('/api/blog/tags/:name', async (req, res) => {
+  try {
+    await deleteBlogTag(req.params.name);
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });

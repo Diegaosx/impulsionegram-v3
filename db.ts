@@ -204,6 +204,53 @@ async function createSchema(client: PoolClient) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`
   );
+  await client.query(
+    `CREATE TABLE IF NOT EXISTS blog_categories (
+      name       TEXT PRIMARY KEY,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`
+  );
+  await client.query(
+    `CREATE TABLE IF NOT EXISTS blog_tags (
+      name       TEXT PRIMARY KEY,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`
+  );
+}
+
+// --- Blog categories & tags ---
+export async function listBlogCategories(): Promise<string[]> {
+  const r = await pool.query(`SELECT name FROM blog_categories ORDER BY name ASC`);
+  return r.rows.map((x) => x.name);
+}
+
+export async function addBlogCategory(name: string): Promise<void> {
+  if (!name.trim()) return;
+  await pool.query(`INSERT INTO blog_categories (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`, [name.trim()]);
+}
+
+export async function deleteBlogCategory(name: string): Promise<void> {
+  await pool.query(`DELETE FROM blog_categories WHERE name = $1`, [name]);
+}
+
+export async function listBlogTags(): Promise<string[]> {
+  const r = await pool.query(`SELECT name FROM blog_tags ORDER BY name ASC`);
+  return r.rows.map((x) => x.name);
+}
+
+export async function deleteBlogTag(name: string): Promise<void> {
+  await pool.query(`DELETE FROM blog_tags WHERE name = $1`, [name]);
+}
+
+async function registerCategoriesAndTags(categories: string[], tags: string[]) {
+  for (const c of categories || []) {
+    const v = String(c).trim();
+    if (v) await pool.query(`INSERT INTO blog_categories (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`, [v]);
+  }
+  for (const t of tags || []) {
+    const v = String(t).trim();
+    if (v) await pool.query(`INSERT INTO blog_tags (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`, [v]);
+  }
 }
 
 // --- Blog posts & comments ---
@@ -212,12 +259,31 @@ export interface BlogPostRecord {
   title: string;
   description: string;
   content: string[];
-  category: string;
+  categories: string[];
   image: string;
   author: string;
   date: string;
   readTime: string;
   tags: string[];
+}
+
+// Normalize stored posts (older posts may use a single `category` string).
+function normalizePost(data: any): BlogPostRecord {
+  const categories = Array.isArray(data.categories)
+    ? data.categories
+    : (data.category ? [data.category] : []);
+  return {
+    slug: data.slug,
+    title: data.title,
+    description: data.description || '',
+    content: Array.isArray(data.content) ? data.content : [],
+    categories,
+    image: data.image || '',
+    author: data.author || '',
+    date: data.date || '',
+    readTime: data.readTime || '',
+    tags: Array.isArray(data.tags) ? data.tags : []
+  };
 }
 
 export interface BlogCommentRecord {
@@ -232,12 +298,12 @@ export interface BlogCommentRecord {
 
 export async function listBlogPosts(): Promise<BlogPostRecord[]> {
   const result = await pool.query(`SELECT data FROM blog_posts ORDER BY published_at DESC`);
-  return result.rows.map((r) => r.data);
+  return result.rows.map((r) => normalizePost(r.data));
 }
 
 export async function getBlogPost(slug: string): Promise<BlogPostRecord | null> {
   const result = await pool.query(`SELECT data FROM blog_posts WHERE slug = $1`, [slug]);
-  return result.rows[0]?.data || null;
+  return result.rows[0]?.data ? normalizePost(result.rows[0].data) : null;
 }
 
 export async function saveBlogPost(post: BlogPostRecord, publishedAt?: string): Promise<BlogPostRecord> {
@@ -247,6 +313,8 @@ export async function saveBlogPost(post: BlogPostRecord, publishedAt?: string): 
      ON CONFLICT (slug) DO UPDATE SET data = EXCLUDED.data`,
     [post.slug, JSON.stringify(post), publishedAt || null]
   );
+  // Register any new categories/tags so they show up in the pickers.
+  await registerCategoriesAndTags(post.categories, post.tags);
   return post;
 }
 
@@ -324,6 +392,41 @@ async function seedBlogIfEmpty(client: PoolClient) {
        VALUES ($1, $2, $3, $4, $5, 'approved') ON CONFLICT (id) DO NOTHING`,
       [c.id, c.postSlug, c.author, c.email, c.content]
     );
+  }
+  // Seed categories and tags from the seed posts.
+  const catSet = new Set<string>(['Instagram', 'TikTok', 'Marketing Digital', 'Dicas']);
+  const tagSet = new Set<string>();
+  for (const post of BLOG_SEED_POSTS) {
+    if (post.category) catSet.add(post.category);
+    (post.tags || []).forEach((t) => tagSet.add(t));
+  }
+  for (const name of catSet) {
+    await client.query(`INSERT INTO blog_categories (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`, [name]);
+  }
+  for (const name of tagSet) {
+    await client.query(`INSERT INTO blog_tags (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`, [name]);
+  }
+}
+
+// For databases that already had blog posts before categories/tags existed,
+// backfill the registries from the existing posts (runs once, when empty).
+async function backfillCategoriesAndTags(client: PoolClient) {
+  const { rows } = await client.query('SELECT COUNT(*)::int AS count FROM blog_categories');
+  if (rows[0]?.count > 0) return;
+  const posts = await client.query('SELECT data FROM blog_posts');
+  const cats = new Set<string>(['Instagram', 'TikTok', 'Marketing Digital', 'Dicas']);
+  const tags = new Set<string>();
+  for (const r of posts.rows) {
+    const d = r.data || {};
+    const postCats = Array.isArray(d.categories) ? d.categories : (d.category ? [d.category] : []);
+    postCats.forEach((c: string) => c && cats.add(c));
+    (Array.isArray(d.tags) ? d.tags : []).forEach((t: string) => t && tags.add(t));
+  }
+  for (const name of cats) {
+    await client.query(`INSERT INTO blog_categories (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`, [name]);
+  }
+  for (const name of tags) {
+    await client.query(`INSERT INTO blog_tags (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`, [name]);
   }
 }
 
@@ -417,6 +520,8 @@ export async function initDB(): Promise<void> {
 
     // Seed blog content on a fresh blog table.
     await seedBlogIfEmpty(client);
+    // Backfill categories/tags for databases seeded before they existed.
+    await backfillCategoriesAndTags(client);
 
     console.log('PostgreSQL database initialized successfully.');
   } finally {

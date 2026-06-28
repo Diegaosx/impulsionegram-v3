@@ -271,13 +271,54 @@ export interface BlogPost {
   title: string;
   description: string;
   content: string[];
-  category: string;
+  categories: string[];
   image: string;
   author: string;
   date: string;
   readTime: string;
   tags: string[];
   publishedAt?: string;
+}
+
+export async function fetchBlogCategories(): Promise<string[]> {
+  try {
+    const res = await fetch('/api/blog/categories');
+    if (!res.ok) throw new Error('Failed to fetch categories');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching blog categories:', error);
+    return [];
+  }
+}
+
+export async function addBlogCategoryToServer(name: string): Promise<void> {
+  const res = await fetch('/api/blog/categories', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name })
+  });
+  if (!res.ok) throw new Error('Failed to add category');
+}
+
+export async function deleteBlogCategoryFromServer(name: string): Promise<void> {
+  const res = await fetch(`/api/blog/categories/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to delete category');
+}
+
+export async function fetchBlogTags(): Promise<string[]> {
+  try {
+    const res = await fetch('/api/blog/tags');
+    if (!res.ok) throw new Error('Failed to fetch tags');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching blog tags:', error);
+    return [];
+  }
+}
+
+export async function deleteBlogTagFromServer(name: string): Promise<void> {
+  const res = await fetch(`/api/blog/tags/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to delete tag');
 }
 
 export interface BlogComment {
