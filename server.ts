@@ -539,7 +539,11 @@ app.post('/api/my/orders', async (req, res) => {
         }
       } catch (mpErr: any) {
         // The order is still created; the PIX can be retried/checked later.
-        console.error('Mercado Pago PIX creation failed:', mpErr?.message || mpErr);
+        const msg = mpErr?.message || String(mpErr);
+        console.error('Mercado Pago PIX creation failed:', msg);
+        const patch = { pixError: msg };
+        await patchOrderData(newOrder.id, patch);
+        Object.assign(newOrder, patch);
       }
     }
 
@@ -587,8 +591,71 @@ app.get('/api/my/orders/:id/payment', async (req, res) => {
         qrCode: order.pixQrCode || '',
         qrCodeBase64: order.pixQrCodeBase64 || '',
         ticketUrl: order.pixTicketUrl || ''
-      }
+      },
+      pixError: order.pixError || ''
     });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Generate (or regenerate) the Mercado Pago PIX charge for one of the logged-in
+// user's pending orders. Used by the dashboard to show/retry the QR code for an
+// order whose PIX wasn't created at checkout (or to issue a fresh code).
+app.post('/api/my/orders/:id/pix', async (req, res) => {
+  try {
+    const payload = getPayload(req)!;
+    const account = await getAccountById(payload.sub);
+    const order = await getOrderById(req.params.id);
+    if (!order) return res.status(404).json({ error: 'Pedido não encontrado.' });
+    const owns = account && (order.accountId === account.id || String(order.email || '').toLowerCase() === account.email);
+    if (!owns) return res.status(403).json({ error: 'Acesso negado.' });
+
+    if (order.status === 'pago' || order.status === 'entregue') {
+      return res.status(400).json({ error: 'Este pedido já foi pago.' });
+    }
+
+    // Reuse an existing valid QR unless the client explicitly asks for a new one.
+    const wantNew = req.body && req.body.regenerate === true;
+    if (!wantNew && order.pixQrCode) {
+      return res.json({
+        success: true,
+        pix: { qrCode: order.pixQrCode, qrCodeBase64: order.pixQrCodeBase64 || '', ticketUrl: order.pixTicketUrl || '' }
+      });
+    }
+
+    const integ = await getIntegrations();
+    if (!isMercadoPagoConfigured(integ.mercadoPagoAccessToken)) {
+      return res.status(400).json({ error: 'Pagamento via PIX automático não está configurado. A confirmação é feita manualmente pela equipe.' });
+    }
+
+    try {
+      const pay = await createPixPayment(integ.mercadoPagoAccessToken, {
+        amount: Number(order.price),
+        description: `${order.serviceLabel} (${order.id})`,
+        email: account!.email,
+        firstName: account!.name,
+        orderId: order.id,
+        notificationUrl: `${publicBaseUrl(req)}/api/mercadopago/webhook`
+      });
+      await patchOrderData(order.id, {
+        mpPaymentId: pay.id,
+        pixQrCode: pay.qrCode,
+        pixQrCodeBase64: pay.qrCodeBase64,
+        pixTicketUrl: pay.ticketUrl,
+        pixExpiresAt: pay.expiresAt,
+        paymentStatus: pay.status,
+        pixError: ''
+      });
+      return res.json({
+        success: true,
+        pix: { qrCode: pay.qrCode, qrCodeBase64: pay.qrCodeBase64, ticketUrl: pay.ticketUrl }
+      });
+    } catch (mpErr: any) {
+      const msg = mpErr?.message || String(mpErr);
+      await patchOrderData(order.id, { pixError: msg });
+      return res.status(502).json({ error: `Não foi possível gerar o PIX: ${msg}` });
+    }
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

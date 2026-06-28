@@ -23,6 +23,7 @@ export interface AdminOrder {
   pixQrCodeBase64?: string;
   pixTicketUrl?: string;
   paymentStatus?: string;
+  pixError?: string;
   // SMM delivery fields.
   smmOrderId?: string;
   smmStatus?: string;
@@ -56,6 +57,7 @@ export interface PaymentStatusResult {
   status: string;
   paid: boolean;
   pix: { qrCode: string; qrCodeBase64: string; ticketUrl: string };
+  pixError?: string;
 }
 
 export async function fetchOrderPayment(orderId: string): Promise<PaymentStatusResult | null> {
@@ -65,6 +67,28 @@ export async function fetchOrderPayment(orderId: string): Promise<PaymentStatusR
     return await res.json();
   } catch {
     return null;
+  }
+}
+
+export interface GeneratePixResult {
+  ok: boolean;
+  pix?: { qrCode: string; qrCodeBase64: string; ticketUrl: string };
+  error?: string;
+}
+
+// Generate (or regenerate) the PIX charge for a pending order.
+export async function generateOrderPix(orderId: string, regenerate = false): Promise<GeneratePixResult> {
+  try {
+    const res = await fetch(`/api/my/orders/${encodeURIComponent(orderId)}/pix`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ regenerate })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data.error || 'Falha ao gerar o PIX.' };
+    return { ok: true, pix: data.pix };
+  } catch {
+    return { ok: false, error: 'Erro de conexão.' };
   }
 }
 
