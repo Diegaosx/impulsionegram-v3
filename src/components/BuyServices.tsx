@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ServiceItem, SocialPlatform } from '../types';
 import { SOCIAL_PLATFORMS } from '../data';
 import { AdminOrder, createMyOrder } from '../utils/storage';
+import { useOffer } from '../utils/useOffer';
 import { ShoppingCart, AlertCircle, Minus, Plus, Sparkles } from 'lucide-react';
 
 interface BuyServicesProps {
@@ -19,6 +20,15 @@ export default function BuyServices({ services, defaultProfile, onCreated }: Buy
   const paymentMethod: 'PIX' | 'Card' = 'PIX'; // PIX only for now
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  // Flash-offer coupon (auto-filled while active).
+  const { offer, active: offerActive } = useOffer();
+  const [coupon, setCoupon] = useState('');
+  useEffect(() => {
+    if (offerActive && offer?.couponCode) setCoupon((c) => (c ? c : offer.couponCode));
+  }, [offerActive, offer?.couponCode]);
+  const couponValid = !!(offerActive && offer && coupon.trim() && coupon.trim().toLowerCase() === offer.couponCode.toLowerCase());
+  const couponPercent = couponValid ? (offer?.discountPercent || 0) : 0;
 
   const categories = useMemo(
     () => services.filter((s) => s.platform === platform).map((s) => ({ type: s.type, label: s.label })),
@@ -74,7 +84,8 @@ export default function BuyServices({ services, defaultProfile, onCreated }: Buy
       price: pricing.final,
       paymentMethod,
       targetProfile: targetProfile.trim(),
-      postUrl: postUrl.trim()
+      postUrl: postUrl.trim(),
+      couponCode: couponValid ? coupon.trim() : ''
     });
     setSubmitting(false);
     if (res.ok && res.order) onCreated(res.order);
@@ -171,17 +182,41 @@ export default function BuyServices({ services, defaultProfile, onCreated }: Buy
         </div>
       </div>
 
+      {/* Coupon (only while a flash offer is active) */}
+      {offerActive && (
+        <div>
+          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block mb-2">Cupom de desconto</label>
+          <div className="max-w-sm">
+            <input
+              type="text"
+              value={coupon}
+              onChange={(e) => setCoupon(e.target.value.toUpperCase())}
+              placeholder="Digite o cupom"
+              className={`w-full text-xs font-bold uppercase tracking-wide rounded-lg py-2.5 px-3 border focus:outline-none focus:ring-2 ${couponValid ? 'border-green-500 focus:ring-green-500 text-green-700' : coupon.trim() ? 'border-red-400 focus:ring-red-400 text-red-600' : 'border-slate-200 focus:ring-primary text-slate-800'}`}
+            />
+            {couponValid
+              ? <p className="text-green-600 text-[11px] font-bold mt-1">Cupom aplicado: -{couponPercent}% OFF 🎉</p>
+              : coupon.trim()
+                ? <p className="text-red-500 text-[11px] font-bold mt-1">Cupom inválido ou expirado.</p>
+                : null}
+          </div>
+        </div>
+      )}
+
       {/* Summary + CTA */}
       <div className="border-t border-slate-100 pt-5 flex items-center justify-between flex-wrap gap-4">
         <div>
           <span className="text-[10px] text-slate-400 font-bold uppercase block">Total</span>
           <div className="flex items-baseline gap-2">
-            <span className="font-display font-black text-2xl text-slate-900">{money(pricing.final)}</span>
+            <span className="font-display font-black text-2xl text-slate-900">{money(pricing.final * (1 - couponPercent / 100))}</span>
+            {(pricing.discountPercent > 0 || couponValid) && (
+              <span className="text-xs line-through text-slate-400">{money(couponValid ? pricing.final : pricing.base)}</span>
+            )}
             {pricing.discountPercent > 0 && (
-              <>
-                <span className="text-xs line-through text-slate-400">{money(pricing.base)}</span>
-                <span className="text-[10px] font-black bg-green-100 text-green-700 px-2 py-0.5 rounded-full">-{pricing.discountPercent}%</span>
-              </>
+              <span className="text-[10px] font-black bg-green-100 text-green-700 px-2 py-0.5 rounded-full">-{pricing.discountPercent}%</span>
+            )}
+            {couponValid && (
+              <span className="text-[10px] font-black bg-primary/10 text-primary px-2 py-0.5 rounded-full">cupom -{couponPercent}%</span>
             )}
           </div>
         </div>

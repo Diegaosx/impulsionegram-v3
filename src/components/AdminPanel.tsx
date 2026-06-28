@@ -8,7 +8,8 @@ import {
   AnalyticsSettings, EMPTY_ANALYTICS_SETTINGS, fetchAnalyticsSettings, saveAnalyticsSettingsToServer,
   fetchSmmBalance, fetchSmmServices,
   AdminAccount, fetchAdminAccounts, createAdminAccount, updateAdminAccount,
-  resetAdminAccountPassword, deleteAdminAccount
+  resetAdminAccountPassword, deleteAdminAccount,
+  OfferSettings, fetchOfferAdmin, saveOffer
 } from '../utils/storage';
 import { setAppTimezone, formatDateTime } from '../utils/datetime';
 import BlogAdmin from './BlogAdmin';
@@ -18,7 +19,7 @@ import {
   X, Plus, Pencil, Trash2, RotateCcw, LayoutDashboard, ShoppingBag,
   BarChart3, Settings, ShieldCheck, HelpCircle, Save, Check, AlertCircle,
   TrendingUp, CircleDollarSign, Compass, Layers, Globe, Filter, MessageCircle,
-  User, Lock, Users, Ban, UserCheck, CreditCard, KeyRound, Eye, EyeOff, Plug,
+  User, Lock, Users, Ban, UserCheck, CreditCard, KeyRound, Eye, EyeOff, Plug, Flame,
   Image as ImageIcon, Upload, Clock, Palette, Type, SlidersHorizontal,
   Mail, Phone, MapPin, Share2, PanelBottom, Cookie, Newspaper, Code2, Quote, Inbox
 } from 'lucide-react';
@@ -49,7 +50,14 @@ export default function AdminPanel({
   onLogout,
   onExit
 }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'users' | 'home' | 'blog' | 'testimonials' | 'messages' | 'general' | 'contact' | 'integrations' | 'analytics' | 'cookies'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'users' | 'home' | 'offer' | 'blog' | 'testimonials' | 'messages' | 'general' | 'contact' | 'integrations' | 'analytics' | 'cookies'>('dashboard');
+
+  // Flash offer (top promo bar + coupon) settings
+  const [offerForm, setOfferForm] = useState<OfferSettings>({
+    enabled: false, text: '', discountPercent: 0, couponCode: '', endsAt: ''
+  });
+  const [offerLoading, setOfferLoading] = useState(false);
+  const [offerSaving, setOfferSaving] = useState(false);
 
   // Users management states (real registered accounts)
   const [users, setUsers] = useState<AdminAccount[]>([]);
@@ -324,6 +332,36 @@ export default function AdminPanel({
     }
   };
   useEffect(() => { loadUsersData(); }, []);
+
+  // Load the flash-offer settings.
+  useEffect(() => {
+    setOfferLoading(true);
+    fetchOfferAdmin()
+      .then((o) => { if (o) setOfferForm(o); })
+      .finally(() => setOfferLoading(false));
+  }, []);
+
+  // datetime-local <-> ISO helpers (local time).
+  const isoToLocalInput = (iso: string) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  const localInputToIso = (val: string) => {
+    if (!val) return '';
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? '' : d.toISOString();
+  };
+
+  const handleSaveOffer = async () => {
+    setOfferSaving(true);
+    const res = await saveOffer(offerForm);
+    setOfferSaving(false);
+    if (res.ok) triggerSuccess('Oferta atualizada com sucesso!');
+    else triggerError(res.error || 'Falha ao salvar a oferta.');
+  };
 
   const openCreateAccount = () => {
     setAccountForm(emptyAccountForm);
@@ -725,6 +763,18 @@ export default function AdminPanel({
               >
                 <Globe className="h-4 w-4" />
                 <span>Conteúdo da Home</span>
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('offer'); setEditingService(null); setIsAddingService(false); setEditingPlan(null); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'offer'
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-slate-600 hover:text-primary hover:bg-slate-100'
+                }`}
+              >
+                <Flame className="h-4 w-4" />
+                <span>Oferta Relâmpago</span>
               </button>
 
               <button
@@ -2344,6 +2394,71 @@ export default function AdminPanel({
                       </button>
                     </div>
                   </form>
+                )}
+              </div>
+            )}
+
+            {/* =================== TAB: OFERTA RELÂMPAGO =================== */}
+            {activeTab === 'offer' && (
+              <div className="space-y-6 max-w-2xl">
+                <div>
+                  <h3 className="font-display font-black text-xl text-slate-900">Oferta Relâmpago (barra superior)</h3>
+                  <p className="text-slate-500 text-xs font-semibold">Ative/desative a barra de oferta, defina o desconto real do cupom e o prazo. Quando expirar, a barra some e o cupom para de funcionar automaticamente.</p>
+                </div>
+
+                {offerLoading ? (
+                  <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>
+                ) : (
+                  <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-5">
+                    <label className="flex items-center justify-between gap-3 cursor-pointer">
+                      <span className="text-sm font-bold text-slate-800 flex items-center gap-2"><Flame className="h-4 w-4 text-orange-500" /> Oferta ativa</span>
+                      <input type="checkbox" className="h-5 w-5 accent-primary" checked={offerForm.enabled}
+                        onChange={(e) => setOfferForm(p => ({ ...p, enabled: e.target.checked }))} />
+                    </label>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Texto da barra</label>
+                      <input type="text" value={offerForm.text}
+                        onChange={(e) => setOfferForm(p => ({ ...p, text: e.target.value }))}
+                        placeholder="OFERTA RELÂMPAGO: 20% OFF EXTRA NO PIX"
+                        className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800" />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Desconto (%)</label>
+                        <input type="number" min={0} max={90} value={offerForm.discountPercent}
+                          onChange={(e) => setOfferForm(p => ({ ...p, discountPercent: Number(e.target.value) }))}
+                          className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Código do cupom</label>
+                        <input type="text" value={offerForm.couponCode}
+                          onChange={(e) => setOfferForm(p => ({ ...p, couponCode: e.target.value.toUpperCase() }))}
+                          placeholder="PIX20"
+                          className="w-full bg-slate-50 border border-slate-200 text-sm font-bold uppercase tracking-wide rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800" />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Termina em (data e hora)</label>
+                      <input type="datetime-local" value={isoToLocalInput(offerForm.endsAt)}
+                        onChange={(e) => setOfferForm(p => ({ ...p, endsAt: localInputToIso(e.target.value) }))}
+                        className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800" />
+                      <p className="text-[11px] text-slate-400 font-semibold">Deixe vazio para uma oferta sem prazo. Após esse horário a barra é ocultada e o cupom deixa de aplicar desconto.</p>
+                    </div>
+
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-[11px] font-semibold text-amber-800">
+                      O desconto do cupom é aplicado de forma real ao total do pedido (validado no servidor) no checkout da home e na compra pelo painel do cliente. O cupom é preenchido automaticamente quando a oferta está ativa.
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button onClick={handleSaveOffer} disabled={offerSaving}
+                        className="bg-primary hover:bg-purple-700 disabled:opacity-60 text-white font-bold text-xs py-3 px-5 rounded-lg flex items-center gap-2 cursor-pointer transition-all shadow-md">
+                        <Save className="h-4 w-4" /> {offerSaving ? 'Salvando...' : 'Salvar oferta'}
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
             )}

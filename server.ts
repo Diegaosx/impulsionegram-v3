@@ -16,6 +16,9 @@ import {
   saveAnalyticsSettings,
   getGeneralSettings,
   saveGeneralSettings,
+  getOffer,
+  saveOffer,
+  isOfferActive,
   getCompanySettings,
   saveCompanySettings,
   saveCookieConsent,
@@ -103,6 +106,7 @@ const PUBLIC_API: { method: string; re: RegExp }[] = [
   { method: 'GET', re: /^\/settings\/?$/ },
   { method: 'GET', re: /^\/company\/?$/ },
   { method: 'GET', re: /^\/public-config\/?$/ },
+  { method: 'GET', re: /^\/offer\/?$/ },
   { method: 'GET', re: /^\/analytics\/?$/ },
   { method: 'POST', re: /^\/cookie-consents\/?$/ },
   { method: 'GET', re: /^\/blog\/posts\/?$/ },
@@ -581,10 +585,23 @@ app.post('/api/my/orders', async (req, res) => {
     if (!account) return res.status(404).json({ error: 'Conta não encontrada.' });
 
     const b = req.body || {};
-    const price = Number(b.price) || 0;
+    let price = Number(b.price) || 0;
     const quantity = Number(b.quantity) || 0;
     if (!b.serviceLabel || price <= 0 || quantity <= 0) {
       return res.status(400).json({ error: 'Serviço, quantidade e preço são obrigatórios.' });
+    }
+
+    // Apply a valid flash-offer coupon server-side (authoritative price).
+    let couponCode = '';
+    let couponDiscountPercent = 0;
+    const submittedCoupon = String(b.couponCode || '').trim();
+    if (submittedCoupon) {
+      const offer = await getOffer();
+      if (isOfferActive(offer) && offer.couponCode && submittedCoupon.toLowerCase() === offer.couponCode.toLowerCase()) {
+        couponCode = offer.couponCode;
+        couponDiscountPercent = offer.discountPercent;
+        price = price * (1 - offer.discountPercent / 100);
+      }
     }
 
     const newOrder = {
@@ -596,6 +613,8 @@ app.post('/api/my/orders', async (req, res) => {
       serviceLabel: String(b.serviceLabel || ''),
       quantity,
       price: Number(price.toFixed(2)),
+      couponCode,
+      couponDiscountPercent,
       paymentMethod: b.paymentMethod === 'Card' ? 'Card' : 'PIX',
       postUrl: String(b.postUrl || '').replace(/[<>"]/g, '').trim().slice(0, 300),
       email: account.email,
@@ -1233,6 +1252,45 @@ app.get('/api/public-config', async (req, res) => {
   try {
     const integ = await getIntegrations();
     res.json({ recaptchaSiteKey: integ.recaptchaSiteKey || '' });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Public flash-offer config (drives the top promo bar + checkout coupon).
+// Exposes the coupon code/discount only while the offer is genuinely active.
+app.get('/api/offer', async (req, res) => {
+  try {
+    const offer = await getOffer();
+    const active = isOfferActive(offer);
+    res.json({
+      active,
+      text: offer.text,
+      discountPercent: active ? offer.discountPercent : 0,
+      couponCode: active ? offer.couponCode : '',
+      endsAt: active ? offer.endsAt : ''
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Admin: read/update the flash-offer config.
+app.get('/api/offer/admin', async (_req, res) => {
+  try {
+    res.json(await getOffer());
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/offer', async (req, res) => {
+  try {
+    const body = req.body;
+    if (!body || typeof body !== 'object') {
+      return res.status(400).json({ error: 'Body must be a valid offer object' });
+    }
+    res.json({ success: true, offer: await saveOffer(body) });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
