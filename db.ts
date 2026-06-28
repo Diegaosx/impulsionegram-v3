@@ -435,6 +435,16 @@ export async function listAccounts(): Promise<AccountRecord[]> {
   return r.rows.map(mapAccount);
 }
 
+export async function getOrderById(id: string): Promise<any | null> {
+  const r = await pool.query(`SELECT data FROM orders WHERE id = $1`, [id]);
+  return r.rows[0]?.data || null;
+}
+
+// Shallow-merge a patch into an order's JSONB document.
+export async function patchOrderData(id: string, patch: Record<string, any>): Promise<void> {
+  await pool.query(`UPDATE orders SET data = data || $2::jsonb WHERE id = $1`, [id, JSON.stringify(patch)]);
+}
+
 // Orders that belong to a given account — matched by linked accountId or by the
 // account's e-mail (for orders placed before the account existed / guest flow).
 export async function listOrdersForAccount(accountId: string, email: string): Promise<any[]> {
