@@ -2,31 +2,37 @@ import { useEffect, useMemo, useState, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingBag, User as UserIcon, LogOut, ArrowLeft, Sparkles,
-  Package, CircleDollarSign, Clock, CheckCircle2, ShoppingCart, QrCode, LifeBuoy
+  Package, CircleDollarSign, Clock, CheckCircle2, ShoppingCart, QrCode, LifeBuoy, ArrowLeftCircle
 } from 'lucide-react';
-import { AuthUser, AdminOrder, fetchMyOrders, fetchServices } from '../utils/storage';
+import { AuthUser, AdminOrder, HomeContent, CompanySettings, fetchMyOrders, fetchServices } from '../utils/storage';
 import { ServiceItem } from '../types';
 import { orderStatusInfo } from '../utils/orderStatus';
 import { formatDateTime } from '../utils/datetime';
 import BuyServices from '../components/BuyServices';
 import OrderConfirmation from '../components/OrderConfirmation';
+import ProfileForm from '../components/ProfileForm';
+import HelpForm from '../components/HelpForm';
 
 interface ClientDashboardProps {
   user: AuthUser;
   onLogout: () => void;
+  onUserUpdate: (user: AuthUser) => void;
   siteName?: string;
   logoUrl?: string;
+  company?: CompanySettings | null;
+  homeContent?: HomeContent | null;
 }
 
-type Tab = 'overview' | 'orders' | 'buy';
+type Tab = 'overview' | 'orders' | 'buy' | 'order' | 'profile' | 'help';
 
-export default function ClientDashboard({ user, onLogout, siteName, logoUrl }: ClientDashboardProps) {
+export default function ClientDashboard({ user, onLogout, onUserUpdate, siteName, logoUrl, company, homeContent }: ClientDashboardProps) {
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>('overview');
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [confirmedOrder, setConfirmedOrder] = useState<AdminOrder | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
 
   const reloadOrders = () => fetchMyOrders().then(setOrders);
 
@@ -36,6 +42,11 @@ export default function ClientDashboard({ user, onLogout, siteName, logoUrl }: C
   }, []);
 
   const goBuy = () => { setConfirmedOrder(null); setTab('buy'); };
+  const openOrder = (id: string) => {
+    const o = orders.find((x) => x.id === id) || null;
+    setSelectedOrder(o);
+    setTab('order');
+  };
 
   const metrics = useMemo(() => {
     const total = orders.length;
@@ -60,6 +71,14 @@ export default function ClientDashboard({ user, onLogout, siteName, logoUrl }: C
     </button>
   );
 
+  const goHomeFaq = () => {
+    navigate('/');
+    setTimeout(() => {
+      const el = document.getElementById('faq');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
       {/* Top bar */}
@@ -76,10 +95,10 @@ export default function ClientDashboard({ user, onLogout, siteName, logoUrl }: C
             <button onClick={goBuy} className="hidden sm:flex items-center gap-1.5 bg-primary hover:bg-purple-700 text-white text-xs font-bold rounded-lg px-3 py-2 transition-colors">
               <ShoppingCart className="h-4 w-4" /> Comprar
             </button>
-            <button onClick={() => navigate('/ajuda')} className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-primary border border-slate-200 rounded-lg px-3 py-2">
+            <button onClick={() => setTab('help')} className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-primary border border-slate-200 rounded-lg px-3 py-2">
               <LifeBuoy className="h-4 w-4" /> Ajuda
             </button>
-            <button onClick={() => navigate('/perfil')} className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-primary border border-slate-200 rounded-lg px-3 py-2">
+            <button onClick={() => setTab('profile')} className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-primary border border-slate-200 rounded-lg px-3 py-2">
               <UserIcon className="h-4 w-4" /> Perfil
             </button>
             <button onClick={() => navigate('/')} className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-primary border border-slate-200 rounded-lg px-3 py-2">
@@ -93,9 +112,9 @@ export default function ClientDashboard({ user, onLogout, siteName, logoUrl }: C
       </header>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Sidebar */}
+        {/* Sidebar (constant) */}
         <aside className="lg:col-span-3">
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-4 lg:sticky lg:top-20">
             <div className="flex items-center gap-3">
               {user.avatar ? (
                 <img src={user.avatar} alt="" className="w-11 h-11 rounded-full object-cover border border-slate-200" referrerPolicy="no-referrer" />
@@ -111,12 +130,8 @@ export default function ClientDashboard({ user, onLogout, siteName, logoUrl }: C
               <NavBtn id="overview" icon={<LayoutDashboard className="h-4 w-4" />} label="Visão Geral" />
               <NavBtn id="buy" icon={<ShoppingCart className="h-4 w-4" />} label="Comprar" />
               <NavBtn id="orders" icon={<ShoppingBag className="h-4 w-4" />} label="Meus Pedidos" />
-              <button
-                onClick={() => navigate('/ajuda')}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold text-slate-600 hover:text-primary hover:bg-slate-100 transition-all"
-              >
-                <LifeBuoy className="h-4 w-4" /><span>Ajuda</span>
-              </button>
+              <NavBtn id="profile" icon={<UserIcon className="h-4 w-4" />} label="Perfil" />
+              <NavBtn id="help" icon={<LifeBuoy className="h-4 w-4" />} label="Ajuda" />
             </nav>
           </div>
         </aside>
@@ -149,7 +164,7 @@ export default function ClientDashboard({ user, onLogout, siteName, logoUrl }: C
                     <button onClick={() => setTab('orders')} className="text-xs font-bold text-primary hover:underline">Ver todos</button>
                   )}
                 </div>
-                <OrdersList orders={orders.slice(0, 3)} loading={loading} onBuy={goBuy} onPay={(id) => navigate(`/pedido/${id}`)} />
+                <OrdersList orders={orders.slice(0, 3)} loading={loading} onBuy={goBuy} onPay={openOrder} />
               </div>
             </>
           )}
@@ -158,7 +173,7 @@ export default function ClientDashboard({ user, onLogout, siteName, logoUrl }: C
             confirmedOrder ? (
               <OrderConfirmation
                 order={confirmedOrder}
-                onGoToOrders={() => { setConfirmedOrder(null); setTab('orders'); }}
+                onGoToOrders={() => { setConfirmedOrder(null); reloadOrders(); setTab('orders'); }}
                 onBuyMore={() => setConfirmedOrder(null)}
               />
             ) : (
@@ -172,7 +187,38 @@ export default function ClientDashboard({ user, onLogout, siteName, logoUrl }: C
           {tab === 'orders' && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
               <h1 className="font-display font-black text-xl text-slate-900 mb-4">Meus Pedidos</h1>
-              <OrdersList orders={orders} loading={loading} onBuy={goBuy} onPay={(id) => navigate(`/pedido/${id}`)} />
+              <OrdersList orders={orders} loading={loading} onBuy={goBuy} onPay={openOrder} />
+            </div>
+          )}
+
+          {tab === 'order' && (
+            <div className="space-y-4">
+              <button onClick={() => { reloadOrders(); setTab('orders'); }} className="text-xs font-bold text-slate-500 hover:text-primary inline-flex items-center gap-1">
+                <ArrowLeftCircle className="h-4 w-4" /> Voltar aos pedidos
+              </button>
+              {selectedOrder ? (
+                <OrderConfirmation
+                  order={selectedOrder}
+                  onGoToOrders={() => { reloadOrders(); setTab('orders'); }}
+                  onBuyMore={goBuy}
+                />
+              ) : (
+                <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-slate-500 text-sm font-semibold">Pedido não encontrado.</div>
+              )}
+            </div>
+          )}
+
+          {tab === 'profile' && (
+            <div className="space-y-4">
+              <h1 className="font-display font-black text-xl text-slate-900">Meu Perfil</h1>
+              <ProfileForm user={user} onUserUpdate={onUserUpdate} />
+            </div>
+          )}
+
+          {tab === 'help' && (
+            <div className="space-y-4">
+              <h1 className="font-display font-black text-xl text-slate-900">Central de Ajuda</h1>
+              <HelpForm homeContent={homeContent || null} company={company} onGoFaq={goHomeFaq} />
             </div>
           )}
         </main>

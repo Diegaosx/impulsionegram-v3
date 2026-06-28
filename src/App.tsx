@@ -253,8 +253,11 @@ export default function App() {
             ? <ClientDashboard
                 user={currentUser}
                 onLogout={handleLogout}
+                onUserUpdate={(u) => { setCurrentUser(u); setCachedUser(u); }}
                 siteName={siteName}
                 logoUrl={logoUrl}
+                company={company}
+                homeContent={homeContent}
               />
             : <Navigate to="/login" replace />
         }
