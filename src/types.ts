@@ -10,6 +10,7 @@ export interface ServiceItem {
   maxQuantity: number;
   deliverySpeed: string;
   benefits: string[];
+  smmServiceId?: string; // ID do serviço no painel SMM (entrega automática)
 }
 
 export interface PlanItem {

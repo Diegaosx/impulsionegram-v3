@@ -23,6 +23,33 @@ export interface AdminOrder {
   pixQrCodeBase64?: string;
   pixTicketUrl?: string;
   paymentStatus?: string;
+  // SMM delivery fields.
+  smmOrderId?: string;
+  smmStatus?: string;
+  smmStartCount?: string;
+  smmRemains?: string;
+}
+
+export async function fetchSmmBalance(): Promise<{ balance?: string; currency?: string; error?: string }> {
+  try {
+    const res = await fetch('/api/smm/balance');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data.error || 'Falha ao consultar saldo.' };
+    return data;
+  } catch {
+    return { error: 'Erro de conexão.' };
+  }
+}
+
+export async function fetchSmmServices(): Promise<{ services: any[]; error?: string }> {
+  try {
+    const res = await fetch('/api/smm/services');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { services: [], error: data.error || 'Falha ao listar serviços.' };
+    return { services: Array.isArray(data) ? data : [] };
+  } catch {
+    return { services: [], error: 'Erro de conexão.' };
+  }
 }
 
 export interface PaymentStatusResult {

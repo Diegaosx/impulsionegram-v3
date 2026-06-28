@@ -5,7 +5,8 @@ import {
   GeneralSettings, fetchGeneralSettings, saveGeneralSettingsToServer, uploadAsset,
   CompanySettings, fetchCompanySettings, saveCompanySettingsToServer,
   CookieConsentRecord, fetchCookieConsents,
-  AnalyticsSettings, EMPTY_ANALYTICS_SETTINGS, fetchAnalyticsSettings, saveAnalyticsSettingsToServer
+  AnalyticsSettings, EMPTY_ANALYTICS_SETTINGS, fetchAnalyticsSettings, saveAnalyticsSettingsToServer,
+  fetchSmmBalance, fetchSmmServices
 } from '../utils/storage';
 import { setAppTimezone, formatDateTime } from '../utils/datetime';
 import BlogAdmin from './BlogAdmin';
@@ -97,6 +98,24 @@ export default function AdminPanel({
   const [integrationsLoading, setIntegrationsLoading] = useState(false);
   const [isSavingIntegrations, setIsSavingIntegrations] = useState(false);
   const [showSecrets, setShowSecrets] = useState(false);
+
+  // SMM panel helpers (balance + services lookup)
+  const [smmInfo, setSmmInfo] = useState<{ balance?: string; currency?: string; error?: string } | null>(null);
+  const [smmServicesList, setSmmServicesList] = useState<any[]>([]);
+  const [smmLoading, setSmmLoading] = useState(false);
+
+  const handleSmmBalance = async () => {
+    setSmmLoading(true);
+    setSmmInfo(await fetchSmmBalance());
+    setSmmLoading(false);
+  };
+  const handleSmmServices = async () => {
+    setSmmLoading(true);
+    const r = await fetchSmmServices();
+    if (r.error) triggerError(r.error);
+    setSmmServicesList(r.services.slice(0, 200));
+    setSmmLoading(false);
+  };
 
   // Load integration settings when the dashboard mounts
   useEffect(() => {
@@ -365,7 +384,8 @@ export default function AdminPanel({
     minQuantity: 100,
     maxQuantity: 10000,
     deliverySpeed: 'Início imediato, entrega natural',
-    benefits: ['Perfis reais', 'Recarga garantida', 'Sem precisar de senha']
+    benefits: ['Perfis reais', 'Recarga garantida', 'Sem precisar de senha'],
+    smmServiceId: ''
   });
 
   // New Benefit helper text
@@ -421,7 +441,8 @@ export default function AdminPanel({
       minQuantity: service.minQuantity,
       maxQuantity: service.maxQuantity,
       deliverySpeed: service.deliverySpeed,
-      benefits: [...service.benefits]
+      benefits: [...service.benefits],
+      smmServiceId: service.smmServiceId || ''
     });
     setIsAddingService(false);
   };
@@ -436,7 +457,8 @@ export default function AdminPanel({
       minQuantity: 100,
       maxQuantity: 50000,
       deliverySpeed: 'Entrega rápida (5-15 min)',
-      benefits: ['Perfis de alta qualidade', 'Prevenção contra quedas', 'Totalmente seguro']
+      benefits: ['Perfis de alta qualidade', 'Prevenção contra quedas', 'Totalmente seguro'],
+      smmServiceId: ''
     });
     setIsAddingService(true);
   };
@@ -1010,6 +1032,19 @@ export default function AdminPanel({
                           placeholder="Ex: Entrega instantânea, média de 5-15 minutos"
                           className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800"
                         />
+                      </div>
+
+                      {/* SMM service id (auto delivery) */}
+                      <div className="space-y-1 md:col-span-2">
+                        <label className="text-xs font-black text-slate-500 uppercase block">ID do Serviço no Painel SMM</label>
+                        <input
+                          type="text"
+                          value={serviceForm.smmServiceId || ''}
+                          onChange={(e) => setServiceForm(prev => ({ ...prev, smmServiceId: e.target.value }))}
+                          placeholder="Ex: 1234 (deixe vazio para não enviar automaticamente)"
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800"
+                        />
+                        <span className="text-[10px] text-slate-400 block font-medium">Usado para enviar o pedido ao painel SMM e entregar automaticamente após o pagamento.</span>
                       </div>
                     </div>
 
@@ -2119,6 +2154,37 @@ export default function AdminPanel({
                           placeholder="sua chave de API do painel"
                           className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
                         />
+                      </div>
+
+                      {/* SMM tools: balance + services lookup (salve as chaves antes) */}
+                      <div className="pt-2 border-t border-slate-100 space-y-3">
+                        <p className="text-[10px] text-slate-400 font-semibold">Salve as chaves acima antes de consultar. Use a lista de serviços para descobrir os IDs e preenchê-los em cada serviço (aba Serviços).</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button type="button" onClick={handleSmmBalance} disabled={smmLoading}
+                            className="text-xs font-bold text-slate-600 hover:text-primary border border-slate-200 bg-white rounded-lg px-3 py-2 transition-colors disabled:opacity-60">
+                            {smmLoading ? 'Consultando...' : 'Consultar saldo'}
+                          </button>
+                          <button type="button" onClick={handleSmmServices} disabled={smmLoading}
+                            className="text-xs font-bold text-slate-600 hover:text-primary border border-slate-200 bg-white rounded-lg px-3 py-2 transition-colors disabled:opacity-60">
+                            Listar serviços
+                          </button>
+                          {smmInfo && (
+                            smmInfo.error
+                              ? <span className="text-xs font-bold text-red-500">{smmInfo.error}</span>
+                              : <span className="text-xs font-bold text-green-600">Saldo: {smmInfo.balance} {smmInfo.currency}</span>
+                          )}
+                        </div>
+                        {smmServicesList.length > 0 && (
+                          <div className="max-h-56 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
+                            {smmServicesList.map((s: any, i: number) => (
+                              <div key={i} className="flex items-center justify-between gap-2 px-3 py-1.5 text-[11px]">
+                                <span className="font-mono font-bold text-primary shrink-0">{s.service}</span>
+                                <span className="text-slate-600 font-semibold truncate flex-1">{s.name}</span>
+                                <span className="text-slate-400 font-mono shrink-0">{s.rate}/{s.min}-{s.max}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
 
