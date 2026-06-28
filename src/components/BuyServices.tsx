@@ -16,7 +16,7 @@ export default function BuyServices({ services, defaultProfile, onCreated }: Buy
   const [quantity, setQuantity] = useState<number>(1000);
   const [targetProfile, setTargetProfile] = useState<string>(defaultProfile || '');
   const [postUrl, setPostUrl] = useState<string>('');
-  const [paymentMethod, setPaymentMethod] = useState<'PIX' | 'Card'>('PIX');
+  const paymentMethod: 'PIX' | 'Card' = 'PIX'; // PIX only for now
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -164,15 +164,10 @@ export default function BuyServices({ services, defaultProfile, onCreated }: Buy
       {/* Payment method */}
       <div>
         <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block mb-2">4. Pagamento</label>
-        <div className="grid grid-cols-2 gap-3 max-w-sm">
-          <button onClick={() => setPaymentMethod('PIX')}
-            className={`py-2.5 rounded-lg border text-xs font-bold transition-all ${paymentMethod === 'PIX' ? 'border-green-500 bg-green-50 text-green-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-            🇧🇷 PIX
-          </button>
-          <button onClick={() => setPaymentMethod('Card')}
-            className={`py-2.5 rounded-lg border text-xs font-bold transition-all ${paymentMethod === 'Card' ? 'border-primary bg-purple-50 text-primary' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-            💳 Cartão
-          </button>
+        <div className="max-w-sm">
+          <div className="py-2.5 px-4 rounded-lg border border-green-500 bg-green-50 text-green-800 text-xs font-bold flex items-center justify-center gap-2">
+            🇧🇷 PIX — aprovação instantânea
+          </div>
         </div>
       </div>
 
