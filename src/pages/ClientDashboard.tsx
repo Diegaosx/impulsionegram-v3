@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingBag, User as UserIcon, LogOut, ArrowLeft, Sparkles,
-  Package, CircleDollarSign, Clock, CheckCircle2, ShoppingCart, QrCode
+  Package, CircleDollarSign, Clock, CheckCircle2, ShoppingCart, QrCode, LifeBuoy
 } from 'lucide-react';
 import { AuthUser, AdminOrder, fetchMyOrders, fetchServices } from '../utils/storage';
 import { ServiceItem } from '../types';
@@ -76,6 +76,9 @@ export default function ClientDashboard({ user, onLogout, siteName, logoUrl }: C
             <button onClick={goBuy} className="hidden sm:flex items-center gap-1.5 bg-primary hover:bg-purple-700 text-white text-xs font-bold rounded-lg px-3 py-2 transition-colors">
               <ShoppingCart className="h-4 w-4" /> Comprar
             </button>
+            <button onClick={() => navigate('/ajuda')} className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-primary border border-slate-200 rounded-lg px-3 py-2">
+              <LifeBuoy className="h-4 w-4" /> Ajuda
+            </button>
             <button onClick={() => navigate('/perfil')} className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-primary border border-slate-200 rounded-lg px-3 py-2">
               <UserIcon className="h-4 w-4" /> Perfil
             </button>
@@ -108,6 +111,12 @@ export default function ClientDashboard({ user, onLogout, siteName, logoUrl }: C
               <NavBtn id="overview" icon={<LayoutDashboard className="h-4 w-4" />} label="Visão Geral" />
               <NavBtn id="buy" icon={<ShoppingCart className="h-4 w-4" />} label="Comprar" />
               <NavBtn id="orders" icon={<ShoppingBag className="h-4 w-4" />} label="Meus Pedidos" />
+              <button
+                onClick={() => navigate('/ajuda')}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold text-slate-600 hover:text-primary hover:bg-slate-100 transition-all"
+              >
+                <LifeBuoy className="h-4 w-4" /><span>Ajuda</span>
+              </button>
             </nav>
           </div>
         </aside>

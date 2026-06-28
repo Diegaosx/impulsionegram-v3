@@ -6,7 +6,9 @@ import {
   CompanySettings, fetchCompanySettings, saveCompanySettingsToServer,
   CookieConsentRecord, fetchCookieConsents,
   AnalyticsSettings, EMPTY_ANALYTICS_SETTINGS, fetchAnalyticsSettings, saveAnalyticsSettingsToServer,
-  fetchSmmBalance, fetchSmmServices
+  fetchSmmBalance, fetchSmmServices,
+  AdminAccount, fetchAdminAccounts, createAdminAccount, updateAdminAccount,
+  resetAdminAccountPassword, deleteAdminAccount
 } from '../utils/storage';
 import { setAppTimezone, formatDateTime } from '../utils/datetime';
 import BlogAdmin from './BlogAdmin';
@@ -15,7 +17,7 @@ import MessagesAdmin from './MessagesAdmin';
 import {
   X, Plus, Pencil, Trash2, RotateCcw, LayoutDashboard, ShoppingBag,
   BarChart3, Settings, ShieldCheck, HelpCircle, Save, Check, AlertCircle,
-  TrendingUp, CircleDollarSign, Compass, Layers, Globe, Filter, Sparkles, MessageCircle,
+  TrendingUp, CircleDollarSign, Compass, Layers, Globe, Filter, MessageCircle,
   User, Lock, Users, Ban, UserCheck, CreditCard, KeyRound, Eye, EyeOff, Plug,
   Image as ImageIcon, Upload, Clock, Palette, Type, SlidersHorizontal,
   Mail, Phone, MapPin, Share2, PanelBottom, Cookie, Newspaper, Code2, Quote, Inbox
@@ -31,7 +33,6 @@ interface AdminPanelProps {
   onUpdatePlans: (plans: PlanItem[]) => void;
   onUpdateOrders: (orders: AdminOrder[]) => void;
   onUpdateHomeContent: (content: HomeContent) => void;
-  onResetAll: () => void;
   onLogout: () => void;
   onExit: () => void;
 }
@@ -45,16 +46,26 @@ export default function AdminPanel({
   onUpdatePlans,
   onUpdateOrders,
   onUpdateHomeContent,
-  onResetAll,
   onLogout,
   onExit
 }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'users' | 'home' | 'blog' | 'testimonials' | 'messages' | 'general' | 'contact' | 'integrations' | 'analytics' | 'cookies' | 'settings'>('dashboard');
-  
-  // Users management states
-  const [users, setUsers] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'users' | 'home' | 'blog' | 'testimonials' | 'messages' | 'general' | 'contact' | 'integrations' | 'analytics' | 'cookies'>('dashboard');
+
+  // Users management states (real registered accounts)
+  const [users, setUsers] = useState<AdminAccount[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [userSearchText, setUserSearchText] = useState('');
+  // Account create/edit modal
+  const emptyAccountForm = { id: '', name: '', email: '', phone: '', role: 'cliente' as 'admin' | 'cliente', password: '', blocked: false };
+  const [accountForm, setAccountForm] = useState(emptyAccountForm);
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+  const [accountModalMode, setAccountModalMode] = useState<'create' | 'edit'>('create');
+  const [accountSaving, setAccountSaving] = useState(false);
+  // Reset-password modal
+  const [pwdResetAccount, setPwdResetAccount] = useState<AdminAccount | null>(null);
+  const [pwdResetValue, setPwdResetValue] = useState('');
+  // Order edit modal
+  const [editingOrder, setEditingOrder] = useState<AdminOrder | null>(null);
 
   // Home Content Editor Form
   const [homeForm, setHomeForm] = useState({
@@ -299,61 +310,96 @@ export default function AdminPanel({
     if (activeTab === 'cookies') loadCookieConsents();
   }, [activeTab]);
 
-  // Load registered users from the backend when the dashboard mounts
-  useEffect(() => {
-    async function loadUsersData() {
-      try {
-        setUsersLoading(true);
-        const res = await fetch('/api/users');
-        if (res.ok) {
-          const data = await res.json();
-          setUsers(data);
-        }
-      } catch (e) {
-        console.error('Error loading users:', e);
-      } finally {
-        setUsersLoading(false);
-      }
-    }
-    loadUsersData();
-  }, []);
-
-  const handleToggleUserStatus = async (user: any) => {
-    const updatedStatus = user.status === 'Ativo' ? 'Bloqueado' : 'Ativo';
-    const updatedUsers = users.map(u => u.id === user.id ? { ...u, status: updatedStatus } : u);
-    setUsers(updatedUsers);
-    
+  // Load registered accounts from the backend when the dashboard mounts.
+  const loadUsersData = async () => {
     try {
-      const res = await fetch('/api/users', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedUsers)
-      });
-      if (res.ok) {
-        triggerSuccess(`Usuário ${user.username} marcado como ${updatedStatus}!`);
-      } else {
-        throw new Error();
-      }
+      setUsersLoading(true);
+      const data = await fetchAdminAccounts();
+      setUsers(data);
     } catch (e) {
-      triggerError('Erro ao atualizar status do usuário no servidor.');
+      console.error('Error loading accounts:', e);
+      triggerError('Erro ao carregar as contas.');
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+  useEffect(() => { loadUsersData(); }, []);
+
+  const openCreateAccount = () => {
+    setAccountForm(emptyAccountForm);
+    setAccountModalMode('create');
+    setIsAccountModalOpen(true);
+  };
+
+  const openEditAccount = (acc: AdminAccount) => {
+    setAccountForm({ id: acc.id, name: acc.name, email: acc.email, phone: acc.phone, role: acc.role, password: '', blocked: acc.blocked });
+    setAccountModalMode('edit');
+    setIsAccountModalOpen(true);
+  };
+
+  const handleSaveAccount = async () => {
+    if (!accountForm.name.trim() || !accountForm.email.trim()) {
+      triggerError('Nome e e-mail são obrigatórios.');
+      return;
+    }
+    if (accountModalMode === 'create' && accountForm.password.length < 6) {
+      triggerError('A senha deve ter ao menos 6 caracteres.');
+      return;
+    }
+    setAccountSaving(true);
+    const res = accountModalMode === 'create'
+      ? await createAdminAccount({
+          name: accountForm.name, email: accountForm.email, phone: accountForm.phone,
+          role: accountForm.role, password: accountForm.password
+        })
+      : await updateAdminAccount(accountForm.id, {
+          name: accountForm.name, email: accountForm.email, phone: accountForm.phone,
+          role: accountForm.role, blocked: accountForm.blocked
+        });
+    setAccountSaving(false);
+    if (res.ok) {
+      triggerSuccess(accountModalMode === 'create' ? 'Conta criada com sucesso!' : 'Conta atualizada com sucesso!');
+      setIsAccountModalOpen(false);
+      loadUsersData();
+    } else {
+      triggerError(res.error || 'Falha ao salvar a conta.');
+    }
+  };
+
+  const handleToggleUserStatus = async (user: AdminAccount) => {
+    const res = await updateAdminAccount(user.id, { blocked: !user.blocked });
+    if (res.ok) {
+      triggerSuccess(`Usuário ${user.blocked ? 'desbloqueado' : 'bloqueado'} com sucesso!`);
+      loadUsersData();
+    } else {
+      triggerError(res.error || 'Erro ao atualizar o status do usuário.');
     }
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!window.confirm('Tem certeza que deseja remover este usuário permanentemente?')) return;
-    const updatedUsers = users.filter(u => u.id !== userId);
-    setUsers(updatedUsers);
-    try {
-      const res = await fetch('/api/users', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedUsers)
-      });
-      if (res.ok) {
-        triggerSuccess('Usuário removido da base com sucesso!');
-      }
-    } catch (e) {
-      triggerError('Erro ao excluir usuário do banco de dados.');
+    if (!window.confirm('Tem certeza que deseja remover esta conta permanentemente?')) return;
+    const res = await deleteAdminAccount(userId);
+    if (res.ok) {
+      triggerSuccess('Conta removida com sucesso!');
+      loadUsersData();
+    } else {
+      triggerError(res.error || 'Erro ao excluir a conta.');
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!pwdResetAccount) return;
+    if (pwdResetValue.length < 6) {
+      triggerError('A nova senha deve ter ao menos 6 caracteres.');
+      return;
+    }
+    const res = await resetAdminAccountPassword(pwdResetAccount.id, pwdResetValue);
+    if (res.ok) {
+      triggerSuccess('Senha redefinida com sucesso!');
+      setPwdResetAccount(null);
+      setPwdResetValue('');
+    } else {
+      triggerError(res.error || 'Falha ao redefinir a senha.');
     }
   };
 
@@ -526,15 +572,27 @@ export default function AdminPanel({
   };
 
   // --- ORDER OPERATIONS ---
-  const handleToggleOrderStatus = (id: string, currentStatus: string) => {
-    const statuses: AdminOrder['status'][] = ['Pendente', 'Processando', 'Aprovado', 'Entregue', 'Cancelado'];
-    const currentIndex = statuses.indexOf(currentStatus as any);
-    const nextIndex = (currentIndex + 1) % statuses.length;
-    const nextStatus = statuses[nextIndex];
+  // Canonical statuses (matching the client-facing orderStatus util).
+  const ORDER_STATUSES: { value: string; label: string }[] = [
+    { value: 'aguardando_pagamento', label: 'Aguardando pagamento' },
+    { value: 'processando', label: 'Processando' },
+    { value: 'pago', label: 'Pagamento aprovado' },
+    { value: 'entregue', label: 'Entregue' },
+    { value: 'cancelado', label: 'Cancelado' }
+  ];
 
+  const handleChangeOrderStatus = (id: string, nextStatus: string) => {
     const updated = orders.map(o => o.id === id ? { ...o, status: nextStatus } : o);
     onUpdateOrders(updated);
-    triggerSuccess(`Pedido #${id} alterado para: ${nextStatus}`);
+    triggerSuccess(`Pedido #${id} alterado para: ${ORDER_STATUSES.find(s => s.value === nextStatus)?.label || nextStatus}`);
+  };
+
+  const handleSaveOrderEdit = () => {
+    if (!editingOrder) return;
+    const updated = orders.map(o => o.id === editingOrder.id ? editingOrder : o);
+    onUpdateOrders(updated);
+    setEditingOrder(null);
+    triggerSuccess(`Pedido #${editingOrder.id} atualizado com sucesso!`);
   };
 
   const handleDeleteOrder = (id: string) => {
@@ -767,18 +825,6 @@ export default function AdminPanel({
             </div>
 
             <div className="border-t border-slate-200 pt-4 space-y-1">
-              <button
-                onClick={() => { setActiveTab('settings'); setEditingService(null); setIsAddingService(false); setEditingPlan(null); }}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
-                  activeTab === 'settings' 
-                    ? 'bg-primary text-white shadow-sm' 
-                    : 'text-slate-500 hover:text-red-650 hover:bg-slate-100'
-                }`}
-              >
-                <RotateCcw className="h-4 w-4" />
-                <span>Redefinição / Reset</span>
-              </button>
-
               <button
                 onClick={onLogout}
                 className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-bold text-red-500 hover:text-red-700 hover:bg-red-50 transition-all"
@@ -1341,8 +1387,8 @@ export default function AdminPanel({
             {activeTab === 'orders' && (
               <div className="space-y-6">
                 <div>
-                  <h3 className="font-display font-black text-xl text-slate-900">Histórico de Pedidos Sandbox</h3>
-                  <p className="text-slate-500 text-xs font-semibold">Registro das aprovações enviadas à Sofia e ao sistema integrado</p>
+                  <h3 className="font-display font-black text-xl text-slate-900">Histórico de Pedidos</h3>
+                  <p className="text-slate-500 text-xs font-semibold">Acompanhe, edite e altere o status dos pedidos dos clientes</p>
                 </div>
 
                 {orders.length === 0 ? (
@@ -1350,7 +1396,7 @@ export default function AdminPanel({
                     <HelpCircle className="h-10 w-10 text-slate-400 mx-auto mb-2" />
                     <h4 className="font-bold text-slate-800">Sem pedidos realizados</h4>
                     <p className="text-slate-500 text-xs mt-1 font-semibold leading-relaxed">
-                      Nenhum checkout simulado foi efetuado ainda. Vá até a calculadora e realize um pagamento completo para carregar!
+                      Nenhum pedido foi efetuado ainda. Eles aparecerão aqui assim que um cliente comprar.
                     </p>
                   </div>
                 ) : (
@@ -1362,8 +1408,8 @@ export default function AdminPanel({
                           <th className="p-4">Serviço Solicitado</th>
                           <th className="p-4">Faturamento</th>
                           <th className="p-4">Cliente / Contatos</th>
-                          <th className="p-4">Status Simulado</th>
-                          <th className="p-4 text-right">Ação</th>
+                          <th className="p-4">Status</th>
+                          <th className="p-4 text-right">Ações</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -1372,13 +1418,6 @@ export default function AdminPanel({
                             day: '2-digit', month: '2-digit', year: 'numeric',
                             hour: '2-digit', minute: '2-digit'
                           });
-
-                          // Status CSS Config
-                          let statusColor = "bg-yellow-100 text-yellow-800 border-yellow-200";
-                          if (order.status === 'Entregue') statusColor = "bg-green-100 text-green-800 border-green-200";
-                          if (order.status === 'Aprovado') statusColor = "bg-blue-100 text-blue-800 border-blue-200";
-                          if (order.status === 'Cancelado') statusColor = "bg-red-100 text-red-800 border-red-200";
-                          if (order.status === 'Processando') statusColor = "bg-purple-100 text-purple-800 border-purple-200";
 
                           return (
                             <tr key={order.id} className="hover:bg-slate-50/50 transition-colors">
@@ -1410,22 +1449,34 @@ export default function AdminPanel({
                                 <div>{order.phone}</div>
                               </td>
                               <td className="p-4">
-                                <button
-                                  onClick={() => handleToggleOrderStatus(order.id, order.status)}
-                                  className={`px-3 py-1 text-[10px] font-black border uppercase rounded-full cursor-pointer transition-all hover:scale-105 active:scale-95 select-none ${statusColor}`}
-                                  title="Clique para alternar o status do pedido"
+                                <select
+                                  value={ORDER_STATUSES.some(s => s.value === order.status) ? order.status : 'aguardando_pagamento'}
+                                  onChange={(e) => handleChangeOrderStatus(order.id, e.target.value)}
+                                  className="text-[11px] font-bold border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                                  title="Alterar status do pedido"
                                 >
-                                  {order.status} 🔄
-                                </button>
+                                  {ORDER_STATUSES.map(s => (
+                                    <option key={s.value} value={s.value}>{s.label}</option>
+                                  ))}
+                                </select>
                               </td>
                               <td className="p-4">
-                                <button
-                                  onClick={() => handleDeleteOrder(order.id)}
-                                  className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors ml-auto block cursor-pointer"
-                                  title="Remover Registro"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    onClick={() => setEditingOrder(order)}
+                                    className="p-1.5 text-slate-400 hover:text-primary hover:bg-purple-50 rounded transition-colors cursor-pointer"
+                                    title="Editar pedido"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteOrder(order.id)}
+                                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors cursor-pointer"
+                                    title="Remover pedido"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -1516,71 +1567,31 @@ export default function AdminPanel({
               </div>
             )}
 
-            {/* =================== TAB 5: RESET / CONFIGS =================== */}
-            {activeTab === 'settings' && (
-              <div className="space-y-6 max-w-xl">
-                <div>
-                  <h3 className="font-display font-black text-xl text-slate-900">Configurações e Redefinição de Base</h3>
-                  <p className="text-slate-500 text-xs font-semibold">Gerencie e retorne os catálogos para o estado padrão de fábrica</p>
-                </div>
-
-                <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
-                  <div className="space-y-2">
-                    <span className="flex items-center gap-1.5 text-slate-800 font-bold text-sm">
-                      <AlertCircle className="h-4 w-4 text-amber-500" />
-                      Aviso de Redefinição Completa
-                    </span>
-                    <p className="text-slate-500 text-xs font-semibold leading-relaxed">
-                      Esta ação limpará as informações armazenadas no LocalStorage de sua máquina (Serviços e Planos editados, além de todos os pedidos agendados na calculadora). O catálogo retornará instantaneamente à configuração definida no código-fonte principal (`src/data.ts`).
-                    </p>
-                  </div>
-
-                  <div className="pt-3 border-t border-slate-100 flex justify-end">
-                    <button
-                      onClick={() => {
-                        if (confirm('Atenção! Isso redefinirá todos os dados personalizados para os valores padrão de fábrica. Continuar?')) {
-                          onResetAll();
-                          triggerSuccess('Configurações redefinidas com sucesso para o padrão de fábrica!');
-                          setActiveTab('dashboard');
-                        }
-                      }}
-                      className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs py-3 px-5 rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 shadow-md"
-                    >
-                      <RotateCcw className="h-4 w-4" />
-                      Redefinir Para Padrões de Fábrica
-                    </button>
-                  </div>
-                </div>
-
-                <div className="bg-purple-50 border border-primary/20 rounded-xl p-5 space-y-3">
-                  <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                    <Sparkles className="h-4 w-4 text-primary" />
-                    Canal Administrativo Direto
-                  </h4>
-                  <p className="text-slate-500 text-xs font-semibold leading-relaxed">
-                    Você pode alterar os limites mínimos e máximos da calculadora arrastável modificando o serviço correspondente. Os multiplicadores de margem e descontos progressivos (10%, 20% e 30% discount percent) serão aplicados no faturamento em tempo de renderização.
-                  </p>
-                </div>
-              </div>
-            )}
-
             {/* =================== TAB 6: GERENCIAR USUÁRIOS =================== */}
             {activeTab === 'users' && (
               <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                   <div>
-                    <h3 className="font-display font-black text-xl text-slate-900">Gerenciamento de Clientes</h3>
-                    <p className="text-slate-500 text-xs font-semibold">Consulte dados cadastrais, volume de compras e alterne bloqueio de acessos</p>
+                    <h3 className="font-display font-black text-xl text-slate-900">Gerenciamento de Usuários</h3>
+                    <p className="text-slate-500 text-xs font-semibold">Crie, edite, bloqueie ou remova contas e redefina senhas</p>
                   </div>
 
-                  <div className="relative w-full sm:w-64">
-                    <input
-                      type="text"
-                      placeholder="Buscar por usuário ou email..."
-                      value={userSearchText}
-                      onChange={(e) => setUserSearchText(e.target.value)}
-                      className="w-full bg-white border border-slate-200 text-xs font-semibold rounded-lg py-2.5 px-4 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800"
-                    />
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <div className="relative flex-1 sm:w-56">
+                      <input
+                        type="text"
+                        placeholder="Buscar por nome ou email..."
+                        value={userSearchText}
+                        onChange={(e) => setUserSearchText(e.target.value)}
+                        className="w-full bg-white border border-slate-200 text-xs font-semibold rounded-lg py-2.5 px-4 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800"
+                      />
+                    </div>
+                    <button
+                      onClick={openCreateAccount}
+                      className="flex items-center gap-1.5 bg-primary hover:bg-purple-700 text-white text-xs font-bold rounded-lg px-3 py-2.5 transition-colors shrink-0"
+                    >
+                      <Plus className="h-4 w-4" /> Novo usuário
+                    </button>
                   </div>
                 </div>
 
@@ -1592,25 +1603,25 @@ export default function AdminPanel({
                   (() => {
                     const filteredUsers = users.filter(u => {
                       const search = userSearchText.toLowerCase();
-                      return u.username.toLowerCase().includes(search) || u.email.toLowerCase().includes(search);
+                      return (u.name || '').toLowerCase().includes(search) || (u.email || '').toLowerCase().includes(search);
                     });
 
                     return filteredUsers.length === 0 ? (
                       <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500 text-xs font-semibold">
                         <Users className="h-8 w-8 text-slate-300 mx-auto mb-2" />
-                        Nenhum cliente cadastrado ou encontrado com esta pesquisa.
+                        Nenhum usuário cadastrado ou encontrado com esta pesquisa.
                       </div>
                     ) : (
-                      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-                        <table className="w-full text-left border-collapse text-xs">
+                      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto">
+                        <table className="w-full text-left border-collapse text-xs min-w-[760px]">
                           <thead>
                             <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-500 uppercase tracking-wider">
                               <th className="p-4">Usuário</th>
                               <th className="p-4">Contatos</th>
                               <th className="p-4">Cadastrado Em</th>
                               <th className="p-4">Compras</th>
-                              <th className="p-4">Status da Conta</th>
-                              <th className="p-4 text-right">Ação</th>
+                              <th className="p-4">Status</th>
+                              <th className="p-4 text-right">Ações</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 font-medium text-slate-600">
@@ -1618,25 +1629,24 @@ export default function AdminPanel({
                               const createdStr = user.createdAt ? formatDateTime(user.createdAt, {
                                 day: '2-digit', month: '2-digit', year: 'numeric',
                                 hour: '2-digit', minute: '2-digit'
-                              }) : 'Manual';
+                              }) : '—';
 
-                              const isBlocked = user.status === 'Bloqueado';
+                              const isBlocked = user.blocked;
+                              const isAdmin = user.role === 'admin';
 
                               return (
                                 <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
                                   <td className="p-4">
                                     <div className="flex items-center gap-2.5">
-                                      <div className={`p-2 rounded-full font-bold text-center shrink-0 w-8 h-8 flex items-center justify-center text-xs ${isBlocked ? 'bg-red-50 text-red-600' : 'bg-purple-50 text-primary'}`}>
-                                        {user.username.slice(0, 2).toUpperCase()}
+                                      <div className={`p-2 rounded-full font-bold text-center shrink-0 w-8 h-8 flex items-center justify-center text-xs ${isBlocked ? 'bg-red-50 text-red-600' : isAdmin ? 'bg-amber-50 text-amber-600' : 'bg-purple-50 text-primary'}`}>
+                                        {(user.name || user.email || '?').slice(0, 2).toUpperCase()}
                                       </div>
                                       <div>
                                         <div className="font-bold text-slate-900 text-sm leading-tight flex items-center gap-1.5">
-                                          {user.username}
-                                          {isBlocked && (
-                                            <span className="bg-red-100 text-red-600 text-[8px] px-1 rounded uppercase font-black">
-                                              Bloqueado
-                                            </span>
-                                          )}
+                                          {user.name || '(sem nome)'}
+                                          <span className={`text-[8px] px-1.5 py-0.5 rounded uppercase font-black ${isAdmin ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
+                                            {isAdmin ? 'Admin' : 'Cliente'}
+                                          </span>
                                         </div>
                                         <div className="text-[10px] text-slate-400 font-mono">ID: {user.id.slice(0, 8)}...</div>
                                       </div>
@@ -1644,7 +1654,7 @@ export default function AdminPanel({
                                   </td>
                                   <td className="p-4 text-[11px] leading-relaxed">
                                     <div className="font-semibold text-slate-800">{user.email}</div>
-                                    <div className="text-slate-400 font-mono">{user.phone}</div>
+                                    <div className="text-slate-400 font-mono">{user.phone || '—'}</div>
                                   </td>
                                   <td className="p-4 text-slate-400 font-mono">
                                     {createdStr}
@@ -1657,33 +1667,39 @@ export default function AdminPanel({
                                     <button
                                       onClick={() => handleToggleUserStatus(user)}
                                       className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border cursor-pointer hover:scale-105 active:scale-95 transition-all flex items-center gap-1 leading-none ${
-                                        isBlocked 
-                                          ? 'bg-red-50 text-red-600 border-red-200' 
+                                        isBlocked
+                                          ? 'bg-red-50 text-red-600 border-red-200'
                                           : 'bg-green-50 text-green-700 border-green-200'
                                       }`}
                                       title={isBlocked ? 'Clique para Desbloquear' : 'Clique para Bloquear'}
                                     >
-                                      {isBlocked ? (
-                                        <>
-                                          <Ban className="h-3 w-3" />
-                                          Bloqueado
-                                        </>
-                                      ) : (
-                                        <>
-                                          <UserCheck className="h-3 w-3" />
-                                          Ativo
-                                        </>
-                                      )}
+                                      {isBlocked ? (<><Ban className="h-3 w-3" /> Bloqueado</>) : (<><UserCheck className="h-3 w-3" /> Ativo</>)}
                                     </button>
                                   </td>
                                   <td className="p-4 text-right">
-                                    <button
-                                      onClick={() => handleDeleteUser(user.id)}
-                                      className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer inline-block"
-                                      title="Remover Usuário"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </button>
+                                    <div className="flex items-center justify-end gap-1">
+                                      <button
+                                        onClick={() => openEditAccount(user)}
+                                        className="p-1.5 text-slate-400 hover:text-primary hover:bg-purple-50 rounded-lg transition-colors cursor-pointer"
+                                        title="Editar usuário"
+                                      >
+                                        <Pencil className="h-4 w-4" />
+                                      </button>
+                                      <button
+                                        onClick={() => { setPwdResetAccount(user); setPwdResetValue(''); }}
+                                        className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                                        title="Redefinir senha"
+                                      >
+                                        <KeyRound className="h-4 w-4" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteUser(user.id)}
+                                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                        title="Remover usuário"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </button>
+                                    </div>
                                   </td>
                                 </tr>
                               );
@@ -2525,6 +2541,151 @@ export default function AdminPanel({
         </div>
 
       </div>
+
+      {/* ===== ACCOUNT CREATE / EDIT MODAL ===== */}
+      {isAccountModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setIsAccountModalOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <h3 className="font-display font-black text-slate-900">{accountModalMode === 'create' ? 'Novo usuário' : 'Editar usuário'}</h3>
+              <button onClick={() => setIsAccountModalOpen(false)} className="text-slate-400 hover:text-slate-700"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Nome</label>
+                <input value={accountForm.name} onChange={(e) => setAccountForm(p => ({ ...p, name: e.target.value }))}
+                  className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">E-mail</label>
+                <input type="email" value={accountForm.email} onChange={(e) => setAccountForm(p => ({ ...p, email: e.target.value }))}
+                  className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Telefone</label>
+                  <input value={accountForm.phone} onChange={(e) => setAccountForm(p => ({ ...p, phone: e.target.value }))}
+                    className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Função</label>
+                  <select value={accountForm.role} onChange={(e) => setAccountForm(p => ({ ...p, role: e.target.value as 'admin' | 'cliente' }))}
+                    className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800">
+                    <option value="cliente">Cliente</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+              </div>
+              {accountModalMode === 'create' ? (
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Senha</label>
+                  <input type="text" value={accountForm.password} onChange={(e) => setAccountForm(p => ({ ...p, password: e.target.value }))}
+                    placeholder="Mínimo 6 caracteres"
+                    className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800" />
+                </div>
+              ) : (
+                <label className="flex items-center gap-2 text-xs font-bold text-slate-600 pt-1 cursor-pointer">
+                  <input type="checkbox" checked={accountForm.blocked} onChange={(e) => setAccountForm(p => ({ ...p, blocked: e.target.checked }))} />
+                  Bloquear acesso desta conta
+                </label>
+              )}
+            </div>
+            <div className="px-5 py-4 border-t border-slate-100 flex justify-end gap-2">
+              <button onClick={() => setIsAccountModalOpen(false)} className="text-xs font-bold text-slate-500 hover:text-slate-700 px-4 py-2.5 rounded-lg">Cancelar</button>
+              <button onClick={handleSaveAccount} disabled={accountSaving}
+                className="bg-primary hover:bg-purple-700 disabled:opacity-60 text-white text-xs font-bold rounded-lg px-4 py-2.5 flex items-center gap-1.5">
+                <Save className="h-4 w-4" /> {accountSaving ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== RESET PASSWORD MODAL ===== */}
+      {pwdResetAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setPwdResetAccount(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <h3 className="font-display font-black text-slate-900">Redefinir senha</h3>
+              <button onClick={() => setPwdResetAccount(null)} className="text-slate-400 hover:text-slate-700"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-xs font-semibold text-slate-500">Defina uma nova senha para <strong className="text-slate-800">{pwdResetAccount.name || pwdResetAccount.email}</strong>.</p>
+              <input type="text" value={pwdResetValue} onChange={(e) => setPwdResetValue(e.target.value)}
+                placeholder="Nova senha (mín. 6 caracteres)"
+                className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800" />
+            </div>
+            <div className="px-5 py-4 border-t border-slate-100 flex justify-end gap-2">
+              <button onClick={() => setPwdResetAccount(null)} className="text-xs font-bold text-slate-500 hover:text-slate-700 px-4 py-2.5 rounded-lg">Cancelar</button>
+              <button onClick={handleResetPassword} className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg px-4 py-2.5 flex items-center gap-1.5">
+                <KeyRound className="h-4 w-4" /> Redefinir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== ORDER EDIT MODAL ===== */}
+      {editingOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setEditingOrder(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <h3 className="font-display font-black text-slate-900">Editar pedido <span className="font-mono text-sm text-slate-400">#{editingOrder.id}</span></h3>
+              <button onClick={() => setEditingOrder(null)} className="text-slate-400 hover:text-slate-700"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Serviço</label>
+                <input value={editingOrder.serviceLabel} onChange={(e) => setEditingOrder({ ...editingOrder, serviceLabel: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Quantidade</label>
+                  <input type="number" value={editingOrder.quantity} onChange={(e) => setEditingOrder({ ...editingOrder, quantity: Number(e.target.value) })}
+                    className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Valor (R$)</label>
+                  <input type="number" step="0.01" value={editingOrder.price} onChange={(e) => setEditingOrder({ ...editingOrder, price: Number(e.target.value) })}
+                    className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Plataforma</label>
+                  <input value={editingOrder.platform} onChange={(e) => setEditingOrder({ ...editingOrder, platform: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Perfil / @</label>
+                  <input value={editingOrder.username} onChange={(e) => setEditingOrder({ ...editingOrder, username: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">URL do post (opcional)</label>
+                <input value={editingOrder.postUrl || ''} onChange={(e) => setEditingOrder({ ...editingOrder, postUrl: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Status</label>
+                <select value={ORDER_STATUSES.some(s => s.value === editingOrder.status) ? editingOrder.status : 'aguardando_pagamento'}
+                  onChange={(e) => setEditingOrder({ ...editingOrder, status: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800">
+                  {ORDER_STATUSES.map(s => (<option key={s.value} value={s.value}>{s.label}</option>))}
+                </select>
+              </div>
+            </div>
+            <div className="px-5 py-4 border-t border-slate-100 flex justify-end gap-2">
+              <button onClick={() => setEditingOrder(null)} className="text-xs font-bold text-slate-500 hover:text-slate-700 px-4 py-2.5 rounded-lg">Cancelar</button>
+              <button onClick={handleSaveOrderEdit} className="bg-primary hover:bg-purple-700 text-white text-xs font-bold rounded-lg px-4 py-2.5 flex items-center gap-1.5">
+                <Save className="h-4 w-4" /> Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

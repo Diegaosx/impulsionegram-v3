@@ -245,6 +245,8 @@ async function createSchema(client: PoolClient) {
       created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
     )`
   );
+  // Blocked flag added after the initial release — apply idempotently.
+  await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS blocked BOOLEAN NOT NULL DEFAULT false`);
   await client.query(
     `CREATE TABLE IF NOT EXISTS contact_messages (
       id         TEXT PRIMARY KEY,
@@ -318,6 +320,7 @@ export interface AccountRecord {
   phone: string;
   role: AccountRole;
   avatar: string;
+  blocked: boolean;
   createdAt: string;
 }
 
@@ -339,6 +342,7 @@ function mapAccount(r: any): AccountRecord {
     phone: r.phone || '',
     role: (r.role === 'admin' ? 'admin' : 'cliente'),
     avatar: r.avatar || '',
+    blocked: r.blocked === true,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at)
   };
 }
@@ -377,6 +381,7 @@ export async function verifyAccountCredentials(email: string, password: string):
   const r = await pool.query(`SELECT * FROM accounts WHERE email = $1`, [normalizeEmail(email)]);
   const row = r.rows[0];
   if (!row) return null;
+  if (row.blocked === true) return null; // blocked accounts cannot log in
   const ok = await bcrypt.compare(String(password || ''), row.password_hash);
   return ok ? mapAccount(row) : null;
 }
@@ -433,6 +438,69 @@ export async function checkAccountPassword(id: string, password: string): Promis
 export async function listAccounts(): Promise<AccountRecord[]> {
   const r = await pool.query(`SELECT * FROM accounts ORDER BY created_at DESC LIMIT 1000`);
   return r.rows.map(mapAccount);
+}
+
+// Admin listing enriched with each account's order count and total spent
+// (matched by linked accountId or e-mail, like listOrdersForAccount).
+export interface AccountWithStats extends AccountRecord {
+  ordersCount: number;
+  totalSpent: number;
+}
+
+export async function listAccountsWithStats(): Promise<AccountWithStats[]> {
+  const r = await pool.query(
+    `SELECT a.*,
+       (SELECT COUNT(*) FROM orders o
+          WHERE o.data->>'accountId' = a.id
+             OR lower(coalesce(o.data->>'email','')) = lower(a.email))::int AS orders_count,
+       (SELECT COALESCE(SUM(NULLIF(o.data->>'price','')::numeric), 0) FROM orders o
+          WHERE o.data->>'accountId' = a.id
+             OR lower(coalesce(o.data->>'email','')) = lower(a.email)) AS total_spent
+     FROM accounts a
+     ORDER BY a.created_at DESC
+     LIMIT 1000`
+  );
+  return r.rows.map((row) => ({
+    ...mapAccount(row),
+    ordersCount: Number(row.orders_count) || 0,
+    totalSpent: Number(row.total_spent) || 0
+  }));
+}
+
+// Admin update of an account's editable fields (name/email/phone/role/blocked).
+export async function adminUpdateAccount(id: string, data: {
+  name?: string;
+  email?: string;
+  phone?: string;
+  role?: AccountRole;
+  blocked?: boolean;
+}): Promise<AccountRecord | null> {
+  const current = await pool.query(`SELECT * FROM accounts WHERE id = $1`, [id]);
+  if (!current.rows[0]) return null;
+  const cur = current.rows[0];
+  const name = data.name !== undefined ? String(data.name).trim() : cur.name;
+  const email = data.email !== undefined ? normalizeEmail(data.email) : cur.email;
+  const phone = data.phone !== undefined ? String(data.phone).trim() : cur.phone;
+  const role = data.role === 'admin' || data.role === 'cliente' ? data.role : cur.role;
+  const blocked = data.blocked !== undefined ? data.blocked === true : cur.blocked;
+  const r = await pool.query(
+    `UPDATE accounts SET name = $2, email = $3, phone = $4, role = $5, blocked = $6 WHERE id = $1 RETURNING *`,
+    [id, name, email, phone, role, blocked]
+  );
+  return mapAccount(r.rows[0]);
+}
+
+export async function setAccountBlocked(id: string, blocked: boolean): Promise<void> {
+  await pool.query(`UPDATE accounts SET blocked = $2 WHERE id = $1`, [id, blocked === true]);
+}
+
+export async function deleteAccount(id: string): Promise<void> {
+  await pool.query(`DELETE FROM accounts WHERE id = $1`, [id]);
+}
+
+export async function countAdmins(): Promise<number> {
+  const r = await pool.query(`SELECT COUNT(*)::int AS count FROM accounts WHERE role = 'admin' AND blocked = false`);
+  return Number(r.rows[0]?.count) || 0;
 }
 
 export async function getOrderById(id: string): Promise<any | null> {

@@ -13,7 +13,7 @@ import {
   fetchServices, saveServicesToServer,
   fetchPlans, savePlansToServer,
   fetchOrders, saveOrdersToServer,
-  addOrderToServer, resetServerDatabase,
+  addOrderToServer,
   fetchHomeContent, saveHomeContentToServer, HomeContent,
   fetchGeneralSettings, fetchCompanySettings, CompanySettings,
   fetchAnalyticsSettings, AnalyticsSettings,
@@ -168,20 +168,6 @@ export default function App() {
     }
   };
 
-  const handleResetAll = async () => {
-    try {
-      const backup = await resetServerDatabase();
-      setServices(backup.services);
-      setPlans(backup.plans);
-      setOrders(backup.orders);
-      if (backup.homeContent) {
-        setHomeContent(backup.homeContent);
-      }
-    } catch (e) {
-      console.error('Failed to reset backend database:', e);
-    }
-  };
-
   const handleAddSimulatedOrder = async (orderInfo: any) => {
     try {
       const savedOrder = await addOrderToServer(orderInfo);
@@ -297,7 +283,6 @@ export default function App() {
               onUpdatePlans={handleUpdatePlans}
               onUpdateOrders={handleUpdateOrders}
               onUpdateHomeContent={handleUpdateHomeContent}
-              onResetAll={handleResetAll}
               onLogout={handleLogout}
               onExit={() => navigate('/')}
             />
