@@ -224,6 +224,50 @@ async function createSchema(client: PoolClient) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`
   );
+  await client.query(
+    `CREATE TABLE IF NOT EXISTS blocked_ips (
+      ip         TEXT PRIMARY KEY,
+      reason     TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`
+  );
+}
+
+// --- Blocked IPs (antispam permanent bans) ---
+export interface BlockedIpRecord {
+  ip: string;
+  reason: string;
+  createdAt: string;
+}
+
+export async function isIpBlocked(ip: string): Promise<boolean> {
+  if (!ip) return false;
+  const r = await pool.query(`SELECT 1 FROM blocked_ips WHERE ip = $1`, [ip]);
+  return r.rowCount! > 0;
+}
+
+export async function blockIp(ip: string, reason: string): Promise<void> {
+  if (!ip) return;
+  await pool.query(
+    `INSERT INTO blocked_ips (ip, reason) VALUES ($1, $2) ON CONFLICT (ip) DO NOTHING`,
+    [ip, reason]
+  );
+}
+
+export async function unblockIp(ip: string): Promise<void> {
+  await pool.query(`DELETE FROM blocked_ips WHERE ip = $1`, [ip]);
+}
+
+export async function listBlockedIps(limit = 500): Promise<BlockedIpRecord[]> {
+  const r = await pool.query(
+    `SELECT ip, reason, created_at FROM blocked_ips ORDER BY created_at DESC LIMIT $1`,
+    [limit]
+  );
+  return r.rows.map((x) => ({
+    ip: x.ip,
+    reason: x.reason || '',
+    createdAt: x.created_at instanceof Date ? x.created_at.toISOString() : String(x.created_at)
+  }));
 }
 
 // --- Blog categories & tags ---

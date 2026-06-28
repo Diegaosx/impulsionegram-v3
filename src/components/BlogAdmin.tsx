@@ -1,14 +1,16 @@
 import { useEffect, useState, FormEvent } from 'react';
 import {
   Plus, Pencil, Trash2, Save, Upload, FileText, MessageSquare,
-  Eye, EyeOff, ArrowLeft, Image as ImageIcon, Tag, FolderTree, ExternalLink
+  Eye, EyeOff, ArrowLeft, Image as ImageIcon, Tag, FolderTree, ExternalLink,
+  Shield, Ban
 } from 'lucide-react';
 import {
   BlogPost, BlogComment,
   fetchBlogPosts, saveBlogPostToServer, deleteBlogPostFromServer,
   fetchAllComments, setCommentStatus, deleteCommentFromServer, uploadAsset,
   fetchBlogCategories, addBlogCategoryToServer, deleteBlogCategoryFromServer,
-  fetchBlogTags, deleteBlogTagFromServer
+  fetchBlogTags, deleteBlogTagFromServer,
+  BlockedIpRecord, fetchBlockedIps, unblockIpFromServer
 } from '../utils/storage';
 import { formatDateTime } from '../utils/datetime';
 import ChipMultiInput from './ChipMultiInput';
@@ -56,6 +58,8 @@ export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminPro
   const [comments, setComments] = useState<BlogComment[]>([]);
   const [loadingComments, setLoadingComments] = useState(false);
 
+  const [blockedIps, setBlockedIps] = useState<BlockedIpRecord[]>([]);
+
   const [categoriesList, setCategoriesList] = useState<string[]>([]);
   const [tagsList, setTagsList] = useState<string[]>([]);
   const [newCategory, setNewCategory] = useState('');
@@ -74,7 +78,18 @@ export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminPro
   const loadComments = async () => {
     setLoadingComments(true);
     setComments(await fetchAllComments());
+    setBlockedIps(await fetchBlockedIps());
     setLoadingComments(false);
+  };
+
+  const handleUnblockIp = async (ip: string) => {
+    try {
+      await unblockIpFromServer(ip);
+      setBlockedIps(prev => prev.filter(b => b.ip !== ip));
+      triggerSuccess(`IP ${ip} desbloqueado.`);
+    } catch {
+      triggerError('Falha ao desbloquear o IP.');
+    }
   };
   const loadTaxonomy = async () => {
     setCategoriesList(await fetchBlogCategories());
@@ -461,20 +476,50 @@ export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminPro
         /* --- COMMENTS MODERATION --- */
         loadingComments ? (
           <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>
-        ) : comments.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500 text-xs font-semibold">
-            <MessageSquare className="h-8 w-8 text-slate-300 mx-auto mb-2" /> Nenhum comentário ainda.
-          </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
+            <div className="flex items-start gap-2 bg-sky-50 border border-sky-200 text-sky-800 rounded-lg p-3 text-xs font-semibold">
+              <Shield className="h-4 w-4 shrink-0 mt-0.5" />
+              <span>Todo comentário entra como <strong>Pendente</strong> e só aparece no site após você aprovar. Links são removidos automaticamente e o envio é limitado (1 a cada 10 min, máx. 3/24h por IP).</span>
+            </div>
+
+            {/* Blocked IPs (antispam) */}
+            {blockedIps.length > 0 && (
+              <div className="bg-white border border-red-200 rounded-xl p-4 shadow-sm">
+                <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5 mb-2">
+                  <Ban className="h-4 w-4 text-red-500" /> IPs bloqueados ({blockedIps.length})
+                </h4>
+                <div className="space-y-1.5">
+                  {blockedIps.map(b => (
+                    <div key={b.ip} className="flex items-center justify-between gap-3 text-xs border border-slate-100 rounded-lg px-3 py-2">
+                      <div className="min-w-0">
+                        <span className="font-mono font-bold text-slate-700">{b.ip}</span>
+                        <span className="text-slate-400 ml-2">{b.reason}</span>
+                        <span className="text-slate-300 ml-2 font-mono">{formatDateTime(b.createdAt)}</span>
+                      </div>
+                      <button onClick={() => handleUnblockIp(b.ip)} className="shrink-0 text-[11px] font-bold text-primary hover:bg-purple-50 border border-purple-200 rounded px-2 py-1 transition-colors">
+                        Desbloquear
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {comments.length === 0 ? (
+              <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500 text-xs font-semibold">
+                <MessageSquare className="h-8 w-8 text-slate-300 mx-auto mb-2" /> Nenhum comentário ainda.
+              </div>
+            ) : (
+              <div className="space-y-3">
             {comments.map(c => (
               <div key={c.id} className={`bg-white border rounded-xl p-4 shadow-sm flex items-start justify-between gap-4 ${c.status === 'hidden' ? 'border-slate-200 opacity-60' : 'border-slate-200'}`}>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className="font-bold text-sm text-slate-900">{c.author}</span>
                     <span className="text-[10px] text-slate-400 font-mono">{c.email}</span>
-                    <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full border ${c.status === 'approved' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                      {c.status === 'approved' ? 'Visível' : 'Oculto'}
+                    <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full border ${c.status === 'approved' ? 'bg-green-50 text-green-700 border-green-200' : c.status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                      {c.status === 'approved' ? 'Visível' : c.status === 'pending' ? 'Pendente' : 'Oculto'}
                     </span>
                   </div>
                   <p className="text-slate-600 text-xs font-medium leading-relaxed">{c.content}</p>
@@ -490,6 +535,8 @@ export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminPro
                 </div>
               </div>
             ))}
+              </div>
+            )}
           </div>
         )
       )}

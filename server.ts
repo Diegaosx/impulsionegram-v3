@@ -38,15 +38,32 @@ import {
   addTestimonial,
   saveTestimonial,
   updateTestimonialStatus,
-  deleteTestimonial
+  deleteTestimonial,
+  listBlockedIps,
+  unblockIp
 } from './db';
 import { uploadToR2, isR2Configured } from './r2';
 import { verifyRecaptcha } from './recaptcha';
+import { stripLinks } from './sanitize';
+import { checkSubmissionRate, initRateLimiter } from './rateLimit';
 
 const app = express();
 const PORT = 3000;
 
+// Behind Railway's proxy, the real client IP is in X-Forwarded-For. Trusting the
+// proxy makes req.ip resolve to the visitor's address (used for rate limiting).
+app.set('trust proxy', true);
+
 app.use(express.json());
+
+// Translate a rate-limit verdict into a client-friendly error message.
+function rateLimitMessage(reason?: string, retryAfterSeconds?: number): string {
+  if (reason === 'blocked') {
+    return 'Seu acesso para envios foi bloqueado por excesso de tentativas. Entre em contato com o suporte se isso for um engano.';
+  }
+  const mins = retryAfterSeconds ? Math.max(1, Math.ceil(retryAfterSeconds / 60)) : 10;
+  return `Você enviou recentemente. Aguarde cerca de ${mins} minuto(s) antes de enviar novamente.`;
+}
 
 // In-memory upload handling (files are streamed straight to Cloudflare R2).
 const upload = multer({
@@ -351,21 +368,31 @@ app.get('/api/blog/comments', async (req, res) => {
   }
 });
 
-// Add a comment (public). Approved by default so it shows immediately; the
-// admin can hide or delete it afterwards. Protected by reCAPTCHA v3 if configured.
+// Add a comment (public). Stored as 'pending' so an admin always approves it
+// before it appears. Protected by reCAPTCHA v3, an antispam rate limit, and
+// URL stripping on the submitted text.
 app.post('/api/blog/comments', async (req, res) => {
   try {
     const { postSlug, author, email, content, recaptchaToken } = req.body || {};
     if (!postSlug || !author || !content) {
       return res.status(400).json({ error: 'postSlug, author and content are required' });
     }
+    const rate = await checkSubmissionRate(req.ip || '');
+    if (!rate.allowed) {
+      return res.status(429).json({ error: rateLimitMessage(rate.reason, rate.retryAfterSeconds), reason: rate.reason });
+    }
     const verification = await verifyRecaptcha(recaptchaToken, req.ip);
     if (!verification.ok) {
       return res.status(400).json({ error: 'Falha na verificação de segurança. Tente novamente.' });
     }
+    const safeAuthor = stripLinks(String(author)).slice(0, 120);
+    const safeContent = stripLinks(String(content)).slice(0, 5000);
+    if (!safeContent.trim()) {
+      return res.status(400).json({ error: 'O comentário não pode ficar vazio.' });
+    }
     const id = `c_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-    const comment = await addComment(id, String(postSlug), String(author), String(email || ''), String(content), 'approved');
-    res.json({ success: true, comment });
+    const comment = await addComment(id, String(postSlug), safeAuthor, String(email || ''), safeContent, 'pending');
+    res.json({ success: true, pending: true, comment });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -459,14 +486,24 @@ app.post('/api/testimonials', async (req, res) => {
     if (!name || !text) {
       return res.status(400).json({ error: 'Nome e depoimento são obrigatórios.' });
     }
+    const rate = await checkSubmissionRate(req.ip || '');
+    if (!rate.allowed) {
+      return res.status(429).json({ error: rateLimitMessage(rate.reason, rate.retryAfterSeconds), reason: rate.reason });
+    }
     const verification = await verifyRecaptcha(recaptchaToken, req.ip);
     if (!verification.ok) {
       return res.status(400).json({ error: 'Falha na verificação de segurança. Tente novamente.' });
     }
+    const safeName = stripLinks(String(name)).slice(0, 120);
+    const safeRole = stripLinks(String(role || '')).slice(0, 120);
+    const safeText = stripLinks(String(text)).slice(0, 2000);
+    if (!safeText.trim()) {
+      return res.status(400).json({ error: 'O depoimento não pode ficar vazio.' });
+    }
     const id = `t_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
     const created = await addTestimonial(
       id,
-      { name, role, rating, text, platformUsed, verified: true, date: 'Agora mesmo' },
+      { name: safeName, role: safeRole, rating, text: safeText, platformUsed, verified: true, date: 'Agora mesmo' },
       'pending'
     );
     res.json({ success: true, testimonial: created });
@@ -509,6 +546,26 @@ app.put('/api/testimonials/:id', async (req, res) => {
 app.delete('/api/testimonials/:id', async (req, res) => {
   try {
     await deleteTestimonial(req.params.id);
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- Blocked IPs (antispam) ---
+// List permanently blocked IPs (admin).
+app.get('/api/blocked-ips', async (req, res) => {
+  try {
+    res.json(await listBlockedIps());
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Lift a permanent block (admin).
+app.delete('/api/blocked-ips/:ip', async (req, res) => {
+  try {
+    await unblockIp(req.params.ip);
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -754,6 +811,7 @@ async function mountFrontend() {
 
 // Ensure the database schema exists (and is seeded) before serving traffic.
 initDB()
+  .then(initRateLimiter)
   .then(mountFrontend)
   .catch((error) => {
     console.error('Failed to initialize PostgreSQL database:', error);
