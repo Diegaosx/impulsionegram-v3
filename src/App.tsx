@@ -6,6 +6,7 @@ import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
 import ClientDashboard from './pages/ClientDashboard';
 import OrderConfirmationPage from './pages/OrderConfirmationPage';
+import HelpPage from './pages/HelpPage';
 import BlogPage from './pages/BlogPage';
 import AdminPanel from './components/AdminPanel';
 import {
@@ -207,6 +208,11 @@ export default function App() {
             onAddSimulatedOrder={handleAddSimulatedOrder}
           />
         }
+      />
+
+      <Route
+        path="/ajuda"
+        element={<HelpPage homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
 
       <Route
