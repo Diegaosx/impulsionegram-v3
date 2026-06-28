@@ -203,10 +203,69 @@ export async function addOrderToServer(order: Omit<AdminOrder, 'id' | 'date'>): 
   return data.order;
 }
 
-export async function resetServerDatabase(): Promise<{ services: ServiceItem[], plans: PlanItem[], orders: AdminOrder[], users: any[], homeContent: any }> {
-  const res = await fetch('/api/reset', { method: 'POST' });
-  if (!res.ok) throw new Error('Failed to reset server database');
+// --- Admin account management (real registered accounts) ---
+export interface AdminAccount {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: 'admin' | 'cliente';
+  avatar: string;
+  blocked: boolean;
+  createdAt: string;
+  ordersCount: number;
+  totalSpent: number;
+}
+
+export async function fetchAdminAccounts(): Promise<AdminAccount[]> {
+  const res = await fetch('/api/accounts');
+  if (!res.ok) throw new Error('Failed to fetch accounts');
   return await res.json();
+}
+
+export interface AccountInput {
+  name: string;
+  email: string;
+  phone?: string;
+  role?: 'admin' | 'cliente';
+  password?: string;
+  blocked?: boolean;
+}
+
+export async function createAdminAccount(input: AccountInput): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch('/api/accounts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input)
+  });
+  const data = await res.json().catch(() => ({}));
+  return res.ok ? { ok: true } : { ok: false, error: data.error || 'Falha ao criar a conta.' };
+}
+
+export async function updateAdminAccount(id: string, input: Partial<AccountInput>): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(`/api/accounts/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input)
+  });
+  const data = await res.json().catch(() => ({}));
+  return res.ok ? { ok: true } : { ok: false, error: data.error || 'Falha ao atualizar a conta.' };
+}
+
+export async function resetAdminAccountPassword(id: string, password: string): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(`/api/accounts/${encodeURIComponent(id)}/password`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password })
+  });
+  const data = await res.json().catch(() => ({}));
+  return res.ok ? { ok: true } : { ok: false, error: data.error || 'Falha ao redefinir a senha.' };
+}
+
+export async function deleteAdminAccount(id: string): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(`/api/accounts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  const data = await res.json().catch(() => ({}));
+  return res.ok ? { ok: true } : { ok: false, error: data.error || 'Falha ao excluir a conta.' };
 }
 
 export interface UserItem {

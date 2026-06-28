@@ -8,7 +8,6 @@ import {
   readDB,
   writeDB,
   initDB,
-  getDefaultData,
   DEFAULT_HOME_CONTENT,
   UserItem,
   getIntegrations,
@@ -49,6 +48,10 @@ import {
   updateAccountProfile,
   updateAccountPassword,
   checkAccountPassword,
+  listAccountsWithStats,
+  adminUpdateAccount,
+  deleteAccount,
+  countAdmins,
   listOrdersForAccount,
   getOrderById,
   patchOrderData,
@@ -231,6 +234,98 @@ app.put('/api/users', async (req, res) => {
     db.users = updatedUsers;
     await writeDB(db);
     res.json({ success: true, users: db.users });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- Admin account management (real registered accounts: admin + cliente) ---
+// All routes here are admin-only via the /api gate (not in PUBLIC/AUTH lists).
+
+// List registered accounts with order count + total spent.
+app.get('/api/accounts', async (_req, res) => {
+  try {
+    res.json(await listAccountsWithStats());
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Create a new account.
+app.post('/api/accounts', async (req, res) => {
+  try {
+    const { name, email, phone, password, role } = req.body || {};
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Nome, e-mail e senha são obrigatórios.' });
+    }
+    if (String(password).length < 6) {
+      return res.status(400).json({ error: 'A senha deve ter ao menos 6 caracteres.' });
+    }
+    const existing = await getAccountByEmail(String(email));
+    if (existing) return res.status(409).json({ error: 'Já existe uma conta com este e-mail.' });
+    const account = await createAccount({
+      name: String(name),
+      email: String(email),
+      phone: String(phone || ''),
+      password: String(password),
+      role: role === 'admin' ? 'admin' : 'cliente'
+    });
+    res.json({ success: true, account });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Update an account's editable fields (name/email/phone/role/blocked).
+app.put('/api/accounts/:id', async (req, res) => {
+  try {
+    const { name, email, phone, role, blocked } = req.body || {};
+    const target = await getAccountById(req.params.id);
+    if (!target) return res.status(404).json({ error: 'Conta não encontrada.' });
+    // Guard: don't demote/block the last active admin.
+    const losingAdmin = target.role === 'admin' && ((role && role !== 'admin') || blocked === true);
+    if (losingAdmin && (await countAdmins()) <= 1) {
+      return res.status(400).json({ error: 'Não é possível remover ou bloquear o último administrador.' });
+    }
+    if (email && String(email).toLowerCase() !== target.email) {
+      const clash = await getAccountByEmail(String(email));
+      if (clash && clash.id !== target.id) {
+        return res.status(409).json({ error: 'Já existe uma conta com este e-mail.' });
+      }
+    }
+    const account = await adminUpdateAccount(req.params.id, { name, email, phone, role, blocked });
+    res.json({ success: true, account });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Reset an account's password (admin).
+app.put('/api/accounts/:id/password', async (req, res) => {
+  try {
+    const { password } = req.body || {};
+    if (!password || String(password).length < 6) {
+      return res.status(400).json({ error: 'A nova senha deve ter ao menos 6 caracteres.' });
+    }
+    const target = await getAccountById(req.params.id);
+    if (!target) return res.status(404).json({ error: 'Conta não encontrada.' });
+    await updateAccountPassword(req.params.id, String(password));
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Delete an account.
+app.delete('/api/accounts/:id', async (req, res) => {
+  try {
+    const target = await getAccountById(req.params.id);
+    if (!target) return res.status(404).json({ error: 'Conta não encontrada.' });
+    if (target.role === 'admin' && (await countAdmins()) <= 1) {
+      return res.status(400).json({ error: 'Não é possível excluir o último administrador.' });
+    }
+    await deleteAccount(req.params.id);
+    res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -1328,17 +1423,6 @@ app.put('/api/orders', async (req, res) => {
     db.orders = updatedOrders;
     await writeDB(db);
     res.json({ success: true, orders: db.orders });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// 8. Reset database
-app.post('/api/reset', async (req, res) => {
-  try {
-    const defaultData = getDefaultData();
-    await writeDB(defaultData);
-    res.json({ success: true, ...defaultData });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
