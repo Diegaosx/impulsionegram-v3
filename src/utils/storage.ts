@@ -249,6 +249,38 @@ export async function savePageContent(slug: PageSlug, data: { title: string; htm
   return res.ok ? { ok: true } : { ok: false, error: out.error || 'Falha ao salvar a página.' };
 }
 
+// --- Floating widgets / Sofia chatbot ---
+export interface ChatbotQA { question: string; answer: string; }
+export interface ChatbotConfig {
+  chatEnabled: boolean;
+  whatsappEnabled: boolean;
+  name: string;
+  role: string;
+  greeting: string;
+  fallback: string;
+  qa: ChatbotQA[];
+}
+
+export async function fetchChatbot(): Promise<ChatbotConfig | null> {
+  try {
+    const res = await fetch('/api/chatbot');
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function saveChatbot(data: ChatbotConfig): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch('/api/chatbot', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  const out = await res.json().catch(() => ({}));
+  return res.ok ? { ok: true } : { ok: false, error: out.error || 'Falha ao salvar o assistente.' };
+}
+
 // Create an order for the logged-in client (status starts awaiting payment).
 export async function createMyOrder(input: NewOrderInput): Promise<{ ok: boolean; order?: AdminOrder; error?: string }> {
   try {
@@ -423,6 +455,7 @@ export interface GeneralSettings {
   seoDescription: string;
   timezone: string;
   theme: string;
+  plansEnabled?: boolean;
 }
 
 const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {

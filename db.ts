@@ -1181,6 +1181,7 @@ export interface GeneralSettings {
   seoDescription: string;
   timezone: string;
   theme: string;
+  plansEnabled: boolean;
 }
 
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
@@ -1191,12 +1192,15 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   seoDescription:
     'Plataforma premium para impulsionar suas redes sociais com seguidores, curtidas e visualizações reais e brasileiros.',
   timezone: 'America/Recife',
-  theme: 'default'
+  theme: 'default',
+  plansEnabled: true
 };
 
 export async function getGeneralSettings(): Promise<GeneralSettings> {
   const result = await pool.query(`SELECT value FROM settings WHERE key = 'general'`);
-  return { ...DEFAULT_GENERAL_SETTINGS, ...(result.rows[0]?.value || {}) };
+  const merged = { ...DEFAULT_GENERAL_SETTINGS, ...(result.rows[0]?.value || {}) };
+  merged.plansEnabled = merged.plansEnabled !== false; // default on
+  return merged;
 }
 
 export async function saveGeneralSettings(data: Partial<GeneralSettings>): Promise<GeneralSettings> {
@@ -1312,6 +1316,68 @@ export function isOfferActive(o: OfferSettings): boolean {
     if (!Number.isNaN(t) && t <= Date.now()) return false;
   }
   return true;
+}
+
+// --- Floating widgets: WhatsApp button + Sofia AI chat assistant ---
+export interface ChatbotQA { question: string; answer: string; }
+export interface ChatbotSettings {
+  chatEnabled: boolean;       // Sofia chat widget
+  whatsappEnabled: boolean;   // floating WhatsApp button
+  name: string;               // assistant name
+  role: string;               // chip next to the name
+  greeting: string;           // first message
+  fallback: string;           // reply when nothing matches
+  qa: ChatbotQA[];            // question -> answer (questions also power the chips)
+}
+
+export const DEFAULT_CHATBOT: ChatbotSettings = {
+  chatEnabled: true,
+  whatsappEnabled: true,
+  name: 'Sofia IA',
+  role: 'Especialista',
+  greeting: 'Olá! Sou a Sofia, especialista de suporte na ImpulsioneGram. Estou aqui para te ajudar a escolher o melhor plano de crescimento para o seu perfil. Qual é a sua dúvida hoje?',
+  fallback: 'Legal! Oferecemos os melhores pacotes de engajamento estável no Brasil para Instagram, TikTok e YouTube. Recomendo simular suas quantidades direto na nossa calculadora automática para obter até 30% de desconto!',
+  qa: [
+    { question: 'Quanto tempo leva a entrega?', answer: 'Nossa entrega é super rápida! O processamento começa automaticamente em até 10 minutos após o pagamento (no Pix é imediato). Configuramos o envio de forma natural e gradativa para garantir total segurança contra o algoritmo das redes sociais!' },
+    { question: 'Preciso dar minha senha?', answer: 'Esqueça senhas! Nós nunca pediremos sua senha ou login em hipótese alguma. Todo o nosso sistema de envio é externo, o que torna o processo 100% seguro e livre de qualquer risco de bloqueio ou banimento do seu perfil.' },
+    { question: 'Os seguidores somem?', answer: 'Damos garantia exclusiva de reposição de 30 dias! Se qualquer seguidor deixar de seguir, nosso reabastecimento inteligente repõe com apenas um clique. Usamos perfis muito estáveis.' },
+    { question: 'Quais formas de pagamento?', answer: 'Aceitamos pagamento via PIX, com aprovação e processamento instantâneo, pelo ambiente seguro do Mercado Pago.' },
+    { question: 'Como funciona a reposição?', answer: 'Se houver qualquer queda no período de garantia, você aciona a reposição pelo painel ou pelo nosso suporte e reabastecemos seu pedido automaticamente.' }
+  ]
+};
+
+function normalizeChatbot(raw: any): ChatbotSettings {
+  const c = { ...DEFAULT_CHATBOT, ...(raw || {}) };
+  const qa = Array.isArray(c.qa)
+    ? c.qa.map((x: any) => ({ question: String(x?.question || '').trim(), answer: String(x?.answer || '').trim() }))
+          .filter((x: ChatbotQA) => x.question && x.answer)
+    : DEFAULT_CHATBOT.qa;
+  return {
+    chatEnabled: c.chatEnabled !== false,
+    whatsappEnabled: c.whatsappEnabled !== false,
+    name: String(c.name || DEFAULT_CHATBOT.name),
+    role: String(c.role || ''),
+    greeting: String(c.greeting || ''),
+    fallback: String(c.fallback || ''),
+    qa
+  };
+}
+
+export async function getChatbot(): Promise<ChatbotSettings> {
+  const r = await pool.query(`SELECT value FROM settings WHERE key = 'chatbot'`);
+  return normalizeChatbot(r.rows[0]?.value);
+}
+
+export async function saveChatbot(data: Partial<ChatbotSettings>): Promise<ChatbotSettings> {
+  const current = await getChatbot();
+  const merged = normalizeChatbot({ ...current, ...data });
+  await pool.query(
+    `INSERT INTO settings (key, value)
+     VALUES ('chatbot', $1::jsonb)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [JSON.stringify(merged)]
+  );
+  return merged;
 }
 
 // --- Custom JS / Analytics code injection ---

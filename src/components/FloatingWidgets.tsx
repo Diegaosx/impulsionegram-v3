@@ -4,7 +4,7 @@ import {
   HelpCircle, Check, ArrowRight, Bot, MessageSquare, Flame 
 } from 'lucide-react';
 import { ChatMessage } from '../types';
-import { CompanySettings } from '../utils/storage';
+import { CompanySettings, ChatbotConfig, fetchChatbot } from '../utils/storage';
 import { useHideOnScroll } from '../utils/useHideOnScroll';
 import { useOffer } from '../utils/useOffer';
 
@@ -29,26 +29,28 @@ export default function FloatingWidgets({ onNavigate, ordersCalculatedStat, home
   // Flash offer (top promo bar) — shared config + live countdown.
   const { offer, active: offerActive, remaining: promoTime } = useOffer();
 
-  // Chat Bot States
+  // Chat Bot States (config-driven: name, greeting, Q&A, toggles)
+  const [chatbot, setChatbot] = useState<ChatbotConfig | null>(null);
   const [showChat, setShowChat] = useState(false);
   const [typing, setTyping] = useState(false);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    {
-      id: 'msg-init',
-      sender: 'agent',
-      text: 'Olá! Sou a Sofia, especialista de suporte na ImpulsioneGram. Estou aqui para te ajudar a escolher o melhor plano de crescimento para o seu perfil. Qual é a sua dúvida hoje?',
-      timestamp: 'Agora mesmo',
-      suggestedQuestions: [
-        'Quanto tempo leva a entrega?',
-        'Preciso dar minha senha?',
-        'Os seguidores somem?',
-        'Quais formas de pagamento?',
-        'Como funciona a reposição?'
-      ]
-    }
-  ]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  // Load the assistant config and seed the greeting + suggested questions.
+  useEffect(() => {
+    fetchChatbot().then((c) => {
+      if (!c) return;
+      setChatbot(c);
+      setChatMessages([{
+        id: 'msg-init',
+        sender: 'agent',
+        text: c.greeting,
+        timestamp: 'Agora mesmo',
+        suggestedQuestions: c.qa.slice(0, 5).map((q) => q.question)
+      }]);
+    }).catch(() => {});
+  }, []);
 
   // Cookie Consent banner
   const [showCookie, setShowCookie] = useState(true);
@@ -68,40 +70,36 @@ export default function FloatingWidgets({ onNavigate, ordersCalculatedStat, home
     }
   }, [chatMessages, typing]);
 
-  // AI Chat Bot Auto Answers Engine (Fully offline & extremely fast!)
+  // Config-driven answer engine: best-matches the query against the editable
+  // Q&A list (exact question, then keyword/word overlap), else the fallback.
   const handleBotResponse = (userQuery: string) => {
     setTyping(true);
 
-    const query = userQuery.toLowerCase();
-    let responseText = '';
-    let suggestions: string[] = [];
+    const qa = chatbot?.qa || [];
+    const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const query = norm(userQuery);
+    const stop = new Set(['de','da','do','a','o','as','os','e','que','meu','minha','para','por','com','um','uma','é','em','no','na']);
+    const qWords = query.split(/\W+/).filter((w) => w.length > 2 && !stop.has(w));
 
-    // Smart intent mapping triggers
-    if (query.includes('tempo') || query.includes('demora') || query.includes('hora') || query.includes('entrega')) {
-      responseText = 'Nossa entrega é super rápida! O processamento começa automaticamente em até 10 minutos após o pagamento (no Pix é imediato). Configuramos o envio de forma natural e gradativa (algumas horas) para garantir total segurança contra o algoritmo das redes sociais!';
-      suggestions = ['Preciso fornecer a senha?', 'Garantia de reposição', 'Ver planos'];
-    } else if (query.includes('senha') || query.includes('seguro') || query.includes('bloqueio') || query.includes('banido') || query.includes('risco')) {
-      responseText = 'Esqueça senhas! Nós nunca pediremos sua senha ou login em hipótese alguma. Todo o nosso sistema de envio é externo, o que torna o processo 100% seguro e livre de qualquer risco de bloqueio ou banimento do seu perfil.';
-      suggestions = ['Como comprar?', 'Os seguidores são reais?'];
-    } else if (query.includes('sumir') || query.includes('queda') || query.includes('queda de seguidores') || query.includes('reposição') || query.includes('some')) {
-      responseText = 'Damos garantia exclusiva de reposição de 30 dias! Se qualquer seguidor deixar de seguir voluntariamente, nosso sistema detecta ou você pode acionar nosso reabastecimento inteligente com apenas um clique! Usamos perfis muito estáveis.';
-      suggestions = ['Qual o valor?', 'Quais as formas de pagamento?'];
-    } else if (query.includes('pagamento') || query.includes('pix') || query.includes('cartão') || query.includes('parcela') || query.includes('parcelamento')) {
-      responseText = 'Aceitamos pagamentos instantâneos por PIX (com desconto de 5% extra aplicado!), todos os cartões de crédito nacionais com parcelamento em até 12x e boleto bancário. Tudo é processado pelo ambiente criptografado certificado do Mercado Pago e ASAAS!';
-      suggestions = ['Ver planos', 'Como falar com humano?'];
-    } else if (query.includes('real') || query.includes('brasileiro') || query.includes('brasileiros') || query.includes('ativos')) {
-      responseText = 'Sim! Trabalhamos com perfis 100% reais de pessoas brasileiras físicas e ativas nas redes sociais. Não utilizamos fakes sem foto ou fakes árabes/asiáticos, o que garante a máxima credibilidade estética do seu perfil!';
-      suggestions = ['Ver planos', 'Como funciona a entrega?'];
-    } else if (query.includes('valor') || query.includes('preco') || query.includes('preço') || query.includes('plano') || query.includes('quanto custa')) {
-      responseText = 'Nossos preços são excelentes! Temos planos a partir de R$ 19,90 por 500 seguidores. Você também pode simular quantidades customizadas na nossa Calculadora de Planos, com descontos progressivos de até 30% em grandes pedidos!';
-      suggestions = ['Ir para planos', 'Quais formas de pagamento?'];
-    } else if (query.includes('humano') || query.includes('falar com atendente') || query.includes('atendente') || query.includes('suporte')) {
-      responseText = 'Para falar com um atendente humano agora mesmo, você pode nos contactar pelo WhatsApp oficial no topo do site ou deixar seus dados no formulário da seção "Fale Conosco". Respondemos rapidinho!';
-      suggestions = ['WhatsApp de vendas', 'Mandar e-mail'];
-    } else {
-      responseText = 'Legal! Oferecemos os melhores pacotes de engajamento estável no Brasil para Instagram, TikTok e YouTube. Recomendo simular suas quantidades direto na nossa calculadora automática para obter até 30% de desconto!';
-      suggestions = ['Ir para a Calculadora', 'Quanto tempo leva?', 'Como comprar?'];
-    }
+    let best: { idx: number; score: number } = { idx: -1, score: 0 };
+    qa.forEach((item, idx) => {
+      const q = norm(item.question);
+      let score = 0;
+      if (q === query) score = 1000;
+      else if (q.includes(query) || query.includes(q)) score = 500;
+      else {
+        const words = new Set(q.split(/\W+/).filter((w) => w.length > 2 && !stop.has(w)));
+        qWords.forEach((w) => { if (words.has(w)) score += 1; });
+      }
+      if (score > best.score) best = { idx, score };
+    });
+
+    const matched = best.idx >= 0 && best.score > 0 ? qa[best.idx] : null;
+    const responseText = matched ? matched.answer : (chatbot?.fallback || 'Posso te ajudar com mais alguma coisa?');
+    const suggestions = qa
+      .filter((_, i) => i !== best.idx)
+      .slice(0, 3)
+      .map((q) => q.question);
 
     setTimeout(() => {
       setTyping(false);
@@ -185,6 +183,7 @@ export default function FloatingWidgets({ onNavigate, ordersCalculatedStat, home
       )}
 
       {/* 2. FLOATING WHATSAPP BUTTON */}
+      {chatbot?.whatsappEnabled !== false && (
       <a
         href={`https://api.whatsapp.com/send?phone=${waPhone}&text=Ol%C3%A1%21+Vim+do+site+e+gostaria+de+saber+mais+sobre+os+pacotes.`}
         target="_blank"
@@ -198,8 +197,10 @@ export default function FloatingWidgets({ onNavigate, ordersCalculatedStat, home
           Online
         </span>
       </a>
+      )}
 
       {/* 3. INTERACTIVE AI CUSTOMER SERVICE CHAT SPECIALIST */}
+      {chatbot?.chatEnabled !== false && (
       <div className="fixed bottom-6 right-6 z-40 text-slate-800" id="ai-chat-bubble-container">
         {showChat ? (
           /* expanded Chat Wrapper */
@@ -215,8 +216,10 @@ export default function FloatingWidgets({ onNavigate, ordersCalculatedStat, home
                 </div>
                 <div>
                   <h4 className="font-bold text-xs sm:text-sm text-white flex items-center gap-1.5">
-                    Sofia AI Assistente
-                    <span className="font-semibold text-[8px] uppercase tracking-wider bg-blue-500/20 text-blue-400 px-1.5 rounded">Especialista</span>
+                    {chatbot?.name || 'Sofia IA'}
+                    {(chatbot?.role || 'Especialista') && (
+                      <span className="font-semibold text-[8px] uppercase tracking-wider bg-blue-500/20 text-blue-400 px-1.5 rounded">{chatbot?.role || 'Especialista'}</span>
+                    )}
                   </h4>
                   <p className="text-[10px] text-green-400 font-semibold flex items-center gap-1">
                     <span>● Online</span>
@@ -322,6 +325,7 @@ export default function FloatingWidgets({ onNavigate, ordersCalculatedStat, home
           </button>
         )}
       </div>
+      )}
 
     </>
   );

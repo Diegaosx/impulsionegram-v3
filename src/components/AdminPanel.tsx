@@ -10,7 +10,8 @@ import {
   AdminAccount, fetchAdminAccounts, createAdminAccount, updateAdminAccount,
   resetAdminAccountPassword, deleteAdminAccount,
   OfferSettings, fetchOfferAdmin, saveOffer,
-  PageSlug, fetchPage, savePageContent
+  PageSlug, fetchPage, savePageContent,
+  ChatbotConfig, fetchChatbot, saveChatbot
 } from '../utils/storage';
 import RichTextEditor from './RichTextEditor';
 import { setAppTimezone, formatDateTime } from '../utils/datetime';
@@ -21,7 +22,7 @@ import {
   X, Plus, Pencil, Trash2, RotateCcw, LayoutDashboard, ShoppingBag,
   BarChart3, Settings, ShieldCheck, HelpCircle, Save, Check, AlertCircle,
   TrendingUp, CircleDollarSign, Compass, Layers, Globe, Filter, MessageCircle,
-  User, Lock, Users, Ban, UserCheck, CreditCard, KeyRound, Eye, EyeOff, Plug, Flame, ArrowLeftCircle,
+  User, Lock, Users, Ban, UserCheck, CreditCard, KeyRound, Eye, EyeOff, Plug, Flame, ArrowLeftCircle, Bot,
   Image as ImageIcon, Upload, Clock, Palette, Type, SlidersHorizontal,
   Mail, Phone, MapPin, Share2, PanelBottom, Cookie, Newspaper, Code2, Quote, Inbox
 } from 'lucide-react';
@@ -52,7 +53,20 @@ export default function AdminPanel({
   onLogout,
   onExit
 }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'users' | 'home' | 'offer' | 'blog' | 'testimonials' | 'messages' | 'general' | 'contact' | 'integrations' | 'analytics' | 'cookies'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'users' | 'home' | 'offer' | 'chatbot' | 'blog' | 'testimonials' | 'messages' | 'general' | 'contact' | 'integrations' | 'analytics' | 'cookies'>('dashboard');
+
+  // Sofia assistant / floating widgets settings
+  const [chatbotForm, setChatbotForm] = useState<ChatbotConfig>({
+    chatEnabled: true, whatsappEnabled: true, name: 'Sofia IA', role: 'Especialista', greeting: '', fallback: '', qa: []
+  });
+  const [chatbotLoading, setChatbotLoading] = useState(false);
+  const [chatbotSaving, setChatbotSaving] = useState(false);
+
+  // Plans section visibility (mirrors general settings: plansEnabled)
+  const [plansSectionEnabled, setPlansSectionEnabled] = useState(true);
+  useEffect(() => {
+    fetchGeneralSettings().then((g) => setPlansSectionEnabled(g?.plansEnabled !== false)).catch(() => {});
+  }, []);
 
   // Flash offer (top promo bar + coupon) settings
   const [offerForm, setOfferForm] = useState<OfferSettings>({
@@ -371,6 +385,23 @@ export default function AdminPanel({
     else triggerError(res.error || 'Falha ao salvar a oferta.');
   };
 
+  // Load the Sofia assistant config.
+  useEffect(() => {
+    setChatbotLoading(true);
+    fetchChatbot()
+      .then((c) => { if (c) setChatbotForm(c); })
+      .finally(() => setChatbotLoading(false));
+  }, []);
+
+  const handleSaveChatbot = async () => {
+    if (!chatbotForm.name.trim()) { triggerError('Informe o nome do assistente.'); return; }
+    setChatbotSaving(true);
+    const res = await saveChatbot({ ...chatbotForm, qa: chatbotForm.qa.filter(q => q.question.trim() && q.answer.trim()) });
+    setChatbotSaving(false);
+    if (res.ok) triggerSuccess('Assistente atualizado com sucesso!');
+    else triggerError(res.error || 'Falha ao salvar o assistente.');
+  };
+
   // Open a legal/policy page in the rich editor.
   const openPageEditor = (slug: PageSlug) => {
     setContentView(slug);
@@ -626,14 +657,49 @@ export default function AdminPanel({
     setEditingPlan(plan);
   };
 
+  const handleAddPlanInit = () => {
+    setEditingPlan({
+      id: `plan-${Math.floor(100000 + Math.random() * 900000)}`,
+      name: 'Novo Plano',
+      price: 49.9,
+      quantity: 1000,
+      platform: 'instagram',
+      type: 'followers',
+      features: ['Perfis reais', 'Entrega gradual', 'Garantia de reposição'],
+      isPopular: false,
+      savingsPercent: 0
+    });
+  };
+
   const handleSavePlan = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingPlan) return;
 
-    const updated = plans.map(p => p.id === editingPlan.id ? editingPlan : p);
+    const exists = plans.some(p => p.id === editingPlan.id);
+    const updated = exists
+      ? plans.map(p => p.id === editingPlan.id ? editingPlan : p)
+      : [...plans, editingPlan];
     onUpdatePlans(updated);
-    triggerSuccess(`Plano "${editingPlan.name}" atualizado com sucesso!`);
+    triggerSuccess(`Plano "${editingPlan.name}" ${exists ? 'atualizado' : 'criado'} com sucesso!`);
     setEditingPlan(null);
+  };
+
+  const handleDeletePlan = (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este plano?')) return;
+    onUpdatePlans(plans.filter(p => p.id !== id));
+    triggerSuccess('Plano removido com sucesso!');
+  };
+
+  // Plans-section visibility (general settings: plansEnabled).
+  const handleTogglePlansSection = async (enabled: boolean) => {
+    setPlansSectionEnabled(enabled);
+    try {
+      const current = await fetchGeneralSettings();
+      await saveGeneralSettingsToServer({ ...current, plansEnabled: enabled });
+      triggerSuccess(`Seção de planos ${enabled ? 'ativada' : 'desativada'}.`);
+    } catch {
+      triggerError('Falha ao atualizar a visibilidade da seção de planos.');
+    }
   };
 
   // --- ORDER OPERATIONS ---
@@ -802,6 +868,18 @@ export default function AdminPanel({
               >
                 <Flame className="h-4 w-4" />
                 <span>Oferta Relâmpago</span>
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('chatbot'); setEditingService(null); setIsAddingService(false); setEditingPlan(null); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'chatbot'
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-slate-600 hover:text-primary hover:bg-slate-100'
+                }`}
+              >
+                <MessageCircle className="h-4 w-4" />
+                <span>Assistente (Sofia)</span>
               </button>
 
               <button
@@ -1320,16 +1398,34 @@ export default function AdminPanel({
             {/* =================== TAB 3: GERENCIAR PLANOS =================== */}
             {activeTab === 'plans' && (
               <div className="space-y-6">
-                <div>
-                  <h3 className="font-display font-black text-xl text-slate-900">Gerenciador de Planos em Destaque</h3>
-                  <p className="text-slate-500 text-xs font-semibold">Customize pacotes pré-modelados e aumente descontos percentuais nas abas rápidas</p>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <h3 className="font-display font-black text-xl text-slate-900">Gerenciador de Planos em Destaque</h3>
+                    <p className="text-slate-500 text-xs font-semibold">Crie, edite ou remova pacotes pré-modelados e controle a exibição da seção no site</p>
+                  </div>
+                  <button
+                    onClick={handleAddPlanInit}
+                    className="flex items-center gap-1.5 bg-primary hover:bg-purple-700 text-white text-xs font-bold rounded-lg px-3 py-2.5 transition-colors shrink-0"
+                  >
+                    <Plus className="h-4 w-4" /> Adicionar plano
+                  </button>
                 </div>
+
+                {/* SECTION VISIBILITY TOGGLE */}
+                <label className="flex items-center justify-between gap-3 bg-white border border-slate-200 rounded-xl p-4 shadow-sm cursor-pointer">
+                  <span className="text-sm font-bold text-slate-800">
+                    Seção "Nossos Planos" visível no site
+                    <span className="block text-[11px] font-semibold text-slate-400">Se desativada, a seção some da home, do menu do header e do rodapé.</span>
+                  </span>
+                  <input type="checkbox" className="h-5 w-5 accent-primary shrink-0" checked={plansSectionEnabled}
+                    onChange={(e) => handleTogglePlansSection(e.target.checked)} />
+                </label>
 
                 {/* PLAN EDIT FORM SCREEN */}
                 {editingPlan && (
                   <form onSubmit={handleSavePlan} className="bg-white border-2 border-primary/30 p-5 rounded-xl shadow-md space-y-4 animate-in slide-in-from-top duration-300">
                     <h4 className="font-bold text-xs text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-100">
-                      📝 Customização do Plano: "{editingPlan.name}"
+                      {plans.some(p => p.id === editingPlan.id) ? '📝 Customização' : '➕ Novo'} do Plano: "{editingPlan.name}"
                     </h4>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1405,7 +1501,7 @@ export default function AdminPanel({
                         className="bg-primary hover:bg-purple-700 text-white font-bold text-xs px-5 py-2 rounded-lg flex items-center gap-1.5"
                       >
                         <Save className="h-3.5 w-3.5" />
-                        Atualizar Plano
+                        Salvar Plano
                       </button>
                     </div>
                   </form>
@@ -1446,8 +1542,15 @@ export default function AdminPanel({
 
                         <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
                           <button
+                            onClick={() => handleDeletePlan(plan.id)}
+                            className="text-slate-400 hover:text-red-500 hover:bg-red-50 font-bold text-[11px] p-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+                            title="Excluir plano"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                          <button
                             onClick={() => handleEditPlanInit(plan)}
-                            className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] px-3.5 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all active:scale-95 ml-auto"
+                            className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] px-3.5 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all active:scale-95"
                           >
                             <Pencil className="h-3 w-3" />
                             Editar Plano
@@ -2486,6 +2589,114 @@ export default function AdminPanel({
                       </button>
                     </div>
                   </div>
+                )}
+              </div>
+            )}
+
+            {/* =================== TAB: ASSISTENTE (SOFIA) =================== */}
+            {activeTab === 'chatbot' && (
+              <div className="space-y-6 max-w-3xl">
+                <div>
+                  <h3 className="font-display font-black text-xl text-slate-900">Assistente Virtual & Ícones Flutuantes</h3>
+                  <p className="text-slate-500 text-xs font-semibold">Ative/desative os ícones flutuantes e gerencie o nome, a saudação e as perguntas e respostas da assistente.</p>
+                </div>
+
+                {chatbotLoading ? (
+                  <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>
+                ) : (
+                  <>
+                    {/* Toggles */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <label className="flex items-center justify-between gap-3 cursor-pointer">
+                        <span className="text-sm font-bold text-slate-800 flex items-center gap-2"><Bot className="h-4 w-4 text-primary" /> Chat da Sofia</span>
+                        <input type="checkbox" className="h-5 w-5 accent-primary" checked={chatbotForm.chatEnabled}
+                          onChange={(e) => setChatbotForm(p => ({ ...p, chatEnabled: e.target.checked }))} />
+                      </label>
+                      <label className="flex items-center justify-between gap-3 cursor-pointer">
+                        <span className="text-sm font-bold text-slate-800 flex items-center gap-2"><MessageCircle className="h-4 w-4 text-green-500" /> Botão do WhatsApp</span>
+                        <input type="checkbox" className="h-5 w-5 accent-primary" checked={chatbotForm.whatsappEnabled}
+                          onChange={(e) => setChatbotForm(p => ({ ...p, whatsappEnabled: e.target.checked }))} />
+                      </label>
+                    </div>
+
+                    {/* Identity + messages */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Nome da assistente</label>
+                          <input type="text" value={chatbotForm.name}
+                            onChange={(e) => setChatbotForm(p => ({ ...p, name: e.target.value }))}
+                            className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Cargo / etiqueta</label>
+                          <input type="text" value={chatbotForm.role}
+                            onChange={(e) => setChatbotForm(p => ({ ...p, role: e.target.value }))}
+                            placeholder="Ex: Especialista"
+                            className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800" />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Mensagem de saudação</label>
+                        <textarea rows={3} value={chatbotForm.greeting}
+                          onChange={(e) => setChatbotForm(p => ({ ...p, greeting: e.target.value }))}
+                          className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800 resize-y" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Resposta padrão (quando nada combina)</label>
+                        <textarea rows={2} value={chatbotForm.fallback}
+                          onChange={(e) => setChatbotForm(p => ({ ...p, fallback: e.target.value }))}
+                          className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800 resize-y" />
+                      </div>
+                    </div>
+
+                    {/* Q&A list */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-bold text-slate-800 text-sm">Perguntas e respostas</h4>
+                        <button
+                          onClick={() => setChatbotForm(p => ({ ...p, qa: [...p.qa, { question: '', answer: '' }] }))}
+                          className="inline-flex items-center gap-1.5 bg-primary hover:bg-purple-700 text-white text-xs font-bold rounded-lg px-3 py-2"
+                        >
+                          <Plus className="h-4 w-4" /> Adicionar
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-slate-400 font-semibold">As perguntas viram os botões de sugestão no chat. Quando o visitante digita ou clica, a resposta correspondente é exibida.</p>
+                      {chatbotForm.qa.length === 0 && (
+                        <p className="text-xs text-slate-400 font-semibold text-center py-4">Nenhuma pergunta cadastrada.</p>
+                      )}
+                      <div className="space-y-3">
+                        {chatbotForm.qa.map((item, idx) => (
+                          <div key={idx} className="border border-slate-150 rounded-xl p-3 space-y-2 bg-slate-50/50">
+                            <div className="flex items-center gap-2">
+                              <input type="text" value={item.question}
+                                onChange={(e) => setChatbotForm(p => ({ ...p, qa: p.qa.map((q, i) => i === idx ? { ...q, question: e.target.value } : q) }))}
+                                placeholder="Pergunta (vira botão de sugestão)"
+                                className="flex-1 bg-white border border-slate-200 text-xs font-bold rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800" />
+                              <button
+                                onClick={() => setChatbotForm(p => ({ ...p, qa: p.qa.filter((_, i) => i !== idx) }))}
+                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors shrink-0"
+                                title="Remover"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                            <textarea rows={2} value={item.answer}
+                              onChange={(e) => setChatbotForm(p => ({ ...p, qa: p.qa.map((q, i) => i === idx ? { ...q, answer: e.target.value } : q) }))}
+                              placeholder="Resposta da assistente"
+                              className="w-full bg-white border border-slate-200 text-xs font-semibold rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-700 resize-y" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button onClick={handleSaveChatbot} disabled={chatbotSaving}
+                        className="bg-primary hover:bg-purple-700 disabled:opacity-60 text-white font-bold text-xs py-3 px-5 rounded-lg flex items-center gap-2 cursor-pointer transition-all shadow-md">
+                        <Save className="h-4 w-4" /> {chatbotSaving ? 'Salvando...' : 'Salvar assistente'}
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
             )}

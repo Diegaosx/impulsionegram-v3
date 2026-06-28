@@ -4,6 +4,7 @@ import { Menu, X, ShoppingCart, Search, Sparkles, Settings, ChevronDown } from '
 import { SocialPlatform } from '../types';
 import { useHideOnScroll } from '../utils/useHideOnScroll';
 import { useOffer } from '../utils/useOffer';
+import { usePlansEnabled } from '../utils/usePlansEnabled';
 
 interface HeaderProps {
   onNavigate: (sectionId: string) => void;
@@ -24,6 +25,7 @@ export default function Header({ onNavigate, cartCount, onOpenCart, onSearch, on
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const hidden = useHideOnScroll();
   const { active: offerActive } = useOffer();
+  const plansEnabled = usePlansEnabled();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -37,7 +39,7 @@ export default function Header({ onNavigate, cartCount, onOpenCart, onSearch, on
     { label: 'Início', id: 'inicio' },
     { label: 'Serviços', id: 'servicos' },
     { label: 'Calculadora', id: 'calculadora' },
-    { label: 'Planos', id: 'planos' },
+    ...(plansEnabled ? [{ label: 'Planos', id: 'planos' }] : []),
   ];
 
   const dropdownMenuItems = [

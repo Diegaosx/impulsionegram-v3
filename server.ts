@@ -22,6 +22,8 @@ import {
   getPage,
   savePage,
   isValidPageSlug,
+  getChatbot,
+  saveChatbot,
   getCompanySettings,
   saveCompanySettings,
   saveCookieConsent,
@@ -111,6 +113,7 @@ const PUBLIC_API: { method: string; re: RegExp }[] = [
   { method: 'GET', re: /^\/public-config\/?$/ },
   { method: 'GET', re: /^\/offer\/?$/ },
   { method: 'GET', re: /^\/pages\/[a-z]+\/?$/ },
+  { method: 'GET', re: /^\/chatbot\/?$/ },
   { method: 'GET', re: /^\/analytics\/?$/ },
   { method: 'POST', re: /^\/cookie-consents\/?$/ },
   { method: 'GET', re: /^\/blog\/posts\/?$/ },
@@ -1315,6 +1318,27 @@ app.put('/api/pages/:slug', async (req, res) => {
     if (!isValidPageSlug(req.params.slug)) return res.status(404).json({ error: 'Página não encontrada.' });
     const { title, html } = req.body || {};
     res.json({ success: true, page: await savePage(req.params.slug, { title, html }) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Floating widgets / Sofia chatbot config. GET public, PUT admin.
+app.get('/api/chatbot', async (_req, res) => {
+  try {
+    res.json(await getChatbot());
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/chatbot', async (req, res) => {
+  try {
+    const body = req.body;
+    if (!body || typeof body !== 'object') {
+      return res.status(400).json({ error: 'Body must be a valid chatbot object' });
+    }
+    res.json({ success: true, chatbot: await saveChatbot(body) });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

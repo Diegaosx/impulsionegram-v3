@@ -16,6 +16,7 @@ import Footer from '../components/Footer';
 import FloatingWidgets from '../components/FloatingWidgets';
 import CookieConsent from '../components/CookieConsent';
 import { HomeContent, CompanySettings, AuthUser } from '../utils/storage';
+import { usePlansEnabled } from '../utils/usePlansEnabled';
 
 interface HomePageProps {
   services: any[];
@@ -31,6 +32,7 @@ interface HomePageProps {
 
 export default function HomePage({ services, plans, homeContent, siteName, logoUrl, company, currentUser, onAuthSuccess, onAddSimulatedOrder }: HomePageProps) {
   const navigate = useNavigate();
+  const plansEnabled = usePlansEnabled();
 
   // Navigation scrolling logic
   const handleScrollToSection = (id: string) => {
@@ -113,12 +115,14 @@ export default function HomePage({ services, plans, homeContent, siteName, logoU
         onAuthSuccess={onAuthSuccess}
       />
 
-      {/* Pre-packaged Popular Plans Grid - dynamic */}
-      <PlansGrid
-        plans={plans}
-        onSelectPlanCustomizer={handleCustomizerSelection}
-        onNavigate={handleScrollToSection}
-      />
+      {/* Pre-packaged Popular Plans Grid - dynamic (hidden when section disabled) */}
+      {plansEnabled && (
+        <PlansGrid
+          plans={plans}
+          onSelectPlanCustomizer={handleCustomizerSelection}
+          onNavigate={handleScrollToSection}
+        />
+      )}
 
       {/* Simple Stepper: How it Works */}
       <HowItWorks />

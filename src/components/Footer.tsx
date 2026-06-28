@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Instagram, Youtube, Facebook, ShieldAlert, Sparkles } from 'lucide-react';
 import { SocialPlatform } from '../types';
 import { CompanySettings } from '../utils/storage';
+import { usePlansEnabled } from '../utils/usePlansEnabled';
 import { TikTokIcon, KwaiIcon, XIcon } from './icons/BrandIcons';
 
 interface FooterProps {
@@ -13,6 +14,7 @@ interface FooterProps {
 
 export default function Footer({ onNavigate, onSetPlatformFilter, siteName, company }: FooterProps) {
   const navigate = useNavigate();
+  const plansEnabled = usePlansEnabled();
   const brandName = siteName || 'ImpulsioneGram';
 
   const footerDescription = company?.footerDescription
@@ -84,7 +86,9 @@ export default function Footer({ onNavigate, onSetPlatformFilter, siteName, comp
               <button onClick={() => onNavigate('inicio')} className="text-left hover:text-white transition-colors cursor-pointer">Início</button>
               <button onClick={() => onNavigate('servicos')} className="text-left hover:text-white transition-colors cursor-pointer">Serviços Premium</button>
               <button onClick={() => onNavigate('calculadora')} className="text-left hover:text-white transition-colors cursor-pointer">Calculadora</button>
-              <button onClick={() => onNavigate('planos')} className="text-left hover:text-white transition-colors cursor-pointer">Planos Populares</button>
+              {plansEnabled && (
+                <button onClick={() => onNavigate('planos')} className="text-left hover:text-white transition-colors cursor-pointer">Planos Populares</button>
+              )}
               <button onClick={() => onNavigate('como-funciona')} className="text-left hover:text-white transition-colors cursor-pointer">Como Funciona</button>
               <button onClick={() => onNavigate('depoimentos')} className="text-left hover:text-white transition-colors cursor-pointer">Depoimentos</button>
             </div>
