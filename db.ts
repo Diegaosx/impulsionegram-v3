@@ -734,6 +734,45 @@ export async function saveGeneralSettings(data: Partial<GeneralSettings>): Promi
   return merged;
 }
 
+// --- Custom JS / Analytics code injection ---
+// Arbitrary code snippets (Google Analytics, AdSense, Tag Manager, pixels, etc.)
+// injected into the document. "site" snippets apply to every page; "article"
+// snippets are injected additionally on blog article pages.
+export interface AnalyticsSettings {
+  siteHeadCode: string;
+  siteBodyCode: string;
+  siteFooterCode: string;
+  articleHeadCode: string;
+  articleBodyCode: string;
+  articleFooterCode: string;
+}
+
+export const DEFAULT_ANALYTICS_SETTINGS: AnalyticsSettings = {
+  siteHeadCode: '',
+  siteBodyCode: '',
+  siteFooterCode: '',
+  articleHeadCode: '',
+  articleBodyCode: '',
+  articleFooterCode: ''
+};
+
+export async function getAnalyticsSettings(): Promise<AnalyticsSettings> {
+  const result = await pool.query(`SELECT value FROM settings WHERE key = 'analytics'`);
+  return { ...DEFAULT_ANALYTICS_SETTINGS, ...(result.rows[0]?.value || {}) };
+}
+
+export async function saveAnalyticsSettings(data: Partial<AnalyticsSettings>): Promise<AnalyticsSettings> {
+  const current = await getAnalyticsSettings();
+  const merged: AnalyticsSettings = { ...current, ...data };
+  await pool.query(
+    `INSERT INTO settings (key, value)
+     VALUES ('analytics', $1::jsonb)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [JSON.stringify(merged)]
+  );
+  return merged;
+}
+
 export async function getIntegrations(): Promise<IntegrationSettings> {
   const result = await pool.query(`SELECT value FROM settings WHERE key = 'integrations'`);
   return { ...DEFAULT_INTEGRATIONS, ...(result.rows[0]?.value || {}) };

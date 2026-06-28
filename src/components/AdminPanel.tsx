@@ -4,7 +4,8 @@ import {
   AdminOrder, HomeContent, IntegrationSettings, fetchIntegrations, saveIntegrationsToServer,
   GeneralSettings, fetchGeneralSettings, saveGeneralSettingsToServer, uploadAsset,
   CompanySettings, fetchCompanySettings, saveCompanySettingsToServer,
-  CookieConsentRecord, fetchCookieConsents
+  CookieConsentRecord, fetchCookieConsents,
+  AnalyticsSettings, EMPTY_ANALYTICS_SETTINGS, fetchAnalyticsSettings, saveAnalyticsSettingsToServer
 } from '../utils/storage';
 import { setAppTimezone, formatDateTime } from '../utils/datetime';
 import BlogAdmin from './BlogAdmin';
@@ -14,7 +15,7 @@ import {
   TrendingUp, CircleDollarSign, Compass, Layers, Globe, Filter, Sparkles, MessageCircle,
   User, Lock, Users, Ban, UserCheck, CreditCard, KeyRound, Eye, EyeOff, Plug,
   Image as ImageIcon, Upload, Clock, Palette, Type, SlidersHorizontal,
-  Mail, Phone, MapPin, Share2, PanelBottom, Cookie, Newspaper
+  Mail, Phone, MapPin, Share2, PanelBottom, Cookie, Newspaper, Code2
 } from 'lucide-react';
 import { SOCIAL_PLATFORMS } from '../data';
 
@@ -45,7 +46,7 @@ export default function AdminPanel({
   onLogout,
   onExit
 }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'users' | 'home' | 'blog' | 'general' | 'contact' | 'integrations' | 'cookies' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'users' | 'home' | 'blog' | 'general' | 'contact' | 'integrations' | 'analytics' | 'cookies' | 'settings'>('dashboard');
   
   // Users management states
   const [users, setUsers] = useState<any[]>([]);
@@ -121,6 +122,29 @@ export default function AdminPanel({
       triggerError('Falha ao salvar as configurações de integração.');
     } finally {
       setIsSavingIntegrations(false);
+    }
+  };
+
+  // Custom JS / Analytics code snippets (site + article head/body/footer)
+  const [analyticsForm, setAnalyticsForm] = useState<AnalyticsSettings>({ ...EMPTY_ANALYTICS_SETTINGS });
+  const [isSavingAnalytics, setIsSavingAnalytics] = useState(false);
+
+  useEffect(() => {
+    fetchAnalyticsSettings()
+      .then(setAnalyticsForm)
+      .catch((e) => console.error('Error loading analytics settings:', e));
+  }, []);
+
+  const handleSaveAnalytics = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingAnalytics(true);
+    try {
+      await saveAnalyticsSettingsToServer(analyticsForm);
+      triggerSuccess('Códigos de JS/Analytics salvos! Recarregue o site para aplicar.');
+    } catch (err) {
+      triggerError('Falha ao salvar os códigos de JS/Analytics.');
+    } finally {
+      setIsSavingAnalytics(false);
     }
   };
 
@@ -667,6 +691,18 @@ export default function AdminPanel({
               >
                 <Plug className="h-4 w-4" />
                 <span>Integrações / API</span>
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('analytics'); setEditingService(null); setIsAddingService(false); setEditingPlan(null); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'analytics'
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-slate-600 hover:text-primary hover:bg-slate-100'
+                }`}
+              >
+                <Code2 className="h-4 w-4" />
+                <span>JS / Analytics</span>
               </button>
 
               <button
@@ -2252,6 +2288,131 @@ export default function AdminPanel({
                     >
                       <Save className="h-4 w-4" />
                       Salvar Alterações
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {activeTab === 'analytics' && (
+              <div className="space-y-6 max-w-3xl">
+                <div>
+                  <h3 className="font-display font-black text-xl text-slate-900">JS / Analytics</h3>
+                  <p className="text-slate-500 text-xs font-semibold">Insira códigos personalizados (Google Analytics, Tag Manager, AdSense, pixels, etc.). São injetados exatamente como digitados — cole as tags <code className="bg-slate-100 px-1 rounded">&lt;script&gt;</code> completas.</p>
+                </div>
+
+                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3 text-xs font-semibold">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>Atenção: este código roda no navegador dos visitantes. Cole apenas códigos de fontes confiáveis. Os snippets do site não rodam dentro deste painel administrativo.</span>
+                </div>
+
+                <form onSubmit={handleSaveAnalytics} className="space-y-6">
+                  {/* SITE-WIDE CODE */}
+                  <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+                    <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+                      <div className="bg-purple-50 text-primary p-2 rounded-lg">
+                        <Globe className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-800 text-sm">Código do Site (todas as páginas)</h4>
+                        <p className="text-slate-400 text-[11px] font-semibold">Aplicado em todo o site público (home, blog, etc.).</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Cabeçalho — dentro do &lt;head&gt;</label>
+                      <textarea
+                        value={analyticsForm.siteHeadCode}
+                        onChange={(e) => setAnalyticsForm(prev => ({ ...prev, siteHeadCode: e.target.value }))}
+                        rows={5}
+                        spellCheck={false}
+                        placeholder="<!-- Google tag (gtag.js), GTM <head>, meta de verificação... -->"
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Início do &lt;body&gt;</label>
+                      <textarea
+                        value={analyticsForm.siteBodyCode}
+                        onChange={(e) => setAnalyticsForm(prev => ({ ...prev, siteBodyCode: e.target.value }))}
+                        rows={4}
+                        spellCheck={false}
+                        placeholder="<!-- GTM (noscript), código que deve abrir logo após o <body> -->"
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Rodapé — fim do &lt;body&gt;</label>
+                      <textarea
+                        value={analyticsForm.siteFooterCode}
+                        onChange={(e) => setAnalyticsForm(prev => ({ ...prev, siteFooterCode: e.target.value }))}
+                        rows={4}
+                        spellCheck={false}
+                        placeholder="<!-- Chat, remarketing, scripts que carregam por último -->"
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* ARTICLE-ONLY CODE */}
+                  <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+                    <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+                      <div className="bg-sky-50 text-sky-600 p-2 rounded-lg">
+                        <Newspaper className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-800 text-sm">Código dos Artigos do Blog</h4>
+                        <p className="text-slate-400 text-[11px] font-semibold">Injetado <strong>apenas</strong> nas páginas de artigo, além do código do site. Ideal para AdSense e Analytics específico de conteúdo.</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Cabeçalho — dentro do &lt;head&gt;</label>
+                      <textarea
+                        value={analyticsForm.articleHeadCode}
+                        onChange={(e) => setAnalyticsForm(prev => ({ ...prev, articleHeadCode: e.target.value }))}
+                        rows={5}
+                        spellCheck={false}
+                        placeholder="<!-- AdSense (Auto ads), schema/JSON-LD extra... -->"
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Início do &lt;body&gt;</label>
+                      <textarea
+                        value={analyticsForm.articleBodyCode}
+                        onChange={(e) => setAnalyticsForm(prev => ({ ...prev, articleBodyCode: e.target.value }))}
+                        rows={4}
+                        spellCheck={false}
+                        placeholder="<!-- Código que abre logo após o <body> nos artigos -->"
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Rodapé — fim do &lt;body&gt;</label>
+                      <textarea
+                        value={analyticsForm.articleFooterCode}
+                        onChange={(e) => setAnalyticsForm(prev => ({ ...prev, articleFooterCode: e.target.value }))}
+                        rows={4}
+                        spellCheck={false}
+                        placeholder="<!-- Scripts de artigo que carregam por último -->"
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={isSavingAnalytics}
+                      className="bg-primary hover:bg-purple-700 disabled:opacity-60 text-white font-bold text-xs py-3 px-5 rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-[1.01] active:scale-95 shadow-md"
+                    >
+                      <Save className="h-4 w-4" />
+                      {isSavingAnalytics ? 'Salvando...' : 'Salvar Códigos'}
                     </button>
                   </div>
                 </form>

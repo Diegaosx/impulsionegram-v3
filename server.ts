@@ -13,6 +13,8 @@ import {
   UserItem,
   getIntegrations,
   saveIntegrations,
+  getAnalyticsSettings,
+  saveAnalyticsSettings,
   getGeneralSettings,
   saveGeneralSettings,
   getCompanySettings,
@@ -463,6 +465,31 @@ app.put('/api/integrations', async (req, res) => {
     }
     const saved = await saveIntegrations(body);
     res.json({ success: true, integrations: saved });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 5i. Get custom JS / Analytics code snippets.
+// The code here is injected verbatim into public pages (Analytics, AdSense,
+// Tag Manager, pixels), so it is inherently public — no secrets live here.
+app.get('/api/analytics', async (req, res) => {
+  try {
+    res.json(await getAnalyticsSettings());
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 5j. Update custom JS / Analytics code snippets (admin).
+app.put('/api/analytics', async (req, res) => {
+  try {
+    const body = req.body;
+    if (!body || typeof body !== 'object') {
+      return res.status(400).json({ error: 'Body must be a valid analytics settings object' });
+    }
+    const saved = await saveAnalyticsSettings(body);
+    res.json({ success: true, analytics: saved });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

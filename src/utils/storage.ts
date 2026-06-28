@@ -519,6 +519,45 @@ export async function saveIntegrationsToServer(integrations: IntegrationSettings
   if (!res.ok) throw new Error('Failed to save integrations on server');
 }
 
+// --- Custom JS / Analytics code injection ---
+export interface AnalyticsSettings {
+  siteHeadCode: string;
+  siteBodyCode: string;
+  siteFooterCode: string;
+  articleHeadCode: string;
+  articleBodyCode: string;
+  articleFooterCode: string;
+}
+
+export const EMPTY_ANALYTICS_SETTINGS: AnalyticsSettings = {
+  siteHeadCode: '',
+  siteBodyCode: '',
+  siteFooterCode: '',
+  articleHeadCode: '',
+  articleBodyCode: '',
+  articleFooterCode: ''
+};
+
+export async function fetchAnalyticsSettings(): Promise<AnalyticsSettings> {
+  try {
+    const res = await fetch('/api/analytics');
+    if (!res.ok) throw new Error('Failed to fetch analytics settings');
+    return { ...EMPTY_ANALYTICS_SETTINGS, ...(await res.json()) };
+  } catch (error) {
+    console.error('Error fetching analytics API:', error);
+    return { ...EMPTY_ANALYTICS_SETTINGS };
+  }
+}
+
+export async function saveAnalyticsSettingsToServer(settings: AnalyticsSettings): Promise<void> {
+  const res = await fetch('/api/analytics', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings)
+  });
+  if (!res.ok) throw new Error('Failed to save analytics settings on server');
+}
+
 export async function loginAdminToServer(credentials: { username: string; password: string }): Promise<{ success: boolean; token?: string; error?: string }> {
   const res = await fetch('/api/login', {
     method: 'POST',

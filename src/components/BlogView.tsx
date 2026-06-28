@@ -20,10 +20,12 @@ import {
 } from 'lucide-react';
 import {
   BlogPost, BlogComment,
-  fetchBlogPosts, fetchPostComments, postComment
+  fetchBlogPosts, fetchPostComments, postComment,
+  fetchAnalyticsSettings, AnalyticsSettings
 } from '../utils/storage';
 import { getRecaptchaToken } from '../utils/recaptcha';
 import { formatDateTime } from '../utils/datetime';
+import { applyArticleCode, clearArticleCode } from '../utils/codeInjection';
 
 // --- SEO HELPER FUNCTION ---
 const updateSEO = (title: string, description: string, image?: string) => {
@@ -157,6 +159,21 @@ export default function BlogView({ onNavigate }: BlogViewProps) {
     const next = currentIndex >= 0 && currentIndex < posts.length - 1 ? posts[currentIndex + 1] : null;
     return { prev, next };
   }, [activePost, posts]);
+
+  // Load the custom article code snippets once, then inject them only while an
+  // article is open and remove them when leaving the article.
+  const [articleCode, setArticleCode] = useState<AnalyticsSettings | null>(null);
+  useEffect(() => {
+    fetchAnalyticsSettings().then(setArticleCode).catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (articleCode && activePost) {
+      applyArticleCode(articleCode);
+    } else {
+      clearArticleCode();
+    }
+    return () => clearArticleCode();
+  }, [articleCode, activePost]);
 
   // SEO Update Trigger
   useEffect(() => {

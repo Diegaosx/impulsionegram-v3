@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import BlogPage from './pages/BlogPage';
@@ -10,13 +10,16 @@ import {
   fetchOrders, saveOrdersToServer,
   addOrderToServer, resetServerDatabase,
   fetchHomeContent, saveHomeContentToServer, HomeContent,
-  fetchGeneralSettings, fetchCompanySettings, CompanySettings
+  fetchGeneralSettings, fetchCompanySettings, CompanySettings,
+  fetchAnalyticsSettings, AnalyticsSettings
 } from './utils/storage';
 import { applyBrandingToHead } from './utils/branding';
 import { setAppTimezone } from './utils/datetime';
+import { applySiteCode, clearSiteCode } from './utils/codeInjection';
 
 export default function App() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Shared server-backed state
   const [services, setServices] = useState<any[]>([]);
@@ -29,6 +32,9 @@ export default function App() {
   const [logoUrl, setLogoUrl] = useState('');
   const [company, setCompany] = useState<CompanySettings | null>(null);
 
+  // Custom JS / Analytics code snippets (injected on public pages)
+  const [analytics, setAnalytics] = useState<AnalyticsSettings | null>(null);
+
   // Admin authentication (persisted in localStorage)
   const [isAuthenticated, setIsAuthenticated] = useState(
     () => localStorage.getItem('admin_authenticated') === 'true'
@@ -38,19 +44,21 @@ export default function App() {
   useEffect(() => {
     async function loadBackendData() {
       try {
-        const [loadedServices, loadedPlans, loadedOrders, loadedHome, loadedGeneral, loadedCompany] = await Promise.all([
+        const [loadedServices, loadedPlans, loadedOrders, loadedHome, loadedGeneral, loadedCompany, loadedAnalytics] = await Promise.all([
           fetchServices(),
           fetchPlans(),
           fetchOrders(),
           fetchHomeContent(),
           fetchGeneralSettings(),
-          fetchCompanySettings()
+          fetchCompanySettings(),
+          fetchAnalyticsSettings()
         ]);
         setServices(loadedServices);
         setPlans(loadedPlans);
         setOrders(loadedOrders);
         setHomeContent(loadedHome);
         setCompany(loadedCompany);
+        setAnalytics(loadedAnalytics);
 
         // Apply configurable branding / SEO / timezone
         setSiteName(loadedGeneral.siteName);
@@ -65,6 +73,19 @@ export default function App() {
     }
     loadBackendData();
   }, []);
+
+  // Inject the site-wide custom code on public pages only. The admin dashboard
+  // and login screen are excluded so analytics/ads don't run inside the panel.
+  useEffect(() => {
+    if (!analytics) return;
+    const path = location.pathname;
+    const isAdminArea = path.startsWith('/dashboard') || path.startsWith('/login');
+    if (isAdminArea) {
+      clearSiteCode();
+    } else {
+      applySiteCode(analytics);
+    }
+  }, [analytics, location.pathname]);
 
   // --- Auth handlers ---
   const handleLoginSuccess = () => {
