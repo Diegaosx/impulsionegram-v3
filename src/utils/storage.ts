@@ -1,5 +1,5 @@
 import { ServiceItem, PlanItem } from '../types';
-import { setAdminToken } from './authFetch';
+import { setAdminToken, setCachedUser } from './authFetch';
 
 export interface AdminOrder {
   id: string;
@@ -681,4 +681,109 @@ export async function loginAdminToServer(credentials: { username: string; passwo
   // Persist the signed admin token so subsequent API calls are authorized.
   if (data?.token) setAdminToken(data.token);
   return data;
+}
+
+// --- Accounts / authenticated user ---
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: 'admin' | 'cliente';
+  avatar: string;
+  createdAt: string;
+}
+
+// Universal login (accepts e-mail or the admin username).
+export async function loginUser(identifier: string, password: string): Promise<{ ok: boolean; user?: AuthUser; error?: string }> {
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: identifier, password })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.token) return { ok: false, error: data.error || 'E-mail ou senha incorretos.' };
+    setAdminToken(data.token);
+    const user = await fetchMe();
+    if (user) setCachedUser(user);
+    return { ok: true, user: user || undefined };
+  } catch {
+    return { ok: false, error: 'Falha de conexão com o servidor.' };
+  }
+}
+
+export async function registerAccount(input: { name: string; email: string; phone?: string; password: string }): Promise<{ ok: boolean; user?: AuthUser; error?: string }> {
+  try {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.token) return { ok: false, error: data.error || 'Não foi possível criar a conta.' };
+    setAdminToken(data.token);
+    setCachedUser(data.user);
+    return { ok: true, user: data.user };
+  } catch {
+    return { ok: false, error: 'Falha de conexão com o servidor.' };
+  }
+}
+
+export async function fetchMe(): Promise<AuthUser | null> {
+  try {
+    const res = await fetch('/api/auth/me');
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.user || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function updateProfile(input: { name?: string; email?: string; phone?: string; avatar?: string }): Promise<{ ok: boolean; user?: AuthUser; error?: string }> {
+  try {
+    const res = await fetch('/api/auth/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data.error || 'Falha ao salvar o perfil.' };
+    if (data?.token) setAdminToken(data.token);
+    if (data?.user) setCachedUser(data.user);
+    return { ok: true, user: data.user };
+  } catch {
+    return { ok: false, error: 'Falha de conexão com o servidor.' };
+  }
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch('/api/auth/password', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword, newPassword })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data.error || 'Falha ao trocar a senha.' };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: 'Falha de conexão com o servidor.' };
+  }
+}
+
+// Check whether an e-mail/phone already has an account (used at checkout).
+export async function checkAccountExists(email: string, phone: string): Promise<{ exists: boolean; emailExists: boolean; phoneExists: boolean }> {
+  try {
+    const res = await fetch('/api/auth/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, phone })
+    });
+    if (!res.ok) return { exists: false, emailExists: false, phoneExists: false };
+    return await res.json();
+  } catch {
+    return { exists: false, emailExists: false, phoneExists: false };
+  }
 }

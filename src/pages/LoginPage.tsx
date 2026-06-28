@@ -1,30 +1,31 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Lock, AlertCircle, ArrowLeft, Settings } from 'lucide-react';
-import { loginAdminToServer } from '../utils/storage';
+import { loginUser, AuthUser } from '../utils/storage';
 
 interface LoginPageProps {
-  onLoginSuccess: () => void;
+  onAuthSuccess: (user: AuthUser) => void;
+  siteName?: string;
 }
 
-export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
+export default function LoginPage({ onAuthSuccess, siteName }: LoginPageProps) {
   const navigate = useNavigate();
-  const [loginUsername, setLoginUsername] = useState('admin');
-  const [loginPassword, setLoginPassword] = useState('admin');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  const handleAdminLoginSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
     setIsLoggingIn(true);
     try {
-      const response = await loginAdminToServer({ username: loginUsername, password: loginPassword });
-      if (response.success) {
-        onLoginSuccess();
-        navigate('/dashboard', { replace: true });
+      const result = await loginUser(identifier.trim(), password);
+      if (result.ok && result.user) {
+        onAuthSuccess(result.user);
+        navigate(result.user.role === 'admin' ? '/dashboard' : '/perfil', { replace: true });
       } else {
-        setLoginError(response.error || 'Autenticação recusada pelo servidor.');
+        setLoginError(result.error || 'Autenticação recusada pelo servidor.');
       }
     } catch (err) {
       setLoginError('Falha de conexão com a API.');
@@ -50,8 +51,8 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           <div className="inline-flex p-3 bg-purple-50 rounded-xl text-primary border border-primary/10">
             <Settings className="h-6 w-6" />
           </div>
-          <h3 className="font-display font-black text-xl text-slate-900">Painel de Gestão ImpulsioneGram</h3>
-          <p className="text-slate-500 text-xs font-semibold">Insira suas credenciais de administrador para prosseguir</p>
+          <h3 className="font-display font-black text-xl text-slate-900">Entrar — {siteName || 'ImpulsioneGram'}</h3>
+          <p className="text-slate-500 text-xs font-semibold">Acesse sua conta para gerenciar seus pedidos</p>
         </div>
 
         {loginError && (
@@ -61,9 +62,9 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           </div>
         )}
 
-        <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Usuário</label>
+            <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">E-mail</label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                 <User className="h-4 w-4" />
@@ -71,9 +72,10 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
               <input
                 type="text"
                 required
-                value={loginUsername}
-                onChange={(e) => setLoginUsername(e.target.value)}
-                placeholder="admin"
+                autoComplete="username"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="voce@email.com"
                 className="w-full bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800"
               />
             </div>
@@ -88,8 +90,9 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
               <input
                 type="password"
                 required
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 className="w-full bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800"
               />
@@ -101,13 +104,15 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
             disabled={isLoggingIn}
             className="w-full bg-primary hover:bg-purple-700 disabled:bg-purple-400 text-white font-bold text-xs py-3.5 rounded-lg shadow-md hover:scale-[1.01] transition-all cursor-pointer flex items-center justify-center gap-1.5"
           >
-            {isLoggingIn ? 'Autenticando...' : 'Acessar Painel'}
+            {isLoggingIn ? 'Autenticando...' : 'Entrar'}
           </button>
         </form>
 
-        <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 text-[10px] text-slate-400 font-semibold text-center leading-relaxed">
-          Acesso de demonstração pré-configurado.<br />
-          Usuário: <strong className="text-slate-600">admin</strong> • Senha: <strong className="text-slate-600">admin</strong>
+        <div className="text-center text-xs font-semibold text-slate-500">
+          Ainda não tem conta?{' '}
+          <button onClick={() => navigate('/cadastro')} className="text-primary font-bold hover:underline cursor-pointer">
+            Criar conta
+          </button>
         </div>
       </div>
     </div>

@@ -108,6 +108,7 @@ const AUTH_API: { method: string; re: RegExp }[] = [
   { method: 'GET', re: /^\/auth\/me\/?$/ },
   { method: 'PUT', re: /^\/auth\/profile\/?$/ },
   { method: 'PUT', re: /^\/auth\/password\/?$/ },
+  { method: 'POST', re: /^\/upload\/?$/ },
   { method: 'GET', re: /^\/my\// },
   { method: 'POST', re: /^\/my\// }
 ];
