@@ -55,7 +55,15 @@ export default function InteractiveCalculator({
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   // Flash-offer coupon (auto-filled while the offer is active).
-  const { offer, active: offerActive } = useOffer();
+  const { offer, active: offerActive, remaining: offerRemaining } = useOffer();
+  const offerPercent = offerActive ? (offer?.discountPercent || 0) : 0;
+  const formatOfferTimer = (sec: number) => {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+  };
   const [coupon, setCoupon] = useState('');
   useEffect(() => {
     if (offerActive && offer?.couponCode) setCoupon((c) => (c ? c : offer.couponCode));
@@ -488,16 +496,40 @@ export default function InteractiveCalculator({
               {/* Prices Section */}
               <div className="space-y-1">
                 <span className="text-slate-500 text-[10px] font-bold uppercase block">Valor Total do Plano</span>
-                <div className="flex items-baseline gap-2">
-                  <span className="font-display font-black text-3xl text-accent">
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className={`font-display font-black ${offerPercent > 0 ? 'text-xl text-slate-400 line-through' : 'text-3xl text-accent'}`}>
                     R$ {bulkMetrics.finalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
-                  {bulkMetrics.discountPercent > 0 && (
+                  {bulkMetrics.discountPercent > 0 && offerPercent === 0 && (
                     <span className="text-xs line-through text-slate-500">
                       R$ {bulkMetrics.basePrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   )}
                 </div>
+
+                {/* Flash-offer price (paid amount) + expiry warning */}
+                {offerPercent > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      <span className="font-display font-black text-3xl text-accent">
+                        R$ {(bulkMetrics.finalPrice * (1 - offerPercent / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                      <span className="text-[10px] font-black bg-accent/15 text-accent border border-accent/30 px-2 py-0.5 rounded-full uppercase tracking-wide">
+                        -{offerPercent}% no PIX
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-accent bg-accent/10 border border-accent/20 rounded-lg px-2.5 py-1.5">
+                      <Flame className="h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        {offer?.text || 'Oferta relâmpago'}
+                        {offerRemaining !== null && offerRemaining > 0 && (
+                          <span className="font-mono tabular-nums"> • Termina em {formatOfferTimer(offerRemaining)}</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 <span className="text-[10px] text-slate-400 font-semibold block pt-1">
                   Pagamento via PIX com aprovação e processamento instantâneo
                 </span>
