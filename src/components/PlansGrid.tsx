@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { PREBUILT_PLANS } from '../data';
 import { SocialPlatform, PlanItem } from '../types';
 import { Check, Flame, Award, ShieldAlert, Sparkles, Instagram, Plus } from 'lucide-react';
@@ -9,14 +9,37 @@ interface PlansGridProps {
   plans?: PlanItem[];
 }
 
+// Display label (with icon) and preferred order for each network tab.
+const PLATFORM_LABEL: Record<SocialPlatform, string> = {
+  instagram: '📸 Instagram',
+  tiktok: '🎵 TikTok',
+  youtube: '▶️ YouTube',
+  twitter: '𝕏 Twitter',
+  facebook: '👍 Facebook',
+  kwai: '⚡ Kwai'
+};
+const PLATFORM_ORDER: SocialPlatform[] = ['instagram', 'tiktok', 'youtube', 'twitter', 'facebook', 'kwai'];
+
 export default function PlansGrid({ onSelectPlanCustomizer, onNavigate, plans: customPlans }: PlansGridProps) {
-  const [activeTab, setActiveTab] = useState<'instagram' | 'tiktok'>('instagram');
+  const allPlans = customPlans && customPlans.length ? customPlans : PREBUILT_PLANS;
+
+  // Tabs are derived from the platforms that actually have plans.
+  const availablePlatforms = useMemo(() => {
+    const present = new Set(allPlans.map(p => p.platform));
+    return PLATFORM_ORDER.filter(p => present.has(p));
+  }, [allPlans]);
+
+  const [activeTab, setActiveTab] = useState<SocialPlatform>(availablePlatforms[0] || 'instagram');
+
+  // Keep the active tab valid as the available platforms change.
+  useEffect(() => {
+    if (availablePlatforms.length && !availablePlatforms.includes(activeTab)) {
+      setActiveTab(availablePlatforms[0]);
+    }
+  }, [availablePlatforms, activeTab]);
 
   // Filter plans based on selected network
-  const plans = useMemo(() => {
-    const list = customPlans || PREBUILT_PLANS;
-    return list.filter(p => p.platform === activeTab);
-  }, [activeTab, customPlans]);
+  const plans = useMemo(() => allPlans.filter(p => p.platform === activeTab), [activeTab, allPlans]);
 
   const handleBuyPlan = (plan: PlanItem) => {
     onSelectPlanCustomizer(plan.platform, plan.type, plan.quantity);
@@ -39,31 +62,25 @@ export default function PlansGrid({ onSelectPlanCustomizer, onNavigate, plans: c
             Escolha um de nossos pacotes estruturados sob medida e agilize o crescimento do seu perfil de forma imediata.
           </p>
 
-          {/* Tab Selector buttons */}
-          <div className="flex justify-center mt-8 gap-2 bg-slate-100 p-1 rounded-lg max-w-xs mx-auto border border-slate-200">
-            <button
-              onClick={() => setActiveTab('instagram')}
-              className={`flex-1 text-center py-2.5 rounded text-xs font-bold transition-all cursor-pointer ${
-                activeTab === 'instagram'
-                  ? 'bg-white text-slate-950 shadow-sm border border-slate-200/50'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-              id="plan-tab-ig"
-            >
-              📸 Instagram
-            </button>
-            <button
-              onClick={() => setActiveTab('tiktok')}
-              className={`flex-1 text-center py-2.5 rounded text-xs font-bold transition-all cursor-pointer ${
-                activeTab === 'tiktok'
-                  ? 'bg-white text-slate-950 shadow-sm border border-slate-200/50'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-              id="plan-tab-tt"
-            >
-              🎵 TikTok
-            </button>
-          </div>
+          {/* Tab Selector buttons (one per network that has plans) */}
+          {availablePlatforms.length > 1 && (
+            <div className="flex flex-wrap justify-center mt-8 gap-2 bg-slate-100 p-1 rounded-lg max-w-xl mx-auto border border-slate-200">
+              {availablePlatforms.map((platform) => (
+                <button
+                  key={platform}
+                  onClick={() => setActiveTab(platform)}
+                  className={`flex-1 min-w-[100px] text-center py-2.5 px-3 rounded text-xs font-bold transition-all cursor-pointer ${
+                    activeTab === platform
+                      ? 'bg-white text-slate-950 shadow-sm border border-slate-200/50'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                  id={`plan-tab-${platform}`}
+                >
+                  {PLATFORM_LABEL[platform]}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* 3 Columns Pre-Packaged Grid + 4th custom column */}
