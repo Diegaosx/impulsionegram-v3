@@ -1,14 +1,17 @@
 import { useEffect, useState, FormEvent } from 'react';
 import {
   Plus, Pencil, Trash2, Save, Upload, FileText, MessageSquare,
-  Eye, EyeOff, ArrowLeft, Image as ImageIcon
+  Eye, EyeOff, ArrowLeft, Image as ImageIcon, Tag, FolderTree
 } from 'lucide-react';
 import {
   BlogPost, BlogComment,
   fetchBlogPosts, saveBlogPostToServer, deleteBlogPostFromServer,
-  fetchAllComments, setCommentStatus, deleteCommentFromServer, uploadAsset
+  fetchAllComments, setCommentStatus, deleteCommentFromServer, uploadAsset,
+  fetchBlogCategories, addBlogCategoryToServer, deleteBlogCategoryFromServer,
+  fetchBlogTags, deleteBlogTagFromServer
 } from '../utils/storage';
 import { formatDateTime } from '../utils/datetime';
+import ChipMultiInput from './ChipMultiInput';
 
 interface BlogAdminProps {
   triggerSuccess: (msg: string) => void;
@@ -19,18 +22,18 @@ interface PostForm {
   slug: string;
   title: string;
   description: string;
-  category: string;
+  categories: string[];
   image: string;
   author: string;
   date: string;
   readTime: string;
-  tagsCsv: string;
+  tags: string[];
   contentText: string;
 }
 
 const EMPTY_FORM: PostForm = {
-  slug: '', title: '', description: '', category: 'Dicas',
-  image: '', author: '', date: '', readTime: '5 min', tagsCsv: '', contentText: ''
+  slug: '', title: '', description: '', categories: [],
+  image: '', author: '', date: '', readTime: '5 min', tags: [], contentText: ''
 };
 
 function slugify(text: string): string {
@@ -44,13 +47,17 @@ function slugify(text: string): string {
 }
 
 export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminProps) {
-  const [view, setView] = useState<'posts' | 'comments'>('posts');
+  const [view, setView] = useState<'posts' | 'comments' | 'taxonomy'>('posts');
 
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(false);
 
   const [comments, setComments] = useState<BlogComment[]>([]);
   const [loadingComments, setLoadingComments] = useState(false);
+
+  const [categoriesList, setCategoriesList] = useState<string[]>([]);
+  const [tagsList, setTagsList] = useState<string[]>([]);
+  const [newCategory, setNewCategory] = useState('');
 
   const [isEditing, setIsEditing] = useState(false);
   const [isNew, setIsNew] = useState(false);
@@ -63,38 +70,32 @@ export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminPro
     setPosts(await fetchBlogPosts());
     setLoadingPosts(false);
   };
-
   const loadComments = async () => {
     setLoadingComments(true);
     setComments(await fetchAllComments());
     setLoadingComments(false);
   };
-
-  useEffect(() => {
-    loadPosts();
-  }, []);
-
-  useEffect(() => {
-    if (view === 'comments') loadComments();
-  }, [view]);
-
-  const startNew = () => {
-    setForm(EMPTY_FORM);
-    setIsNew(true);
-    setIsEditing(true);
+  const loadTaxonomy = async () => {
+    setCategoriesList(await fetchBlogCategories());
+    setTagsList(await fetchBlogTags());
   };
+
+  useEffect(() => { loadPosts(); loadTaxonomy(); }, []);
+  useEffect(() => { if (view === 'comments') loadComments(); }, [view]);
+
+  const startNew = () => { setForm(EMPTY_FORM); setIsNew(true); setIsEditing(true); };
 
   const startEdit = (post: BlogPost) => {
     setForm({
       slug: post.slug,
       title: post.title,
       description: post.description,
-      category: post.category,
+      categories: post.categories || [],
       image: post.image,
       author: post.author,
       date: post.date,
       readTime: post.readTime,
-      tagsCsv: (post.tags || []).join(', '),
+      tags: post.tags || [],
       contentText: (post.content || []).join('\n\n')
     });
     setIsNew(false);
@@ -102,11 +103,7 @@ export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminPro
   };
 
   const handleTitleChange = (value: string) => {
-    setForm(prev => ({
-      ...prev,
-      title: value,
-      slug: isNew ? slugify(value) : prev.slug
-    }));
+    setForm(prev => ({ ...prev, title: value, slug: isNew ? slugify(value) : prev.slug }));
   };
 
   const handleImageUpload = async (file?: File) => {
@@ -136,17 +133,18 @@ export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminPro
         title: form.title.trim(),
         description: form.description.trim(),
         content: form.contentText.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean),
-        category: form.category.trim() || 'Dicas',
+        categories: form.categories,
         image: form.image.trim(),
         author: form.author.trim(),
         date: form.date.trim(),
         readTime: form.readTime.trim(),
-        tags: form.tagsCsv.split(',').map(t => t.trim()).filter(Boolean)
+        tags: form.tags
       };
       await saveBlogPostToServer(post);
       triggerSuccess(isNew ? 'Artigo criado com sucesso!' : 'Artigo atualizado!');
       setIsEditing(false);
       await loadPosts();
+      await loadTaxonomy();
     } catch (e: any) {
       triggerError(e?.message || 'Falha ao salvar o artigo.');
     } finally {
@@ -189,6 +187,41 @@ export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminPro
     }
   };
 
+  const handleAddCategory = async () => {
+    const name = newCategory.trim();
+    if (!name) return;
+    try {
+      await addBlogCategoryToServer(name);
+      setNewCategory('');
+      await loadTaxonomy();
+      triggerSuccess('Categoria adicionada.');
+    } catch (e) {
+      triggerError('Falha ao adicionar a categoria.');
+    }
+  };
+
+  const handleDeleteCategory = async (name: string) => {
+    if (!window.confirm(`Remover a categoria "${name}"? Os artigos existentes mantêm o valor já salvo.`)) return;
+    try {
+      await deleteBlogCategoryFromServer(name);
+      await loadTaxonomy();
+      triggerSuccess('Categoria removida.');
+    } catch (e) {
+      triggerError('Falha ao remover a categoria.');
+    }
+  };
+
+  const handleDeleteTag = async (name: string) => {
+    if (!window.confirm(`Remover a tag "${name}"?`)) return;
+    try {
+      await deleteBlogTagFromServer(name);
+      await loadTaxonomy();
+      triggerSuccess('Tag removida.');
+    } catch (e) {
+      triggerError('Falha ao remover a tag.');
+    }
+  };
+
   const postTitleBySlug = (s: string) => posts.find(p => p.slug === s)?.title || s;
 
   return (
@@ -196,29 +229,23 @@ export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminPro
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h3 className="font-display font-black text-xl text-slate-900">Gerenciar Blog</h3>
-          <p className="text-slate-500 text-xs font-semibold">Crie e edite artigos e modere os comentários dos visitantes.</p>
+          <p className="text-slate-500 text-xs font-semibold">Crie e edite artigos, organize categorias/tags e modere os comentários.</p>
         </div>
         {!isEditing && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <div className="flex bg-slate-100 rounded-lg p-1">
-              <button
-                onClick={() => setView('posts')}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${view === 'posts' ? 'bg-white text-primary shadow-sm' : 'text-slate-500'}`}
-              >
+              <button onClick={() => setView('posts')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${view === 'posts' ? 'bg-white text-primary shadow-sm' : 'text-slate-500'}`}>
                 <FileText className="h-3.5 w-3.5 inline mr-1" /> Artigos
               </button>
-              <button
-                onClick={() => setView('comments')}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${view === 'comments' ? 'bg-white text-primary shadow-sm' : 'text-slate-500'}`}
-              >
+              <button onClick={() => setView('taxonomy')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${view === 'taxonomy' ? 'bg-white text-primary shadow-sm' : 'text-slate-500'}`}>
+                <FolderTree className="h-3.5 w-3.5 inline mr-1" /> Categorias & Tags
+              </button>
+              <button onClick={() => setView('comments')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${view === 'comments' ? 'bg-white text-primary shadow-sm' : 'text-slate-500'}`}>
                 <MessageSquare className="h-3.5 w-3.5 inline mr-1" /> Comentários
               </button>
             </div>
             {view === 'posts' && (
-              <button
-                onClick={startNew}
-                className="bg-primary hover:bg-purple-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg flex items-center gap-2 cursor-pointer transition-all hover:scale-[1.02] shadow-sm"
-              >
+              <button onClick={startNew} className="bg-primary hover:bg-purple-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg flex items-center gap-2 cursor-pointer transition-all hover:scale-[1.02] shadow-sm">
                 <Plus className="h-4 w-4" /> Novo Artigo
               </button>
             )}
@@ -251,16 +278,13 @@ export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminPro
               <span className="text-[10px] text-slate-400 block">/blog/artigo/{form.slug || '...'}</span>
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Categoria</label>
-              <input type="text" list="blog-categories" value={form.category} onChange={(e) => setForm(prev => ({ ...prev, category: e.target.value }))}
-                placeholder="Ex: Instagram"
-                className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
-              <datalist id="blog-categories">
-                <option value="Instagram" />
-                <option value="TikTok" />
-                <option value="Marketing Digital" />
-                <option value="Dicas" />
-              </datalist>
+              <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Categorias (uma ou mais)</label>
+              <ChipMultiInput
+                value={form.categories}
+                onChange={(next) => setForm(prev => ({ ...prev, categories: next }))}
+                suggestions={categoriesList}
+                placeholder="Selecione ou crie categorias..."
+              />
             </div>
 
             <div className="space-y-1.5 md:col-span-2">
@@ -315,10 +339,13 @@ export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminPro
             </div>
 
             <div className="space-y-1.5 md:col-span-2">
-              <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Tags (separadas por vírgula)</label>
-              <input type="text" value={form.tagsCsv} onChange={(e) => setForm(prev => ({ ...prev, tagsCsv: e.target.value }))}
-                placeholder="Instagram, Algoritmo, Alcance"
-                className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
+              <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Tags</label>
+              <ChipMultiInput
+                value={form.tags}
+                onChange={(next) => setForm(prev => ({ ...prev, tags: next }))}
+                suggestions={tagsList}
+                placeholder="Digite uma tag e Enter (sugere as existentes)..."
+              />
             </div>
 
             <div className="space-y-1.5 md:col-span-2">
@@ -351,7 +378,7 @@ export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminPro
               <thead className="bg-slate-50 text-slate-400 font-black text-[10px] uppercase border-b border-slate-100 font-mono tracking-wider">
                 <tr>
                   <th className="p-4">Artigo</th>
-                  <th className="p-4">Categoria</th>
+                  <th className="p-4">Categorias</th>
                   <th className="p-4">Data</th>
                   <th className="p-4 text-right">Ações</th>
                 </tr>
@@ -367,7 +394,13 @@ export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminPro
                         <span className="font-bold text-slate-900 line-clamp-2">{post.title}</span>
                       </div>
                     </td>
-                    <td className="p-4"><span className="bg-purple-50 text-primary text-[10px] font-black uppercase px-2 py-1 rounded">{post.category}</span></td>
+                    <td className="p-4">
+                      <div className="flex flex-wrap gap-1">
+                        {(post.categories || []).map(c => (
+                          <span key={c} className="bg-purple-50 text-primary text-[10px] font-black uppercase px-2 py-0.5 rounded">{c}</span>
+                        ))}
+                      </div>
+                    </td>
                     <td className="p-4 text-slate-500 font-mono">{post.date || '—'}</td>
                     <td className="p-4">
                       <div className="flex gap-2 justify-end">
@@ -381,6 +414,49 @@ export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminPro
             </table>
           </div>
         )
+      ) : view === 'taxonomy' ? (
+        /* --- CATEGORIES & TAGS MANAGEMENT --- */
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+            <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+              <div className="bg-purple-50 text-primary p-2 rounded-lg"><FolderTree className="h-5 w-5" /></div>
+              <h4 className="font-bold text-slate-800 text-sm">Categorias</h4>
+            </div>
+            <div className="flex gap-2">
+              <input type="text" value={newCategory} onChange={(e) => setNewCategory(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddCategory(); } }}
+                placeholder="Nova categoria"
+                className="flex-1 bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
+              <button type="button" onClick={handleAddCategory} className="bg-primary hover:bg-purple-700 text-white font-bold text-xs px-3 rounded-lg flex items-center gap-1"><Plus className="h-4 w-4" /> Add</button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {categoriesList.length === 0 ? <span className="text-slate-400 text-xs font-semibold">Nenhuma categoria.</span> :
+                categoriesList.map(c => (
+                  <span key={c} className="bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-bold py-1 px-2 rounded-lg flex items-center gap-1.5">
+                    {c}
+                    <button type="button" onClick={() => handleDeleteCategory(c)} className="text-red-500 hover:text-red-700" title="Remover"><Trash2 className="h-3 w-3" /></button>
+                  </span>
+                ))}
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+            <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+              <div className="bg-pink-50 text-pink-600 p-2 rounded-lg"><Tag className="h-5 w-5" /></div>
+              <h4 className="font-bold text-slate-800 text-sm">Tags</h4>
+            </div>
+            <p className="text-[11px] text-slate-400 font-semibold">As tags são criadas ao escrever o artigo (com sugestão automática). Aqui você pode removê-las.</p>
+            <div className="flex flex-wrap gap-2">
+              {tagsList.length === 0 ? <span className="text-slate-400 text-xs font-semibold">Nenhuma tag.</span> :
+                tagsList.map(t => (
+                  <span key={t} className="bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-bold py-1 px-2 rounded-lg flex items-center gap-1.5">
+                    {t}
+                    <button type="button" onClick={() => handleDeleteTag(t)} className="text-red-500 hover:text-red-700" title="Remover"><Trash2 className="h-3 w-3" /></button>
+                  </span>
+                ))}
+            </div>
+          </div>
+        </div>
       ) : (
         /* --- COMMENTS MODERATION --- */
         loadingComments ? (

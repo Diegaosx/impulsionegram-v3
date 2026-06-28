@@ -178,7 +178,7 @@ export default function BlogView({ onNavigate }: BlogViewProps) {
     let list = posts;
 
     if (currentCategory) {
-      list = list.filter(p => p.category.toLowerCase() === currentCategory.toLowerCase());
+      list = list.filter(p => (p.categories || []).some(c => c.toLowerCase() === currentCategory.toLowerCase()));
     }
 
     if (activeSearchFilter) {
@@ -197,7 +197,9 @@ export default function BlogView({ onNavigate }: BlogViewProps) {
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     posts.forEach(p => {
-      counts[p.category] = (counts[p.category] || 0) + 1;
+      (p.categories || []).forEach(c => {
+        counts[c] = (counts[c] || 0) + 1;
+      });
     });
     return counts;
   }, [posts]);
@@ -275,7 +277,7 @@ export default function BlogView({ onNavigate }: BlogViewProps) {
             {activePost && (
               <>
                 <ChevronRight className="h-3 w-3 text-slate-400" />
-                <button onClick={() => navigateToCategory(activePost.category)} className="hover:text-primary transition-colors cursor-pointer">{activePost.category}</button>
+                <button onClick={() => navigateToCategory(activePost.categories[0])} className="hover:text-primary transition-colors cursor-pointer">{activePost.categories[0]}</button>
                 <ChevronRight className="h-3 w-3 text-slate-400" />
                 <span className="text-primary font-bold max-w-xs truncate hidden md:inline">{activePost.title}</span>
               </>
@@ -323,10 +325,16 @@ export default function BlogView({ onNavigate }: BlogViewProps) {
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover transform hover:scale-105 transition-transform duration-700"
                   />
-                  <div className="absolute top-4 left-4">
-                    <span className="bg-primary/95 text-white font-black text-xs uppercase px-3.5 py-1.5 rounded-full shadow-md tracking-wider">
-                      {activePost.category}
-                    </span>
+                  <div className="absolute top-4 left-4 flex flex-wrap gap-1.5">
+                    {(activePost.categories || []).map(cat => (
+                      <button
+                        key={cat}
+                        onClick={() => navigateToCategory(cat)}
+                        className="bg-primary/95 hover:bg-primary text-white font-black text-xs uppercase px-3.5 py-1.5 rounded-full shadow-md tracking-wider cursor-pointer"
+                      >
+                        {cat}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
@@ -539,7 +547,7 @@ export default function BlogView({ onNavigate }: BlogViewProps) {
                             />
                             <div className="absolute top-3 left-3">
                               <span className="bg-white/95 text-slate-900 font-extrabold text-[10px] uppercase px-2.5 py-1 rounded shadow">
-                                {post.category}
+                                {post.categories[0]}
                               </span>
                             </div>
                           </div>
@@ -668,7 +676,7 @@ export default function BlogView({ onNavigate }: BlogViewProps) {
                       />
                     </div>
                     <div className="space-y-1">
-                      <span className="text-[9px] font-black uppercase tracking-wider text-primary block">{p.category}</span>
+                      <span className="text-[9px] font-black uppercase tracking-wider text-primary block">{p.categories[0]}</span>
                       <h5 className="font-bold text-xs text-slate-800 line-clamp-2 leading-snug group-hover:text-primary transition-colors">
                         {p.title}
                       </h5>
