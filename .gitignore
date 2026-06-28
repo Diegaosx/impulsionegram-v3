@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+# Local Redis dump created during testing
+dump.rdb
+*.rdb
