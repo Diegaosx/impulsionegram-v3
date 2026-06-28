@@ -258,7 +258,7 @@ export interface BlogPostRecord {
   slug: string;
   title: string;
   description: string;
-  content: string[];
+  content: string; // HTML
   categories: string[];
   image: string;
   author: string;
@@ -267,16 +267,34 @@ export interface BlogPostRecord {
   tags: string[];
 }
 
-// Normalize stored posts (older posts may use a single `category` string).
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Convert legacy paragraph arrays into HTML (one-time, on read).
+function legacyContentToHtml(arr: string[]): string {
+  return arr.map((p) => {
+    const t = (p || '').trim();
+    if (!t) return '';
+    if (t.startsWith('•')) return `<ul><li>${escapeHtml(t.replace(/^•\s*/, ''))}</li></ul>`;
+    return `<p>${escapeHtml(t)}</p>`;
+  }).join('');
+}
+
+// Normalize stored posts (older posts may use a single `category` and a
+// paragraph array for content).
 function normalizePost(data: any): BlogPostRecord {
   const categories = Array.isArray(data.categories)
     ? data.categories
     : (data.category ? [data.category] : []);
+  const content = Array.isArray(data.content)
+    ? legacyContentToHtml(data.content)
+    : String(data.content || '');
   return {
     slug: data.slug,
     title: data.title,
     description: data.description || '',
-    content: Array.isArray(data.content) ? data.content : [],
+    content,
     categories,
     image: data.image || '',
     author: data.author || '',

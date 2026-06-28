@@ -298,11 +298,14 @@ app.post('/api/blog/posts', async (req, res) => {
     const categories = Array.isArray(post.categories)
       ? post.categories.map((c: any) => String(c).trim()).filter(Boolean)
       : (post.category ? [String(post.category).trim()] : []);
+    const content = Array.isArray(post.content)
+      ? post.content.map((p: any) => `<p>${String(p)}</p>`).join('')
+      : String(post.content || '');
     const saved = await saveBlogPost({
       slug: String(post.slug),
       title: String(post.title),
       description: String(post.description || ''),
-      content: Array.isArray(post.content) ? post.content : [],
+      content,
       categories,
       image: String(post.image || ''),
       author: String(post.author || ''),
