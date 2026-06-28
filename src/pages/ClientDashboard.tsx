@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingBag, User as UserIcon, LogOut, ArrowLeft, Sparkles,
-  Package, CircleDollarSign, Clock, CheckCircle2, ShoppingCart
+  Package, CircleDollarSign, Clock, CheckCircle2, ShoppingCart, QrCode
 } from 'lucide-react';
 import { AuthUser, AdminOrder, fetchMyOrders, fetchServices } from '../utils/storage';
 import { ServiceItem } from '../types';
@@ -140,7 +140,7 @@ export default function ClientDashboard({ user, onLogout, siteName, logoUrl }: C
                     <button onClick={() => setTab('orders')} className="text-xs font-bold text-primary hover:underline">Ver todos</button>
                   )}
                 </div>
-                <OrdersList orders={orders.slice(0, 3)} loading={loading} onBuy={goBuy} />
+                <OrdersList orders={orders.slice(0, 3)} loading={loading} onBuy={goBuy} onPay={(id) => navigate(`/pedido/${id}`)} />
               </div>
             </>
           )}
@@ -163,7 +163,7 @@ export default function ClientDashboard({ user, onLogout, siteName, logoUrl }: C
           {tab === 'orders' && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
               <h1 className="font-display font-black text-xl text-slate-900 mb-4">Meus Pedidos</h1>
-              <OrdersList orders={orders} loading={loading} onBuy={goBuy} />
+              <OrdersList orders={orders} loading={loading} onBuy={goBuy} onPay={(id) => navigate(`/pedido/${id}`)} />
             </div>
           )}
         </main>
@@ -182,7 +182,7 @@ function MetricCard({ icon, label, value, tone }: { icon: ReactNode; label: stri
   );
 }
 
-function OrdersList({ orders, loading, onBuy }: { orders: AdminOrder[]; loading: boolean; onBuy: () => void }) {
+function OrdersList({ orders, loading, onBuy, onPay }: { orders: AdminOrder[]; loading: boolean; onBuy: () => void; onPay: (id: string) => void }) {
   if (loading) {
     return <div className="flex items-center justify-center py-10"><div className="animate-spin rounded-full h-7 w-7 border-b-2 border-primary"></div></div>;
   }
@@ -201,6 +201,8 @@ function OrdersList({ orders, loading, onBuy }: { orders: AdminOrder[]; loading:
     <div className="space-y-2.5">
       {orders.map((o) => {
         const st = orderStatusInfo(o.status);
+        const isPending = st.key === 'aguardando_pagamento' || st.key === 'pendente';
+        const canPay = isPending && (o.paymentMethod || 'PIX') === 'PIX';
         return (
           <div key={o.id} className="flex items-center justify-between gap-3 border border-slate-100 rounded-xl p-3 hover:border-slate-200 transition-colors">
             <div className="min-w-0">
@@ -218,9 +220,17 @@ function OrdersList({ orders, loading, onBuy }: { orders: AdminOrder[]; loading:
               )}
               <p className="text-[10px] text-slate-300 font-mono mt-0.5">{o.date ? formatDateTime(o.date) : ''}</p>
             </div>
-            <div className="text-right shrink-0">
+            <div className="text-right shrink-0 space-y-1.5">
               <p className="font-display font-black text-slate-900 text-sm">{(Number(o.price) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
               <p className="text-[10px] text-slate-400 font-semibold">{o.paymentMethod || ''}</p>
+              {canPay && (
+                <button
+                  onClick={() => onPay(o.id)}
+                  className="inline-flex items-center gap-1 bg-primary hover:bg-purple-700 text-white text-[10px] font-black uppercase tracking-wide rounded-lg px-2.5 py-1.5 transition-colors"
+                >
+                  <QrCode className="h-3 w-3" /> Pagar com PIX
+                </button>
+              )}
             </div>
           </div>
         );
