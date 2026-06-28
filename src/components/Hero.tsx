@@ -29,7 +29,7 @@ export default function Hero({ onNavigate, homeContent }: HeroProps) {
   }, []);
 
   return (
-    <section id="inicio" className="relative pt-28 pb-16 md:pt-36 md:pb-24 lg:pt-40 overflow-hidden bg-gradient-to-br from-[#faf5ff] via-white to-white border-b border-slate-200">
+    <section id="inicio" className="relative pt-36 pb-16 md:pt-36 md:pb-24 lg:pt-40 overflow-hidden bg-gradient-to-br from-[#faf5ff] via-white to-white border-b border-slate-200">
       {/* Subtle clean geometric accent lines */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px] pointer-events-none" />
       

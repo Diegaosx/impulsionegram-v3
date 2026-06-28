@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { ChatMessage } from '../types';
 import { CompanySettings } from '../utils/storage';
+import { useHideOnScroll } from '../utils/useHideOnScroll';
 
 interface FloatingWidgetsProps {
   onNavigate: (sectionId: string) => void;
@@ -20,7 +21,10 @@ interface FloatingWidgetsProps {
 }
 
 export default function FloatingWidgets({ onNavigate, ordersCalculatedStat, homeContent, company }: FloatingWidgetsProps) {
-  
+
+  // Hide the promo bar together with the header on scroll down.
+  const hidden = useHideOnScroll();
+
   // Sticky Top Promo Countdown State
   const [promoTime, setPromoTime] = useState(899); // 14 min 59 sec
   
@@ -160,7 +164,10 @@ export default function FloatingWidgets({ onNavigate, ordersCalculatedStat, home
   return (
     <>
       {/* 1. STICKY TOP FLASH PROMO COUNTDOWN BAR */}
-      <div className="fixed top-0 left-0 right-0 min-h-[3rem] py-2 sm:py-0 sm:h-12 bg-slate-900 text-white z-50 flex items-center justify-center px-4 font-bold text-[10px] sm:text-xs shadow-md border-b border-primary/30">
+      <div
+        className="fixed top-0 left-0 right-0 min-h-[3rem] py-2 sm:py-0 sm:h-12 bg-slate-900 text-white z-50 flex items-center justify-center px-4 font-bold text-[10px] sm:text-xs shadow-md border-b border-primary/30 transition-transform duration-300 will-change-transform"
+        style={{ transform: hidden ? 'translateY(-100%)' : 'translateY(0)' }}
+      >
         <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2.5 text-center">
           <Clock className="h-3.5 w-3.5 animate-pulse text-accent shrink-0" />
           <span className="text-slate-100 uppercase tracking-wide">

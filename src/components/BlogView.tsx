@@ -394,8 +394,8 @@ export default function BlogView({ onNavigate, siteName, logoUrl }: BlogViewProp
   const recentPopularPosts = useMemo(() => posts.slice(0, 3), [posts]);
 
   return (
-    <div className="bg-slate-50 text-slate-800 min-h-screen py-24 px-4 sm:px-6 lg:px-8 font-sans">
-      <div className="max-w-7xl mx-auto mt-6">
+    <div className="bg-slate-50 text-slate-800 min-h-screen pt-32 sm:pt-36 pb-20 px-4 sm:px-6 lg:px-8 font-sans">
+      <div className="max-w-7xl mx-auto">
 
         {/* Blog Breadcrumbs & Header Banner */}
         <div className="mb-10 text-center sm:text-left">
@@ -424,7 +424,7 @@ export default function BlogView({ onNavigate, siteName, logoUrl }: BlogViewProp
           {!activePost && (
             <div className="mt-4">
               <h1 className="font-display font-black text-3xl sm:text-4xl lg:text-5xl text-slate-950 tracking-tight leading-none">
-                Blog <span className="text-primary">ImpulsioneGram</span>
+                Blog <span className="text-primary">{siteName || 'ImpulsioneGram'}</span>
               </h1>
               <p className="mt-3 text-slate-600 font-medium text-sm sm:text-base max-w-2xl">
                 O seu portal completo para dominar o algoritmo, engajar sua audiência, explodir seu alcance e faturar mais com as redes sociais.
