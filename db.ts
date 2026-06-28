@@ -1269,6 +1269,79 @@ const PAGE_DEFAULT_TITLE: Record<PageSlug, string> = {
   warranty: 'Garantia / Devolução'
 };
 
+// Starter content shown until the admin edits each page. Editable/overridable
+// from the "Conteúdo Principal" hub.
+const PAGE_DEFAULT_HTML: Record<PageSlug, string> = {
+  privacy: `
+<p>A sua privacidade é importante para nós. Esta Política de Privacidade explica quais dados coletamos, como os utilizamos e quais são os seus direitos, em conformidade com a Lei Geral de Proteção de Dados (LGPD - Lei nº 13.709/2018).</p>
+<h2>1. Dados que coletamos</h2>
+<ul>
+<li><strong>Dados de cadastro e pedido:</strong> nome, e-mail, telefone e o nome de usuário (@) do perfil informado para a entrega do serviço.</li>
+<li><strong>Dados de pagamento:</strong> processados diretamente pelo nosso intermediador de pagamento (Mercado Pago). Não armazenamos dados de cartão.</li>
+<li><strong>Dados de navegação:</strong> informações técnicas como endereço IP, navegador e cookies, para segurança e melhoria da experiência.</li>
+</ul>
+<h2>2. Como utilizamos seus dados</h2>
+<ul>
+<li>Para processar e entregar os pedidos contratados;</li>
+<li>Para enviar atualizações sobre o status do seu pedido;</li>
+<li>Para prestar suporte e responder solicitações;</li>
+<li>Para cumprir obrigações legais e prevenir fraudes.</li>
+</ul>
+<h2>3. Senhas das redes sociais</h2>
+<p>Em hipótese alguma solicitamos a senha das suas redes sociais. Para a entrega dos serviços precisamos apenas do nome de usuário público (@) e, quando aplicável, do link da publicação.</p>
+<h2>4. Compartilhamento</h2>
+<p>Não vendemos seus dados. Compartilhamos informações apenas com parceiros essenciais para a execução do serviço (gateway de pagamento e painel de entrega) e quando exigido por lei.</p>
+<h2>5. Seus direitos</h2>
+<p>Você pode solicitar a qualquer momento o acesso, a correção ou a exclusão dos seus dados, bem como revogar consentimentos, entrando em contato pelos nossos canais de atendimento.</p>
+<h2>6. Cookies</h2>
+<p>Utilizamos cookies para funcionamento do site, análise e marketing. Você pode gerenciar suas preferências pelo banner de consentimento de cookies.</p>
+<h2>7. Contato</h2>
+<p>Em caso de dúvidas sobre esta política ou sobre seus dados, fale com a nossa equipe pela página de Ajuda ou pelos canais de contato informados no rodapé.</p>
+`.trim(),
+  terms: `
+<p>Ao utilizar nossa plataforma e contratar nossos serviços, você concorda com os termos descritos abaixo. Recomendamos a leitura atenta deste documento.</p>
+<h2>1. Sobre o serviço</h2>
+<p>Oferecemos serviços de impulsionamento e engajamento para redes sociais (seguidores, curtidas, visualizações e similares). Atuamos como assessoria independente e não temos vínculo oficial com Instagram, TikTok, YouTube, Facebook ou outras plataformas.</p>
+<h2>2. Cadastro e responsabilidades do cliente</h2>
+<ul>
+<li>As informações fornecidas (perfil, e-mail, telefone) devem ser verdadeiras e estar corretas;</li>
+<li>O perfil informado deve estar público durante a entrega do pedido;</li>
+<li>Nunca solicitamos sua senha — não a forneça a ninguém.</li>
+</ul>
+<h2>3. Pagamento</h2>
+<p>No momento, os pagamentos são realizados via PIX, com aprovação e processamento instantâneo, por meio do ambiente seguro do Mercado Pago. O pedido entra na fila de entrega após a confirmação do pagamento.</p>
+<h2>4. Prazo de entrega</h2>
+<p>O processamento inicia automaticamente após a confirmação do pagamento. A entrega é feita de forma gradual e natural para a segurança do seu perfil, podendo levar de alguns minutos a algumas horas conforme a quantidade.</p>
+<h2>5. Uso adequado</h2>
+<p>É proibido utilizar o serviço para fins ilícitos, ofensivos ou que violem os termos das redes sociais. Reservamo-nos o direito de recusar ou cancelar pedidos suspeitos.</p>
+<h2>6. Limitação de responsabilidade</h2>
+<p>Não nos responsabilizamos por alterações de regras das plataformas de terceiros que estejam fora do nosso controle. Atuamos sempre com as melhores práticas para a segurança do seu perfil.</p>
+<h2>7. Alterações nos termos</h2>
+<p>Estes termos podem ser atualizados a qualquer momento. A versão vigente estará sempre disponível nesta página.</p>
+`.trim(),
+  warranty: `
+<p>Trabalhamos para que a sua experiência seja segura e satisfatória. Veja como funcionam a nossa garantia e a política de devolução.</p>
+<h2>1. Garantia de reposição</h2>
+<p>Oferecemos garantia de reposição no período informado para cada serviço. Caso ocorra qualquer queda dentro do prazo de garantia, repomos o seu pedido sem custo adicional — basta acionar o nosso suporte ou solicitar a reposição pelo painel.</p>
+<h2>2. Como solicitar a reposição</h2>
+<ul>
+<li>Entre em contato pela página de Ajuda ou pelos nossos canais de atendimento;</li>
+<li>Informe o código do pedido e o perfil utilizado;</li>
+<li>Nossa equipe analisa e providencia a reposição.</li>
+</ul>
+<h2>3. Política de devolução</h2>
+<p>Caso o pedido não seja entregue, você tem direito ao reembolso integral do valor pago. Pedidos já entregues, total ou parcialmente, podem ter o reembolso proporcional avaliado conforme o caso.</p>
+<h2>4. Condições</h2>
+<ul>
+<li>O perfil deve permanecer público durante a entrega e o período de garantia;</li>
+<li>A garantia não cobre quedas causadas por alterações feitas pelo próprio usuário ou pela rede social;</li>
+<li>O nome de usuário (@) informado deve estar correto.</li>
+</ul>
+<h2>5. Contato</h2>
+<p>Ficou com dúvidas sobre a garantia ou a devolução? Fale com a nossa equipe pela página de Ajuda — teremos prazer em ajudar.</p>
+`.trim()
+};
+
 export interface SitePage {
   slug: PageSlug;
   title: string;
@@ -1286,7 +1359,7 @@ export async function getPage(slug: PageSlug): Promise<SitePage> {
   return {
     slug,
     title: String(v.title || PAGE_DEFAULT_TITLE[slug]),
-    html: String(v.html || ''),
+    html: v.html ? String(v.html) : PAGE_DEFAULT_HTML[slug],
     updatedAt: String(v.updatedAt || '')
   };
 }
