@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
 import ClientDashboard from './pages/ClientDashboard';
+import OrderConfirmationPage from './pages/OrderConfirmationPage';
 import BlogPage from './pages/BlogPage';
 import AdminPanel from './components/AdminPanel';
 import {
@@ -201,6 +202,8 @@ export default function App() {
             siteName={siteName}
             logoUrl={logoUrl}
             company={company}
+            currentUser={currentUser}
+            onAuthSuccess={handleAuthSuccess}
             onAddSimulatedOrder={handleAddSimulatedOrder}
           />
         }
@@ -247,6 +250,15 @@ export default function App() {
                 siteName={siteName}
                 logoUrl={logoUrl}
               />
+            : <Navigate to="/login" replace />
+        }
+      />
+
+      <Route
+        path="/pedido/:id"
+        element={
+          currentUser
+            ? <OrderConfirmationPage user={currentUser} siteName={siteName} logoUrl={logoUrl} />
             : <Navigate to="/login" replace />
         }
       />

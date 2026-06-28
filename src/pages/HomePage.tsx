@@ -15,7 +15,7 @@ import Newsletter from '../components/Newsletter';
 import Footer from '../components/Footer';
 import FloatingWidgets from '../components/FloatingWidgets';
 import CookieConsent from '../components/CookieConsent';
-import { HomeContent, CompanySettings } from '../utils/storage';
+import { HomeContent, CompanySettings, AuthUser } from '../utils/storage';
 
 interface HomePageProps {
   services: any[];
@@ -24,10 +24,12 @@ interface HomePageProps {
   siteName?: string;
   logoUrl?: string;
   company?: CompanySettings | null;
+  currentUser?: AuthUser | null;
+  onAuthSuccess?: (user: AuthUser) => void;
   onAddSimulatedOrder: (orderInfo: any) => void;
 }
 
-export default function HomePage({ services, plans, homeContent, siteName, logoUrl, company, onAddSimulatedOrder }: HomePageProps) {
+export default function HomePage({ services, plans, homeContent, siteName, logoUrl, company, currentUser, onAuthSuccess, onAddSimulatedOrder }: HomePageProps) {
   const navigate = useNavigate();
 
   // Navigation scrolling logic
@@ -107,6 +109,8 @@ export default function HomePage({ services, plans, homeContent, siteName, logoU
         initialType={selectedServiceType}
         onAddOrderToStats={handleUpdatePlatformStats}
         onAddSimulatedOrder={handleAddSimulatedOrder}
+        currentUser={currentUser}
+        onAuthSuccess={onAuthSuccess}
       />
 
       {/* Pre-packaged Popular Plans Grid - dynamic */}
