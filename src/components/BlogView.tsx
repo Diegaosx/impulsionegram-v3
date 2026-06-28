@@ -368,19 +368,19 @@ export default function BlogView({ onNavigate, siteName, logoUrl }: BlogViewProp
     setIsSubmittingComment(true);
     setCommentError('');
     const token = await getRecaptchaToken('comment');
-    const created = await postComment(currentSlug, commentName.trim(), commentEmail.trim(), commentText.trim(), token);
+    const result = await postComment(currentSlug, commentName.trim(), commentEmail.trim(), commentText.trim(), token);
     setIsSubmittingComment(false);
 
-    if (created) {
-      setComments(prev => [...prev, created]);
+    if (result.ok) {
+      // Comments now require admin approval, so we don't add it to the live list.
       setCommentSuccess(true);
       setCommentText('');
       setTimeout(() => {
         setCommentSuccess(false);
         setIsCommentModalOpen(false);
-      }, 2000);
+      }, 3500);
     } else {
-      setCommentError('Não foi possível enviar o comentário. Verifique sua conexão e tente novamente.');
+      setCommentError(result.error || 'Não foi possível enviar o comentário. Verifique sua conexão e tente novamente.');
     }
   };
 
@@ -875,7 +875,7 @@ export default function BlogView({ onNavigate, siteName, logoUrl }: BlogViewProp
                   </div>
                   <h4 className="font-display font-black text-lg text-slate-900">Comentário Enviado!</h4>
                   <p className="text-slate-500 font-semibold text-xs">
-                    Seu comentário foi registrado com sucesso e já está disponível para visualização.
+                    Obrigado! Seu comentário foi enviado e será publicado após a aprovação da nossa equipe.
                   </p>
                 </div>
               ) : (

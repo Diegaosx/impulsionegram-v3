@@ -387,19 +387,19 @@ export async function postComment(
   email: string,
   content: string,
   recaptchaToken?: string | null
-): Promise<BlogComment | null> {
+): Promise<{ ok: boolean; pending?: boolean; error?: string }> {
   try {
     const res = await fetch('/api/blog/comments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ postSlug, author, email, content, recaptchaToken })
     });
-    if (!res.ok) throw new Error('Failed to post comment');
-    const data = await res.json();
-    return data.comment;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data.error || 'Não foi possível enviar o comentário.' };
+    return { ok: true, pending: data.pending !== false };
   } catch (error) {
     console.error('Error posting comment:', error);
-    return null;
+    return { ok: false, error: 'Não foi possível enviar o comentário. Verifique sua conexão e tente novamente.' };
   }
 }
 
@@ -498,6 +498,29 @@ export async function setTestimonialStatus(id: string, status: 'approved' | 'hid
 export async function deleteTestimonialFromServer(id: string): Promise<void> {
   const res = await fetch(`/api/testimonials/${encodeURIComponent(id)}`, { method: 'DELETE' });
   if (!res.ok) throw new Error('Failed to delete testimonial');
+}
+
+// --- Blocked IPs (antispam) ---
+export interface BlockedIpRecord {
+  ip: string;
+  reason: string;
+  createdAt: string;
+}
+
+export async function fetchBlockedIps(): Promise<BlockedIpRecord[]> {
+  try {
+    const res = await fetch('/api/blocked-ips');
+    if (!res.ok) throw new Error('Failed to fetch blocked IPs');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching blocked IPs:', error);
+    return [];
+  }
+}
+
+export async function unblockIpFromServer(ip: string): Promise<void> {
+  const res = await fetch(`/api/blocked-ips/${encodeURIComponent(ip)}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to unblock IP');
 }
 
 export interface CookieChoices {
