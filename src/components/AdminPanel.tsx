@@ -86,7 +86,10 @@ export default function AdminPanel({
     smtpPassword: '',
     smtpFromName: '',
     smtpFromEmail: '',
-    smtpSecure: false
+    smtpSecure: false,
+    recaptchaSiteKey: '',
+    recaptchaSecretKey: '',
+    recaptchaMinScore: '0.5'
   });
   const [integrationsLoading, setIntegrationsLoading] = useState(false);
   const [isSavingIntegrations, setIsSavingIntegrations] = useState(false);
@@ -2132,6 +2135,41 @@ export default function AdminPanel({
                             onChange={(e) => setIntegrationsForm(prev => ({ ...prev, smtpFromEmail: e.target.value }))}
                             placeholder="no-reply@seudominio.com"
                             className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* reCAPTCHA v3 CARD */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+                      <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+                        <div className="bg-emerald-50 text-emerald-600 p-2 rounded-lg"><ShieldCheck className="h-5 w-5" /></div>
+                        <div>
+                          <h4 className="font-bold text-slate-800 text-sm">reCAPTCHA v3 (Anti-spam)</h4>
+                          <p className="text-slate-400 text-[11px] font-semibold">Proteção invisível para comentários e depoimentos. Crie as chaves em google.com/recaptcha/admin.</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Site Key (pública)</label>
+                          <input type="text" autoComplete="off" value={integrationsForm.recaptchaSiteKey}
+                            onChange={(e) => setIntegrationsForm(prev => ({ ...prev, recaptchaSiteKey: e.target.value.trim() }))}
+                            placeholder="6Lc..."
+                            className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Secret Key</label>
+                          <input type={showSecrets ? 'text' : 'password'} autoComplete="off" value={integrationsForm.recaptchaSecretKey}
+                            onChange={(e) => setIntegrationsForm(prev => ({ ...prev, recaptchaSecretKey: e.target.value.trim() }))}
+                            placeholder="6Lc..."
+                            className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Pontuação mínima (0.0 – 1.0)</label>
+                          <input type="text" autoComplete="off" value={integrationsForm.recaptchaMinScore}
+                            onChange={(e) => setIntegrationsForm(prev => ({ ...prev, recaptchaMinScore: e.target.value }))}
+                            placeholder="0.5"
+                            className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
+                          <span className="text-[10px] text-slate-400 block font-medium">Abaixo da pontuação, o envio é bloqueado como provável bot. Deixe vazias as chaves para desativar.</span>
                         </div>
                       </div>
                     </div>

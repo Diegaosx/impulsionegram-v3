@@ -34,6 +34,7 @@ import {
   deleteBlogTag
 } from './db';
 import { uploadToR2, isR2Configured } from './r2';
+import { verifyRecaptcha } from './recaptcha';
 
 const app = express();
 const PORT = 3000;
@@ -344,12 +345,16 @@ app.get('/api/blog/comments', async (req, res) => {
 });
 
 // Add a comment (public). Approved by default so it shows immediately; the
-// admin can hide or delete it afterwards.
+// admin can hide or delete it afterwards. Protected by reCAPTCHA v3 if configured.
 app.post('/api/blog/comments', async (req, res) => {
   try {
-    const { postSlug, author, email, content } = req.body || {};
+    const { postSlug, author, email, content, recaptchaToken } = req.body || {};
     if (!postSlug || !author || !content) {
       return res.status(400).json({ error: 'postSlug, author and content are required' });
+    }
+    const verification = await verifyRecaptcha(recaptchaToken, req.ip);
+    if (!verification.ok) {
+      return res.status(400).json({ error: 'Falha na verificação de segurança. Tente novamente.' });
     }
     const id = `c_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
     const comment = await addComment(id, String(postSlug), String(author), String(email || ''), String(content), 'approved');
@@ -422,6 +427,16 @@ app.delete('/api/blog/tags/:name', async (req, res) => {
   try {
     await deleteBlogTag(req.params.name);
     res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Public config exposed to the frontend (no secrets) — e.g. the reCAPTCHA site key.
+app.get('/api/public-config', async (req, res) => {
+  try {
+    const integ = await getIntegrations();
+    res.json({ recaptchaSiteKey: integ.recaptchaSiteKey || '' });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
