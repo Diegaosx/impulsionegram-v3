@@ -4,9 +4,12 @@ import {
   LayoutDashboard, ShoppingBag, User as UserIcon, LogOut, ArrowLeft, Sparkles,
   Package, CircleDollarSign, Clock, CheckCircle2, ShoppingCart
 } from 'lucide-react';
-import { AuthUser, AdminOrder, fetchMyOrders } from '../utils/storage';
+import { AuthUser, AdminOrder, fetchMyOrders, fetchServices } from '../utils/storage';
+import { ServiceItem } from '../types';
 import { orderStatusInfo } from '../utils/orderStatus';
 import { formatDateTime } from '../utils/datetime';
+import BuyServices from '../components/BuyServices';
+import OrderConfirmation from '../components/OrderConfirmation';
 
 interface ClientDashboardProps {
   user: AuthUser;
@@ -15,17 +18,24 @@ interface ClientDashboardProps {
   logoUrl?: string;
 }
 
-type Tab = 'overview' | 'orders';
+type Tab = 'overview' | 'orders' | 'buy';
 
 export default function ClientDashboard({ user, onLogout, siteName, logoUrl }: ClientDashboardProps) {
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>('overview');
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [services, setServices] = useState<ServiceItem[]>([]);
+  const [confirmedOrder, setConfirmedOrder] = useState<AdminOrder | null>(null);
+
+  const reloadOrders = () => fetchMyOrders().then(setOrders);
 
   useEffect(() => {
     fetchMyOrders().then(setOrders).finally(() => setLoading(false));
+    fetchServices().then(setServices).catch(() => {});
   }, []);
+
+  const goBuy = () => { setConfirmedOrder(null); setTab('buy'); };
 
   const metrics = useMemo(() => {
     const total = orders.length;
@@ -63,7 +73,7 @@ export default function ClientDashboard({ user, onLogout, siteName, logoUrl }: C
             )}
           </button>
           <div className="flex items-center gap-2">
-            <button onClick={() => navigate('/#servicos')} className="hidden sm:flex items-center gap-1.5 bg-primary hover:bg-purple-700 text-white text-xs font-bold rounded-lg px-3 py-2 transition-colors">
+            <button onClick={goBuy} className="hidden sm:flex items-center gap-1.5 bg-primary hover:bg-purple-700 text-white text-xs font-bold rounded-lg px-3 py-2 transition-colors">
               <ShoppingCart className="h-4 w-4" /> Comprar
             </button>
             <button onClick={() => navigate('/perfil')} className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-primary border border-slate-200 rounded-lg px-3 py-2">
@@ -96,6 +106,7 @@ export default function ClientDashboard({ user, onLogout, siteName, logoUrl }: C
             </div>
             <nav className="space-y-1">
               <NavBtn id="overview" icon={<LayoutDashboard className="h-4 w-4" />} label="Visão Geral" />
+              <NavBtn id="buy" icon={<ShoppingCart className="h-4 w-4" />} label="Comprar" />
               <NavBtn id="orders" icon={<ShoppingBag className="h-4 w-4" />} label="Meus Pedidos" />
             </nav>
           </div>
@@ -110,7 +121,7 @@ export default function ClientDashboard({ user, onLogout, siteName, logoUrl }: C
                   <h1 className="font-display font-black text-2xl">Olá, {firstName}! 👋</h1>
                   <p className="text-white/80 text-sm font-semibold mt-1">Acompanhe seus pedidos e impulsione seu perfil.</p>
                 </div>
-                <button onClick={() => navigate('/#servicos')} className="flex items-center gap-1.5 bg-white text-primary font-bold text-xs rounded-lg px-4 py-2.5 hover:scale-[1.02] transition-transform shadow">
+                <button onClick={goBuy} className="flex items-center gap-1.5 bg-white text-primary font-bold text-xs rounded-lg px-4 py-2.5 hover:scale-[1.02] transition-transform shadow">
                   <Sparkles className="h-4 w-4" /> Comprar serviços
                 </button>
               </div>
@@ -129,15 +140,30 @@ export default function ClientDashboard({ user, onLogout, siteName, logoUrl }: C
                     <button onClick={() => setTab('orders')} className="text-xs font-bold text-primary hover:underline">Ver todos</button>
                   )}
                 </div>
-                <OrdersList orders={orders.slice(0, 3)} loading={loading} onBuy={() => navigate('/#servicos')} />
+                <OrdersList orders={orders.slice(0, 3)} loading={loading} onBuy={goBuy} />
               </div>
             </>
+          )}
+
+          {tab === 'buy' && (
+            confirmedOrder ? (
+              <OrderConfirmation
+                order={confirmedOrder}
+                onGoToOrders={() => { setConfirmedOrder(null); setTab('orders'); }}
+                onBuyMore={() => setConfirmedOrder(null)}
+              />
+            ) : (
+              <BuyServices
+                services={services}
+                onCreated={(order) => { setConfirmedOrder(order); reloadOrders(); }}
+              />
+            )
           )}
 
           {tab === 'orders' && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
               <h1 className="font-display font-black text-xl text-slate-900 mb-4">Meus Pedidos</h1>
-              <OrdersList orders={orders} loading={loading} onBuy={() => navigate('/#servicos')} />
+              <OrdersList orders={orders} loading={loading} onBuy={goBuy} />
             </div>
           )}
         </main>

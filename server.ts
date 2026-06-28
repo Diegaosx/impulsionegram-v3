@@ -378,6 +378,47 @@ app.get('/api/my/orders', async (req, res) => {
   }
 });
 
+// Create an order for the logged-in client. Always starts as awaiting payment;
+// a real Mercado Pago PIX flow will flip the status later.
+app.post('/api/my/orders', async (req, res) => {
+  try {
+    const payload = getPayload(req)!;
+    const account = await getAccountById(payload.sub);
+    if (!account) return res.status(404).json({ error: 'Conta não encontrada.' });
+
+    const b = req.body || {};
+    const price = Number(b.price) || 0;
+    const quantity = Number(b.quantity) || 0;
+    if (!b.serviceLabel || price <= 0 || quantity <= 0) {
+      return res.status(400).json({ error: 'Serviço, quantidade e preço são obrigatórios.' });
+    }
+
+    const newOrder = {
+      id: `TRX-${Math.floor(100000 + Math.random() * 900000)}`,
+      accountId: account.id,
+      username: stripLinks(String(b.targetProfile || account.name || '')).slice(0, 120),
+      platform: String(b.platform || ''),
+      serviceType: String(b.serviceType || ''),
+      serviceLabel: String(b.serviceLabel || ''),
+      quantity,
+      price: Number(price.toFixed(2)),
+      paymentMethod: b.paymentMethod === 'Card' ? 'Card' : 'PIX',
+      postUrl: String(b.postUrl || '').replace(/[<>"]/g, '').trim().slice(0, 300),
+      email: account.email,
+      phone: account.phone,
+      status: 'aguardando_pagamento',
+      date: new Date().toISOString()
+    };
+
+    const db = await readDB();
+    db.orders = [newOrder, ...db.orders];
+    await writeDB(db);
+    res.json({ success: true, order: newOrder });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Change the current user's password.
 app.put('/api/auth/password', async (req, res) => {
   try {
