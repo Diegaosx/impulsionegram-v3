@@ -1,12 +1,16 @@
-import React, { useState, useMemo } from 'react';
-import { TESTIMONIALS } from '../data';
-import { Testimonial, SocialPlatform } from '../types';
-import { Star, MessageSquareCode, Plus, Check, CheckCircle2, ThumbsUp } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { SocialPlatform } from '../types';
+import { TestimonialItem, fetchTestimonials, submitTestimonial } from '../utils/storage';
+import { getRecaptchaToken } from '../utils/recaptcha';
+import { Star, Plus, CheckCircle2 } from 'lucide-react';
+
+// Fallback avatar for testimonials without a custom photo.
+const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80';
 
 export default function Testimonials() {
-  const [reviewsList, setReviewsList] = useState<Testimonial[]>(TESTIMONIALS);
+  const [reviewsList, setReviewsList] = useState<TestimonialItem[]>([]);
   const [filterPlatform, setFilterPlatform] = useState<SocialPlatform | 'todos'>('todos');
-  
+
   // Submit review states
   const [showForm, setShowForm] = useState(false);
   const [newName, setNewName] = useState('');
@@ -15,7 +19,13 @@ export default function Testimonials() {
   const [newText, setNewText] = useState('');
   const [newPlatform, setNewPlatform] = useState<SocialPlatform>('instagram');
   const [submittedReview, setSubmittedReview] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState('');
+
+  // Load approved testimonials from the API.
+  useEffect(() => {
+    fetchTestimonials().then(setReviewsList).catch(() => {});
+  }, []);
 
   // Filter reviews
   const filteredReviews = useMemo(() => {
@@ -23,7 +33,7 @@ export default function Testimonials() {
     return reviewsList.filter(r => r.platformUsed === filterPlatform);
   }, [reviewsList, filterPlatform]);
 
-  const handleSubmitReview = (e: React.FormEvent) => {
+  const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError('');
     if (!newName.trim() || !newText.trim() || !newRole.trim()) {
@@ -31,38 +41,36 @@ export default function Testimonials() {
       return;
     }
 
-    const customReview: Testimonial = {
-      id: 'custom-' + Math.floor(Math.random() * 10000),
-      name: newName,
-      role: newRole,
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80', // Default elegant avatar
-      rating: newRating,
-      text: newText,
-      platformUsed: newPlatform,
-      verified: true,
-      date: 'Agora mesmo'
-    };
-
-    setReviewsList([customReview, ...reviewsList]);
-    setSubmittedReview(true);
-    
-    // Reset form states
-    setNewName('');
-    setNewRole('');
-    setNewRating(5);
-    setNewText('');
-    setValidationError('');
-    
-    setTimeout(() => {
-      setSubmittedReview(false);
-      setShowForm(false);
-    }, 2500);
+    setIsSubmitting(true);
+    try {
+      const token = await getRecaptchaToken('testimonial');
+      const result = await submitTestimonial(
+        { name: newName.trim(), role: newRole.trim(), rating: newRating, text: newText.trim(), platformUsed: newPlatform },
+        token
+      );
+      if (!result.ok) {
+        setValidationError(result.error || 'Falha ao enviar depoimento.');
+        return;
+      }
+      setSubmittedReview(true);
+      // Reset form states
+      setNewName('');
+      setNewRole('');
+      setNewRating(5);
+      setNewText('');
+      setTimeout(() => {
+        setSubmittedReview(false);
+        setShowForm(false);
+      }, 4000);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <section id="depoimentos" className="py-20 bg-white relative">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
+
         {/* Title */}
         <div className="text-center max-w-3xl mx-auto mb-12">
           <span className="text-xs uppercase font-black bg-purple-50 border border-primary/20 text-primary px-3 py-1.5 rounded-full tracking-wider">
@@ -127,7 +135,7 @@ export default function Testimonials() {
         {/* Reviews Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filteredReviews.map((rev) => (
-            <div 
+            <div
               key={rev.id}
               className="bg-slate-50 rounded-lg p-6 border border-slate-200 flex flex-col justify-between hover:border-primary/40 transition-all duration-200 relative group h-full"
             >
@@ -147,10 +155,10 @@ export default function Testimonials() {
 
               {/* Reviewer Details Footer */}
               <div className="flex items-center gap-3 border-t border-slate-200 pt-4 mt-auto">
-                <img 
-                  src={rev.avatar} 
-                  alt={rev.name} 
-                  className="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0" 
+                <img
+                  src={rev.avatar || DEFAULT_AVATAR}
+                  alt={rev.name}
+                  className="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0"
                   referrerPolicy="no-referrer"
                 />
                 <div>
@@ -178,14 +186,14 @@ export default function Testimonials() {
         <div className="mt-12 text-center" id="reviews-form-injector-panel">
           {showForm ? (
             <div className="bg-slate-50 rounded-xl p-6 sm:p-8 border border-slate-200 shadow-md text-left max-w-xl mx-auto animate-scale-up">
-              
+
               {submittedReview ? (
                 <div className="text-center py-6 space-y-3">
                   <div className="mx-auto bg-green-50 text-green-600 p-2 rounded-full inline-block">
                     <CheckCircle2 className="h-10 w-10 text-green-500 fill-current text-white rounded-full" />
                   </div>
                   <h4 className="font-bold text-slate-800 text-lg">Depoimento Enviado!</h4>
-                  <p className="text-slate-500 text-xs font-semibold">Seu depoimento foi aprovado temporariamente e adicionado aos feeds ao vivo.</p>
+                  <p className="text-slate-500 text-xs font-semibold">Obrigado! Seu depoimento foi enviado e aparecerá no site após a aprovação da nossa equipe.</p>
                 </div>
               ) : (
                 <form onSubmit={handleSubmitReview} className="space-y-4">
@@ -213,10 +221,10 @@ export default function Testimonials() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase block">Sua Profissão ou Bio</label>
+                      <label className="text-[10px] font-black text-slate-400 uppercase block">Sua Profissão ou @ da rede</label>
                       <input
                         type="text"
-                        placeholder="Ex: Empreendedora"
+                        placeholder="Ex: @amanda ou Empreendedora"
                         value={newRole}
                         onChange={(e) => setNewRole(e.target.value)}
                         className="w-full bg-white border border-slate-200 text-xs font-semibold rounded py-2 px-3 focus:outline-none focus:border-primary text-slate-800"
@@ -273,11 +281,16 @@ export default function Testimonials() {
 
                   <button
                     type="submit"
-                    className="w-full bg-primary hover:bg-blue-700 text-white font-bold py-3 text-xs uppercase tracking-wider cursor-pointer rounded"
+                    disabled={isSubmitting}
+                    className="w-full bg-primary hover:bg-blue-700 disabled:opacity-60 text-white font-bold py-3 text-xs uppercase tracking-wider cursor-pointer rounded"
                     id="submit-custom-review-btn"
                   >
-                    Publicar Meu Depoimento
+                    {isSubmitting ? 'Enviando...' : 'Enviar Meu Depoimento'}
                   </button>
+
+                  <p className="text-[10px] text-slate-400 text-center font-medium">
+                    Protegido por reCAPTCHA. Seu depoimento passa por moderação antes de ser publicado.
+                  </p>
                 </form>
               )}
 

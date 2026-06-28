@@ -417,6 +417,89 @@ export async function deleteCommentFromServer(id: string): Promise<void> {
   if (!res.ok) throw new Error('Failed to delete comment');
 }
 
+// --- Testimonials (home reviews) ---
+export interface TestimonialItem {
+  id: string;
+  name: string;
+  role: string;
+  avatar: string;
+  rating: number;
+  text: string;
+  platformUsed: string;
+  verified: boolean;
+  date: string;
+  status: 'approved' | 'pending' | 'hidden';
+  createdAt: string;
+}
+
+export async function fetchTestimonials(): Promise<TestimonialItem[]> {
+  try {
+    const res = await fetch('/api/testimonials');
+    if (!res.ok) throw new Error('Failed to fetch testimonials');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching testimonials:', error);
+    return [];
+  }
+}
+
+export async function fetchAllTestimonials(): Promise<TestimonialItem[]> {
+  try {
+    const res = await fetch('/api/testimonials?all=1');
+    if (!res.ok) throw new Error('Failed to fetch testimonials');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching all testimonials:', error);
+    return [];
+  }
+}
+
+export async function submitTestimonial(
+  payload: { name: string; role: string; rating: number; text: string; platformUsed: string },
+  recaptchaToken?: string | null
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch('/api/testimonials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, recaptchaToken })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data.error || 'Falha ao enviar depoimento.' };
+    return { ok: true };
+  } catch (error) {
+    console.error('Error submitting testimonial:', error);
+    return { ok: false, error: 'Erro de conexão ao enviar depoimento.' };
+  }
+}
+
+export async function saveTestimonialToServer(payload: Partial<TestimonialItem>): Promise<TestimonialItem | null> {
+  const res = await fetch('/api/testimonials/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to save testimonial');
+  }
+  return (await res.json()).testimonial;
+}
+
+export async function setTestimonialStatus(id: string, status: 'approved' | 'hidden' | 'pending'): Promise<void> {
+  const res = await fetch(`/api/testimonials/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status })
+  });
+  if (!res.ok) throw new Error('Failed to update testimonial');
+}
+
+export async function deleteTestimonialFromServer(id: string): Promise<void> {
+  const res = await fetch(`/api/testimonials/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to delete testimonial');
+}
+
 export interface CookieChoices {
   necessary: boolean;
   analytics: boolean;
