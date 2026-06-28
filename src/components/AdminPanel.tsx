@@ -987,10 +987,6 @@ export default function AdminPanel({
                 <Lock className="h-4 w-4" />
                 <span>Sair do Painel</span>
               </button>
-              
-              <div className="p-2 text-[9px] text-slate-400 font-semibold bg-slate-100 rounded-lg leading-snug mt-2">
-                Modificações aplicam-se instantaneamente na calculadora e catálogo.
-              </div>
             </div>
           </div>
 
@@ -1438,6 +1434,32 @@ export default function AdminPanel({
                           onChange={(e) => setEditingPlan(prev => prev ? ({ ...prev, name: e.target.value }) : null)}
                           className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800"
                         />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase block">Rede Social</label>
+                        <select
+                          value={editingPlan.platform}
+                          onChange={(e) => setEditingPlan(prev => prev ? ({ ...prev, platform: e.target.value as SocialPlatform }) : null)}
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800"
+                        >
+                          {SOCIAL_PLATFORMS.map((p) => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase block">Tipo de Serviço</label>
+                        <select
+                          value={editingPlan.type}
+                          onChange={(e) => setEditingPlan(prev => prev ? ({ ...prev, type: e.target.value as PlanItem['type'] }) : null)}
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800"
+                        >
+                          <option value="followers">Seguidores</option>
+                          <option value="likes">Curtidas</option>
+                          <option value="views">Visualizações</option>
+                        </select>
                       </div>
 
                       <div className="space-y-1">
