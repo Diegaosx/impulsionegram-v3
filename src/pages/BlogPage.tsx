@@ -38,7 +38,7 @@ export default function BlogPage({ homeContent, company, siteName, logoUrl }: Bl
         logoUrl={logoUrl}
       />
 
-      <BlogView onNavigate={handleNavigate} />
+      <BlogView onNavigate={handleNavigate} siteName={siteName} logoUrl={logoUrl} />
 
       <Footer
         onNavigate={handleNavigate}

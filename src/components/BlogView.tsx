@@ -27,55 +27,82 @@ import { getRecaptchaToken } from '../utils/recaptcha';
 import { formatDateTime } from '../utils/datetime';
 import { applyArticleCode, clearArticleCode } from '../utils/codeInjection';
 
-// --- SEO HELPER FUNCTION ---
-const updateSEO = (title: string, description: string, image?: string) => {
-  document.title = `${title} | Blog ImpulsioneGram`;
+// --- SEO HELPERS ---
 
-  // Meta description
-  let metaDesc = document.querySelector('meta[name="description"]');
-  if (!metaDesc) {
-    metaDesc = document.createElement('meta');
-    metaDesc.setAttribute('name', 'description');
-    document.head.appendChild(metaDesc);
+// Upsert a <meta> tag selected by an attribute/value pair.
+function upsertMeta(attr: 'name' | 'property', key: string, content: string) {
+  let el = document.head.querySelector(`meta[${attr}="${key}"]`);
+  if (!el) {
+    el = document.createElement('meta');
+    el.setAttribute(attr, key);
+    document.head.appendChild(el);
   }
-  metaDesc.setAttribute('content', description);
+  el.setAttribute('content', content);
+}
 
-  // OG Title
-  let ogTitle = document.querySelector('meta[property="og:title"]');
-  if (!ogTitle) {
-    ogTitle = document.createElement('meta');
-    ogTitle.setAttribute('property', 'og:title');
-    document.head.appendChild(ogTitle);
+// Upsert the single <link rel="canonical"> tag.
+function upsertCanonical(url: string) {
+  let el = document.head.querySelector('link[rel="canonical"]');
+  if (!el) {
+    el = document.createElement('link');
+    el.setAttribute('rel', 'canonical');
+    document.head.appendChild(el);
   }
-  ogTitle.setAttribute('content', title);
+  el.setAttribute('href', url);
+}
 
-  // OG Description
-  let ogDesc = document.querySelector('meta[property="og:description"]');
-  if (!ogDesc) {
-    ogDesc = document.createElement('meta');
-    ogDesc.setAttribute('property', 'og:description');
-    document.head.appendChild(ogDesc);
-  }
-  ogDesc.setAttribute('content', description);
+// Inject (or replace) a JSON-LD structured-data block, tagged by id so it can
+// be swapped on navigation. Pass null to remove it.
+function setJsonLd(id: string, data: object | null) {
+  const selector = `script[type="application/ld+json"][data-seo="${id}"]`;
+  document.head.querySelector(selector)?.remove();
+  if (!data) return;
+  const script = document.createElement('script');
+  script.type = 'application/ld+json';
+  script.setAttribute('data-seo', id);
+  script.text = JSON.stringify(data);
+  document.head.appendChild(script);
+}
 
-  // OG Image
+interface SEOOptions {
+  title: string;
+  description: string;
+  brand: string;
+  canonical: string;
+  image?: string;
+  type?: 'website' | 'article';
+}
+
+// Apply title, description, canonical, robots and Open Graph / Twitter tags.
+function updateSEO({ title, description, brand, canonical, image, type = 'website' }: SEOOptions) {
+  document.title = `${title} | Blog ${brand}`;
+
+  upsertMeta('name', 'description', description);
+  upsertMeta('name', 'robots', 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1');
+  upsertCanonical(canonical);
+
+  upsertMeta('property', 'og:type', type);
+  upsertMeta('property', 'og:title', title);
+  upsertMeta('property', 'og:description', description);
+  upsertMeta('property', 'og:url', canonical);
+  upsertMeta('property', 'og:site_name', brand);
+  upsertMeta('name', 'twitter:card', image ? 'summary_large_image' : 'summary');
+  upsertMeta('name', 'twitter:title', title);
+  upsertMeta('name', 'twitter:description', description);
   if (image) {
-    let ogImg = document.querySelector('meta[property="og:image"]');
-    if (!ogImg) {
-      ogImg = document.createElement('meta');
-      ogImg.setAttribute('property', 'og:image');
-      document.head.appendChild(ogImg);
-    }
-    ogImg.setAttribute('content', image);
+    upsertMeta('property', 'og:image', image);
+    upsertMeta('name', 'twitter:image', image);
   }
-};
+}
 
 interface BlogViewProps {
   // Navigate to a landing-page section (the blog lives on its own route).
   onNavigate: (sectionId: string) => void;
+  siteName?: string;
+  logoUrl?: string;
 }
 
-export default function BlogView({ onNavigate }: BlogViewProps) {
+export default function BlogView({ onNavigate, siteName, logoUrl }: BlogViewProps) {
   // Routing is driven by react-router:
   // - /blog (main page, optional ?q= search)
   // - /blog/artigo/:slug (individual article)
@@ -175,22 +202,109 @@ export default function BlogView({ onNavigate }: BlogViewProps) {
     return () => clearArticleCode();
   }, [articleCode, activePost]);
 
-  // SEO Update Trigger
+  // SEO Update Trigger — title/description/canonical/OG plus JSON-LD structured
+  // data following Google's guidelines (Article + BreadcrumbList).
   useEffect(() => {
+    const brand = siteName || 'ImpulsioneGram';
+    const origin = window.location.origin;
+    const path = window.location.pathname;
+    const blogUrl = `${origin}/blog`;
+
+    const breadcrumb = (items: { name: string; url: string }[]) => ({
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: items.map((it, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        name: it.name,
+        item: it.url
+      }))
+    });
+
     if (activePost) {
-      updateSEO(activePost.title, activePost.description, activePost.image);
+      const canonical = `${origin}/blog/artigo/${activePost.slug}`;
+      updateSEO({
+        title: activePost.title,
+        description: activePost.description,
+        brand,
+        canonical,
+        image: activePost.image,
+        type: 'article'
+      });
+      if (activePost.publishedAt) {
+        upsertMeta('property', 'article:published_time', activePost.publishedAt);
+      }
+      (activePost.categories || []).forEach((c) => upsertMeta('property', 'article:section', c));
+
+      const publisher: any = {
+        '@type': 'Organization',
+        name: brand,
+        url: origin
+      };
+      if (logoUrl) publisher.logo = { '@type': 'ImageObject', url: logoUrl };
+
+      setJsonLd('article', {
+        '@context': 'https://schema.org',
+        '@type': 'BlogPosting',
+        headline: activePost.title,
+        description: activePost.description,
+        image: activePost.image ? [activePost.image] : undefined,
+        author: { '@type': 'Person', name: activePost.author || brand },
+        publisher,
+        datePublished: activePost.publishedAt || undefined,
+        dateModified: activePost.publishedAt || undefined,
+        mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
+        articleSection: activePost.categories && activePost.categories.length ? activePost.categories : undefined,
+        keywords: activePost.tags && activePost.tags.length ? activePost.tags.join(', ') : undefined,
+        url: canonical
+      });
+
+      const crumbs = [
+        { name: 'Início', url: origin + '/' },
+        { name: 'Blog', url: blogUrl }
+      ];
+      if (activePost.categories && activePost.categories[0]) {
+        crumbs.push({ name: activePost.categories[0], url: `${origin}/blog/categoria/${encodeURIComponent(activePost.categories[0])}` });
+      }
+      crumbs.push({ name: activePost.title, url: canonical });
+      setJsonLd('breadcrumb', breadcrumb(crumbs));
     } else if (currentCategory) {
-      updateSEO(
-        `Artigos sobre ${currentCategory}`,
-        `Confira os melhores artigos de marketing e crescimento social na categoria ${currentCategory} do nosso Blog.`
-      );
+      const canonical = `${origin}/blog/categoria/${encodeURIComponent(currentCategory)}`;
+      updateSEO({
+        title: `Artigos sobre ${currentCategory}`,
+        description: `Confira os melhores artigos de marketing e crescimento social na categoria ${currentCategory} do nosso Blog.`,
+        brand,
+        canonical
+      });
+      setJsonLd('article', null);
+      setJsonLd('breadcrumb', breadcrumb([
+        { name: 'Início', url: origin + '/' },
+        { name: 'Blog', url: blogUrl },
+        { name: currentCategory, url: canonical }
+      ]));
     } else {
-      updateSEO(
-        'Blog de Marketing de Redes Sociais e Engajamento',
-        'Dicas, estratégias, guias práticos e tendências de Instagram, TikTok e Marketing Digital no Blog oficial ImpulsioneGram.'
-      );
+      const canonical = activeSearchFilter ? `${blogUrl}` : `${origin}${path}`;
+      updateSEO({
+        title: 'Blog de Marketing de Redes Sociais e Engajamento',
+        description: `Dicas, estratégias, guias práticos e tendências de Instagram, TikTok e Marketing Digital no Blog oficial ${brand}.`,
+        brand,
+        canonical
+      });
+      setJsonLd('article', null);
+      setJsonLd('breadcrumb', breadcrumb([
+        { name: 'Início', url: origin + '/' },
+        { name: 'Blog', url: blogUrl }
+      ]));
     }
-  }, [activePost, currentCategory]);
+  }, [activePost, currentCategory, activeSearchFilter, siteName, logoUrl]);
+
+  // Remove blog-specific structured data when leaving the blog entirely.
+  useEffect(() => {
+    return () => {
+      setJsonLd('article', null);
+      setJsonLd('breadcrumb', null);
+    };
+  }, []);
 
   // Filter posts based on Category or Search queries
   const filteredPosts = useMemo(() => {

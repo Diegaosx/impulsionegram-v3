@@ -265,6 +265,7 @@ export interface BlogPostRecord {
   date: string;
   readTime: string;
   tags: string[];
+  publishedAt?: string; // ISO timestamp from the published_at column (for SEO)
 }
 
 function escapeHtml(s: string): string {
@@ -283,7 +284,7 @@ function legacyContentToHtml(arr: string[]): string {
 
 // Normalize stored posts (older posts may use a single `category` and a
 // paragraph array for content).
-function normalizePost(data: any): BlogPostRecord {
+function normalizePost(data: any, publishedAt?: string): BlogPostRecord {
   const categories = Array.isArray(data.categories)
     ? data.categories
     : (data.category ? [data.category] : []);
@@ -300,8 +301,14 @@ function normalizePost(data: any): BlogPostRecord {
     author: data.author || '',
     date: data.date || '',
     readTime: data.readTime || '',
-    tags: Array.isArray(data.tags) ? data.tags : []
+    tags: Array.isArray(data.tags) ? data.tags : [],
+    publishedAt
   };
+}
+
+function toIso(value: any): string | undefined {
+  if (!value) return undefined;
+  return value instanceof Date ? value.toISOString() : String(value);
 }
 
 export interface BlogCommentRecord {
@@ -315,13 +322,13 @@ export interface BlogCommentRecord {
 }
 
 export async function listBlogPosts(): Promise<BlogPostRecord[]> {
-  const result = await pool.query(`SELECT data FROM blog_posts ORDER BY published_at DESC`);
-  return result.rows.map((r) => normalizePost(r.data));
+  const result = await pool.query(`SELECT data, published_at FROM blog_posts ORDER BY published_at DESC`);
+  return result.rows.map((r) => normalizePost(r.data, toIso(r.published_at)));
 }
 
 export async function getBlogPost(slug: string): Promise<BlogPostRecord | null> {
-  const result = await pool.query(`SELECT data FROM blog_posts WHERE slug = $1`, [slug]);
-  return result.rows[0]?.data ? normalizePost(result.rows[0].data) : null;
+  const result = await pool.query(`SELECT data, published_at FROM blog_posts WHERE slug = $1`, [slug]);
+  return result.rows[0]?.data ? normalizePost(result.rows[0].data, toIso(result.rows[0].published_at)) : null;
 }
 
 export async function saveBlogPost(post: BlogPostRecord, publishedAt?: string): Promise<BlogPostRecord> {

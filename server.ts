@@ -495,6 +495,78 @@ app.put('/api/analytics', async (req, res) => {
   }
 });
 
+// --- SEO: sitemap.xml & robots.txt ---
+
+// Resolve the public base URL from the incoming request (works behind Railway's
+// proxy, which sets x-forwarded-proto/host).
+function publicBaseUrl(req: any): string {
+  const proto = String(req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim();
+  const host = String(req.headers['x-forwarded-host'] || req.headers['host'] || '').trim();
+  return `${proto}://${host}`;
+}
+
+function xmlEscape(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+app.get('/sitemap.xml', async (req, res) => {
+  try {
+    const base = publicBaseUrl(req);
+    const [posts, categories] = await Promise.all([listBlogPosts(), listBlogCategories()]);
+    const urls: string[] = [];
+    const push = (loc: string, lastmod?: string, changefreq?: string, priority?: string) => {
+      urls.push(
+        `  <url>\n    <loc>${xmlEscape(base + loc)}</loc>` +
+        (lastmod ? `\n    <lastmod>${lastmod}</lastmod>` : '') +
+        (changefreq ? `\n    <changefreq>${changefreq}</changefreq>` : '') +
+        (priority ? `\n    <priority>${priority}</priority>` : '') +
+        `\n  </url>`
+      );
+    };
+
+    // Static, indexable pages.
+    push('/', undefined, 'weekly', '1.0');
+    push('/blog', undefined, 'daily', '0.8');
+    // Article pages.
+    for (const p of posts) {
+      const lastmod = p.publishedAt ? p.publishedAt.slice(0, 10) : undefined;
+      push(`/blog/artigo/${p.slug}`, lastmod, 'monthly', '0.7');
+    }
+    // Category pages.
+    for (const c of categories) {
+      push(`/blog/categoria/${encodeURIComponent(c)}`, undefined, 'weekly', '0.5');
+    }
+
+    const xml =
+      `<?xml version="1.0" encoding="UTF-8"?>\n` +
+      `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+      urls.join('\n') +
+      `\n</urlset>\n`;
+    res.set('Content-Type', 'application/xml; charset=utf-8');
+    res.send(xml);
+  } catch (e: any) {
+    res.status(500).send(`<!-- sitemap error: ${e.message} -->`);
+  }
+});
+
+app.get('/robots.txt', (req, res) => {
+  const base = publicBaseUrl(req);
+  const body =
+    `User-agent: *\n` +
+    `Allow: /\n` +
+    `Disallow: /dashboard\n` +
+    `Disallow: /login\n` +
+    `Disallow: /api/\n\n` +
+    `Sitemap: ${base}/sitemap.xml\n`;
+  res.set('Content-Type', 'text/plain; charset=utf-8');
+  res.send(body);
+});
+
 // 6. Post new order checkout
 app.post('/api/orders', async (req, res) => {
   try {
