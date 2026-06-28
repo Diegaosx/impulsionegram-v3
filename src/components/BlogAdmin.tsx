@@ -1,7 +1,7 @@
 import { useEffect, useState, FormEvent } from 'react';
 import {
   Plus, Pencil, Trash2, Save, Upload, FileText, MessageSquare,
-  Eye, EyeOff, ArrowLeft, Image as ImageIcon, Tag, FolderTree
+  Eye, EyeOff, ArrowLeft, Image as ImageIcon, Tag, FolderTree, ExternalLink
 } from 'lucide-react';
 import {
   BlogPost, BlogComment,
@@ -12,6 +12,7 @@ import {
 } from '../utils/storage';
 import { formatDateTime } from '../utils/datetime';
 import ChipMultiInput from './ChipMultiInput';
+import RichTextEditor from './RichTextEditor';
 
 interface BlogAdminProps {
   triggerSuccess: (msg: string) => void;
@@ -28,12 +29,12 @@ interface PostForm {
   date: string;
   readTime: string;
   tags: string[];
-  contentText: string;
+  content: string;
 }
 
 const EMPTY_FORM: PostForm = {
   slug: '', title: '', description: '', categories: [],
-  image: '', author: '', date: '', readTime: '5 min', tags: [], contentText: ''
+  image: '', author: '', date: '', readTime: '5 min', tags: [], content: ''
 };
 
 function slugify(text: string): string {
@@ -96,7 +97,7 @@ export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminPro
       date: post.date,
       readTime: post.readTime,
       tags: post.tags || [],
-      contentText: (post.content || []).join('\n\n')
+      content: post.content || ''
     });
     setIsNew(false);
     setIsEditing(true);
@@ -132,7 +133,7 @@ export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminPro
         slug: slugify(form.slug),
         title: form.title.trim(),
         description: form.description.trim(),
-        content: form.contentText.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean),
+        content: form.content,
         categories: form.categories,
         image: form.image.trim(),
         author: form.author.trim(),
@@ -349,11 +350,9 @@ export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminPro
             </div>
 
             <div className="space-y-1.5 md:col-span-2">
-              <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Conteúdo (separe os parágrafos com uma linha em branco)</label>
-              <textarea rows={12} value={form.contentText} onChange={(e) => setForm(prev => ({ ...prev, contentText: e.target.value }))}
-                placeholder={'Primeiro parágrafo...\n\nSegundo parágrafo...\n\n1. Item de lista numerada\n\n• Item com marcador'}
-                className="w-full bg-slate-50 border border-slate-200 text-xs font-medium rounded-lg p-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-y leading-relaxed" />
-              <span className="text-[10px] text-slate-400 block">Linhas iniciadas com "1." viram destaque e com "•" viram itens de lista.</span>
+              <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Conteúdo</label>
+              <RichTextEditor value={form.content} onChange={(html) => setForm(prev => ({ ...prev, content: html }))} />
+              <span className="text-[10px] text-slate-400 block">Use a barra de ferramentas (negrito, títulos, listas, links, imagens) ou alterne para "HTML" para editar o código diretamente.</span>
             </div>
           </div>
 
@@ -404,6 +403,7 @@ export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminPro
                     <td className="p-4 text-slate-500 font-mono">{post.date || '—'}</td>
                     <td className="p-4">
                       <div className="flex gap-2 justify-end">
+                        <a href={`/blog/artigo/${post.slug}`} target="_blank" rel="noopener noreferrer" className="p-1.5 hover:bg-blue-100 hover:text-blue-600 text-slate-500 rounded cursor-pointer inline-block" title="Visualizar artigo"><ExternalLink className="h-4 w-4" /></a>
                         <button onClick={() => startEdit(post)} className="p-1.5 hover:bg-purple-100 hover:text-primary text-slate-500 rounded cursor-pointer" title="Editar"><Pencil className="h-4 w-4" /></button>
                         <button onClick={() => handleDelete(post.slug)} className="p-1.5 hover:bg-red-100 hover:text-red-600 text-slate-500 rounded cursor-pointer" title="Excluir"><Trash2 className="h-4 w-4" /></button>
                       </div>

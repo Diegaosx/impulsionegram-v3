@@ -270,7 +270,7 @@ export interface BlogPost {
   slug: string;
   title: string;
   description: string;
-  content: string[];
+  content: string; // HTML
   categories: string[];
   image: string;
   author: string;

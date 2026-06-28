@@ -360,30 +360,11 @@ export default function BlogView({ onNavigate }: BlogViewProps) {
                     {activePost.title}
                   </h1>
 
-                  {/* Paragraphs of content */}
-                  <div className="space-y-5 text-slate-700 leading-relaxed font-medium text-sm sm:text-base">
-                    {activePost.content.map((para, idx) => {
-                      if (para.startsWith('1.') || para.startsWith('2.') || para.startsWith('3.')) {
-                        return (
-                          <div key={idx} className="pl-4 border-l-2 border-primary/40 my-3 font-semibold text-slate-900">
-                            {para}
-                          </div>
-                        );
-                      }
-                      if (para.startsWith('•')) {
-                        return (
-                          <li key={idx} className="list-none pl-6 relative before:content-[''] before:absolute before:left-2 before:top-2.5 before:w-1.5 before:h-1.5 before:bg-primary before:rounded-full my-2">
-                            {para.replace('•', '').trim()}
-                          </li>
-                        );
-                      }
-                      return (
-                        <p key={idx} className="indent-0">
-                          {para}
-                        </p>
-                      );
-                    })}
-                  </div>
+                  {/* Article content (HTML) */}
+                  <div
+                    className="blog-content text-slate-700 leading-relaxed font-medium text-sm sm:text-base"
+                    dangerouslySetInnerHTML={{ __html: activePost.content }}
+                  />
 
                   {/* Tags */}
                   <div className="flex flex-wrap gap-2 mt-8 pt-6 border-t border-slate-100">
