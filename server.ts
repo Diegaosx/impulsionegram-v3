@@ -58,6 +58,7 @@ import {
   deleteContactMessage
 } from './db';
 import { isMercadoPagoConfigured, createPixPayment, getPaymentStatus } from './mercadopago';
+import { isSmmConfigured, smmAddOrder, smmOrderStatus, smmBalance, smmServices, isSmmCompleted, buildTargetLink } from './smm';
 import { uploadToR2, isR2Configured } from './r2';
 import { verifyRecaptcha } from './recaptcha';
 import { stripLinks } from './sanitize';
@@ -291,6 +292,63 @@ function publicUser(a: any) {
   return { id: a.id, name: a.name, email: a.email, phone: a.phone, role: a.role, avatar: a.avatar, createdAt: a.createdAt };
 }
 
+// --- SMM delivery helpers ---
+
+// Send a paid order to the SMM panel (gated; idempotent on smmOrderId).
+async function dispatchOrderToSmm(order: any): Promise<void> {
+  if (!order || order.smmOrderId) return;
+  const integ = await getIntegrations();
+  if (!isSmmConfigured(integ.smmApiUrl, integ.smmApiKey)) return;
+  const db = await readDB();
+  const svc = (db.services as any[]).find((s) => s.platform === order.platform && s.type === order.serviceType);
+  const serviceId = svc?.smmServiceId;
+  if (!serviceId) {
+    console.warn(`SMM: sem smmServiceId para ${order.platform}/${order.serviceType} (pedido ${order.id}).`);
+    return;
+  }
+  const link = order.postUrl && String(order.postUrl).trim()
+    ? String(order.postUrl).trim()
+    : buildTargetLink(order.platform, order.username);
+  try {
+    const r = await smmAddOrder(integ.smmApiUrl, integ.smmApiKey, {
+      service: String(serviceId),
+      link,
+      quantity: Number(order.quantity) || 0
+    });
+    await patchOrderData(order.id, { smmOrderId: r.order, smmStatus: 'Enviado', smmError: '' });
+  } catch (e: any) {
+    console.error('SMM dispatch failed:', e?.message || e);
+    await patchOrderData(order.id, { smmError: String(e?.message || e) });
+  }
+}
+
+// Refresh delivery status from the SMM panel; marks delivered when complete.
+async function refreshSmmStatus(order: any): Promise<string> {
+  if (!order || !order.smmOrderId || order.status === 'entregue') return order?.status;
+  const integ = await getIntegrations();
+  if (!isSmmConfigured(integ.smmApiUrl, integ.smmApiKey)) return order.status;
+  try {
+    const st = await smmOrderStatus(integ.smmApiUrl, integ.smmApiKey, order.smmOrderId);
+    const patch: any = { smmStatus: st.status, smmStartCount: st.startCount, smmRemains: st.remains };
+    if (isSmmCompleted(st.status)) patch.status = 'entregue';
+    await patchOrderData(order.id, patch);
+    return patch.status || order.status;
+  } catch (e: any) {
+    console.error('SMM status refresh failed:', e?.message || e);
+    return order.status;
+  }
+}
+
+// Confirm payment: flip to "pago" (once) and dispatch to the SMM panel.
+async function handleOrderPaid(orderId: string): Promise<void> {
+  const order = await getOrderById(orderId);
+  if (!order) return;
+  if (order.status !== 'pago' && order.status !== 'entregue') {
+    await patchOrderData(orderId, { status: 'pago', paymentStatus: 'approved' });
+  }
+  await dispatchOrderToSmm({ ...order, status: 'pago' });
+}
+
 // Register a new client account.
 app.post('/api/auth/register', async (req, res) => {
   try {
@@ -374,16 +432,48 @@ app.put('/api/auth/profile', async (req, res) => {
   }
 });
 
-// Orders belonging to the logged-in user (client area).
+// Orders belonging to the logged-in user (client area). Refreshes SMM delivery
+// status for paid orders so the client sees progress and "entregue".
 app.get('/api/my/orders', async (req, res) => {
   try {
     const payload = getPayload(req)!;
     const account = await getAccountById(payload.sub);
     if (!account) return res.json([]);
-    const orders = await listOrdersForAccount(account.id, account.email);
+    let orders = await listOrdersForAccount(account.id, account.email);
+    const toRefresh = orders.filter((o) => o.smmOrderId && o.status === 'pago');
+    if (toRefresh.length) {
+      await Promise.all(toRefresh.map((o) => refreshSmmStatus(o)));
+      orders = await listOrdersForAccount(account.id, account.email);
+    }
     res.json(orders);
   } catch (e: any) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// --- SMM panel (admin helpers) ---
+app.get('/api/smm/balance', async (req, res) => {
+  try {
+    const integ = await getIntegrations();
+    if (!isSmmConfigured(integ.smmApiUrl, integ.smmApiKey)) {
+      return res.status(400).json({ error: 'Configure a URL e a API Key do painel SMM em Integrações.' });
+    }
+    res.json(await smmBalance(integ.smmApiUrl, integ.smmApiKey));
+  } catch (e: any) {
+    res.status(502).json({ error: e.message });
+  }
+});
+
+app.get('/api/smm/services', async (req, res) => {
+  try {
+    const integ = await getIntegrations();
+    if (!isSmmConfigured(integ.smmApiUrl, integ.smmApiKey)) {
+      return res.status(400).json({ error: 'Configure a URL e a API Key do painel SMM em Integrações.' });
+    }
+    const list = await smmServices(integ.smmApiUrl, integ.smmApiKey);
+    res.json(list);
+  } catch (e: any) {
+    res.status(502).json({ error: e.message });
   }
 });
 
@@ -477,7 +567,7 @@ app.get('/api/my/orders/:id/payment', async (req, res) => {
         try {
           const pay = await getPaymentStatus(integ.mercadoPagoAccessToken, order.mpPaymentId);
           if (pay.status === 'approved') {
-            await patchOrderData(order.id, { status: 'pago', paymentStatus: 'approved' });
+            await handleOrderPaid(order.id);
             status = 'pago';
           } else if (pay.status === 'cancelled' || pay.status === 'rejected') {
             await patchOrderData(order.id, { paymentStatus: pay.status });
@@ -518,7 +608,7 @@ app.post('/api/mercadopago/webhook', async (req, res) => {
         const pay = await getPaymentStatus(integ.mercadoPagoAccessToken, paymentId);
         if (pay.externalReference) {
           if (pay.status === 'approved') {
-            await patchOrderData(pay.externalReference, { status: 'pago', paymentStatus: 'approved' });
+            await handleOrderPaid(pay.externalReference);
           } else {
             await patchOrderData(pay.externalReference, { paymentStatus: pay.status });
           }

@@ -211,6 +211,11 @@ function OrdersList({ orders, loading, onBuy }: { orders: AdminOrder[]; loading:
               <p className="text-[11px] text-slate-400 font-semibold mt-0.5">
                 {o.quantity ? `${Number(o.quantity).toLocaleString('pt-BR')} • ` : ''}{o.platform || ''} • #{o.id}
               </p>
+              {(o.smmStatus || o.smmRemains) && o.status !== 'entregue' && (
+                <p className="text-[10px] text-sky-600 font-bold mt-0.5">
+                  Entrega: {o.smmStatus || 'em andamento'}{o.smmRemains ? ` • faltam ${Number(o.smmRemains).toLocaleString('pt-BR')}` : ''}
+                </p>
+              )}
               <p className="text-[10px] text-slate-300 font-mono mt-0.5">{o.date ? formatDateTime(o.date) : ''}</p>
             </div>
             <div className="text-right shrink-0">
