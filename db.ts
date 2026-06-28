@@ -1,7 +1,7 @@
 import { Pool, PoolClient } from 'pg';
 
 // Initial catalog data is bundled so a fresh database can be seeded on first run.
-import { SERVICES, PREBUILT_PLANS } from './src/data';
+import { SERVICES, PREBUILT_PLANS, TESTIMONIALS } from './src/data';
 
 // --- Shared domain types (also consumed by server.ts) ---
 export interface UserItem {
@@ -216,6 +216,14 @@ async function createSchema(client: PoolClient) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`
   );
+  await client.query(
+    `CREATE TABLE IF NOT EXISTS testimonials (
+      id         TEXT PRIMARY KEY,
+      data       JSONB NOT NULL,
+      status     TEXT NOT NULL DEFAULT 'approved',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`
+  );
 }
 
 // --- Blog categories & tags ---
@@ -396,6 +404,108 @@ export async function deleteComment(id: string): Promise<void> {
   await pool.query(`DELETE FROM blog_comments WHERE id = $1`, [id]);
 }
 
+// --- Testimonials (home reviews) ---
+export interface TestimonialRecord {
+  id: string;
+  name: string;
+  role: string;
+  avatar: string;
+  rating: number;
+  text: string;
+  platformUsed: string;
+  verified: boolean;
+  date: string;
+  status: 'approved' | 'pending' | 'hidden';
+  createdAt: string;
+}
+
+function mapTestimonial(r: any): TestimonialRecord {
+  const d = r.data || {};
+  return {
+    id: r.id,
+    name: d.name || '',
+    role: d.role || '',
+    avatar: d.avatar || '',
+    rating: Number(d.rating) || 5,
+    text: d.text || '',
+    platformUsed: d.platformUsed || 'instagram',
+    verified: d.verified !== false,
+    date: d.date || '',
+    status: r.status,
+    createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at)
+  };
+}
+
+// Build the JSONB payload (everything except moderation columns).
+function testimonialPayload(t: Partial<TestimonialRecord>) {
+  return {
+    name: String(t.name || '').trim(),
+    role: String(t.role || '').trim(),
+    avatar: String(t.avatar || '').trim(),
+    rating: Math.min(5, Math.max(1, Number(t.rating) || 5)),
+    text: String(t.text || '').trim(),
+    platformUsed: String(t.platformUsed || 'instagram'),
+    verified: t.verified !== false,
+    date: String(t.date || '').trim()
+  };
+}
+
+export async function listTestimonials(approvedOnly: boolean): Promise<TestimonialRecord[]> {
+  const result = approvedOnly
+    ? await pool.query(`SELECT * FROM testimonials WHERE status = 'approved' ORDER BY created_at DESC`)
+    : await pool.query(`SELECT * FROM testimonials ORDER BY created_at DESC LIMIT 500`);
+  return result.rows.map(mapTestimonial);
+}
+
+export async function addTestimonial(
+  id: string,
+  data: Partial<TestimonialRecord>,
+  status: string
+): Promise<TestimonialRecord> {
+  const result = await pool.query(
+    `INSERT INTO testimonials (id, data, status) VALUES ($1, $2::jsonb, $3) RETURNING *`,
+    [id, JSON.stringify(testimonialPayload(data)), status]
+  );
+  return mapTestimonial(result.rows[0]);
+}
+
+// Admin create/update (upsert) keeping the moderation status.
+export async function saveTestimonial(
+  id: string,
+  data: Partial<TestimonialRecord>,
+  status: string
+): Promise<TestimonialRecord> {
+  const result = await pool.query(
+    `INSERT INTO testimonials (id, data, status) VALUES ($1, $2::jsonb, $3)
+     ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, status = EXCLUDED.status RETURNING *`,
+    [id, JSON.stringify(testimonialPayload(data)), status]
+  );
+  return mapTestimonial(result.rows[0]);
+}
+
+export async function updateTestimonialStatus(id: string, status: string): Promise<void> {
+  await pool.query(`UPDATE testimonials SET status = $2 WHERE id = $1`, [id, status]);
+}
+
+export async function deleteTestimonial(id: string): Promise<void> {
+  await pool.query(`DELETE FROM testimonials WHERE id = $1`, [id]);
+}
+
+async function seedTestimonialsIfEmpty(client: PoolClient) {
+  const { rows } = await client.query('SELECT COUNT(*)::int AS count FROM testimonials');
+  if (rows[0]?.count > 0) return;
+  console.log('Seeding testimonials...');
+  for (let i = 0; i < TESTIMONIALS.length; i++) {
+    const t = TESTIMONIALS[i];
+    const createdAt = new Date(Date.now() - i * 3600000).toISOString();
+    await client.query(
+      `INSERT INTO testimonials (id, data, status, created_at) VALUES ($1, $2::jsonb, 'approved', $3)
+       ON CONFLICT (id) DO NOTHING`,
+      [t.id, JSON.stringify(testimonialPayload(t as any)), createdAt]
+    );
+  }
+}
+
 async function seedBlogIfEmpty(client: PoolClient) {
   const { rows } = await client.query('SELECT COUNT(*)::int AS count FROM blog_posts');
   if (rows[0]?.count > 0) return;
@@ -547,6 +657,8 @@ export async function initDB(): Promise<void> {
     await seedBlogIfEmpty(client);
     // Backfill categories/tags for databases seeded before they existed.
     await backfillCategoriesAndTags(client);
+    // Seed home testimonials on a fresh testimonials table.
+    await seedTestimonialsIfEmpty(client);
 
     console.log('PostgreSQL database initialized successfully.');
   } finally {

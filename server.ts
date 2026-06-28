@@ -33,7 +33,12 @@ import {
   addBlogCategory,
   deleteBlogCategory,
   listBlogTags,
-  deleteBlogTag
+  deleteBlogTag,
+  listTestimonials,
+  addTestimonial,
+  saveTestimonial,
+  updateTestimonialStatus,
+  deleteTestimonial
 } from './db';
 import { uploadToR2, isR2Configured } from './r2';
 import { verifyRecaptcha } from './recaptcha';
@@ -428,6 +433,82 @@ app.get('/api/blog/tags', async (req, res) => {
 app.delete('/api/blog/tags/:name', async (req, res) => {
   try {
     await deleteBlogTag(req.params.name);
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- TESTIMONIALS (home reviews) ---
+
+// List testimonials. Public returns approved only; admin (?all=1) returns all.
+app.get('/api/testimonials', async (req, res) => {
+  try {
+    const all = req.query.all === '1';
+    res.json(await listTestimonials(!all));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Submit a testimonial (public). Stored as 'pending' until an admin approves it.
+// Protected by reCAPTCHA v3 if configured.
+app.post('/api/testimonials', async (req, res) => {
+  try {
+    const { name, role, rating, text, platformUsed, recaptchaToken } = req.body || {};
+    if (!name || !text) {
+      return res.status(400).json({ error: 'Nome e depoimento são obrigatórios.' });
+    }
+    const verification = await verifyRecaptcha(recaptchaToken, req.ip);
+    if (!verification.ok) {
+      return res.status(400).json({ error: 'Falha na verificação de segurança. Tente novamente.' });
+    }
+    const id = `t_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+    const created = await addTestimonial(
+      id,
+      { name, role, rating, text, platformUsed, verified: true, date: 'Agora mesmo' },
+      'pending'
+    );
+    res.json({ success: true, testimonial: created });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Create or update a testimonial (admin). Defaults to approved.
+app.post('/api/testimonials/save', async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!body.name || !body.text) {
+      return res.status(400).json({ error: 'name and text are required' });
+    }
+    const id = body.id || `t_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+    const status = ['approved', 'pending', 'hidden'].includes(body.status) ? body.status : 'approved';
+    const saved = await saveTestimonial(id, body, status);
+    res.json({ success: true, testimonial: saved });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Update a testimonial status (admin): approved | hidden | pending
+app.put('/api/testimonials/:id', async (req, res) => {
+  try {
+    const status = String(req.body?.status || '');
+    if (!['approved', 'hidden', 'pending'].includes(status)) {
+      return res.status(400).json({ error: 'invalid status' });
+    }
+    await updateTestimonialStatus(req.params.id, status);
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Delete a testimonial (admin)
+app.delete('/api/testimonials/:id', async (req, res) => {
+  try {
+    await deleteTestimonial(req.params.id);
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
