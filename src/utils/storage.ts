@@ -17,6 +17,8 @@ export interface AdminOrder {
   accountId?: string;
   serviceType?: string;
   postUrl?: string;
+  couponCode?: string;
+  couponDiscountPercent?: number;
   // Mercado Pago PIX fields.
   mpPaymentId?: string;
   pixQrCode?: string;
@@ -165,6 +167,86 @@ export interface NewOrderInput {
   paymentMethod: 'PIX' | 'Card';
   targetProfile: string;
   postUrl?: string;
+  couponCode?: string;
+}
+
+// --- Flash offer / promo bar coupon ---
+export interface OfferConfig {
+  active: boolean;
+  text: string;
+  discountPercent: number;
+  couponCode: string;
+  endsAt: string;
+}
+
+export interface OfferSettings {
+  enabled: boolean;
+  text: string;
+  discountPercent: number;
+  couponCode: string;
+  endsAt: string;
+}
+
+// Public offer config (drives the promo bar + checkout coupon).
+export async function fetchOffer(): Promise<OfferConfig | null> {
+  try {
+    const res = await fetch('/api/offer');
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+// Admin: full offer settings.
+export async function fetchOfferAdmin(): Promise<OfferSettings | null> {
+  try {
+    const res = await fetch('/api/offer/admin');
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function saveOffer(data: OfferSettings): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch('/api/offer', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  const out = await res.json().catch(() => ({}));
+  return res.ok ? { ok: true } : { ok: false, error: out.error || 'Falha ao salvar a oferta.' };
+}
+
+// --- Editable site pages (privacy / terms / warranty) ---
+export type PageSlug = 'privacy' | 'terms' | 'warranty';
+
+export interface SitePage {
+  slug: PageSlug;
+  title: string;
+  html: string;
+  updatedAt: string;
+}
+
+export async function fetchPage(slug: PageSlug): Promise<SitePage | null> {
+  try {
+    const res = await fetch(`/api/pages/${slug}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function savePageContent(slug: PageSlug, data: { title: string; html: string }): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(`/api/pages/${slug}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  const out = await res.json().catch(() => ({}));
+  return res.ok ? { ok: true } : { ok: false, error: out.error || 'Falha ao salvar a página.' };
 }
 
 // Create an order for the logged-in client (status starts awaiting payment).

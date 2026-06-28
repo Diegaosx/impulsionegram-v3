@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { SERVICES, SOCIAL_PLATFORMS } from '../data';
 import { SocialPlatform, ServiceItem } from '../types';
 import { AuthUser, AdminOrder, checkAccountExists, registerAccount, createMyOrder } from '../utils/storage';
+import { useOffer } from '../utils/useOffer';
 import OrderConfirmation from './OrderConfirmation';
 import {
   Instagram, Youtube, Twitter, Facebook, Flame, Zap, Shield,
@@ -52,6 +53,15 @@ export default function InteractiveCalculator({
   const [confirmPassword, setConfirmPassword] = useState('');
   const paymentMethod: 'PIX' | 'Card' = 'PIX'; // PIX only for now
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  // Flash-offer coupon (auto-filled while the offer is active).
+  const { offer, active: offerActive } = useOffer();
+  const [coupon, setCoupon] = useState('');
+  useEffect(() => {
+    if (offerActive && offer?.couponCode) setCoupon((c) => (c ? c : offer.couponCode));
+  }, [offerActive, offer?.couponCode]);
+  const couponValid = !!(offerActive && offer && coupon.trim() && coupon.trim().toLowerCase() === offer.couponCode.toLowerCase());
+  const couponPercent = couponValid ? (offer?.discountPercent || 0) : 0;
   const [accountError, setAccountError] = useState('');
 
   // Handle outside notification trigger
@@ -210,7 +220,8 @@ export default function InteractiveCalculator({
       price: bulkMetrics.finalPrice,
       paymentMethod,
       targetProfile: targetProfile(),
-      postUrl: postUrl.trim()
+      postUrl: postUrl.trim(),
+      couponCode: couponValid ? coupon.trim() : ''
     });
     if (res.ok && res.order) {
       onAddOrderToStats();
@@ -640,9 +651,34 @@ export default function InteractiveCalculator({
                     </div>
                   </div>
 
+                  {offerActive && (
+                    <div>
+                      <label className="text-xs font-black uppercase text-slate-500 block mb-1">Cupom de desconto</label>
+                      <input
+                        type="text"
+                        value={coupon}
+                        onChange={(e) => setCoupon(e.target.value.toUpperCase())}
+                        placeholder="Digite o cupom"
+                        className={`w-full bg-slate-50 border text-sm rounded-xl py-3 px-4 focus:outline-none focus:ring-2 font-semibold uppercase tracking-wide ${couponValid ? 'border-green-500 focus:ring-green-500 text-green-700' : coupon.trim() ? 'border-red-400 focus:ring-red-400 text-red-600' : 'border-slate-200 focus:ring-blue-600 text-slate-800'}`}
+                      />
+                      {couponValid
+                        ? <p className="text-green-600 text-[11px] font-bold mt-1">Cupom aplicado: -{couponPercent}% OFF 🎉</p>
+                        : coupon.trim()
+                          ? <p className="text-red-500 text-[11px] font-bold mt-1">Cupom inválido ou expirado.</p>
+                          : null}
+                    </div>
+                  )}
+
                   <div className="bg-slate-50 rounded-xl border border-slate-200 p-3 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-500">Total do pedido</span>
-                    <span className="font-display font-black text-lg text-slate-900">R$ {bulkMetrics.finalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span className="font-display font-black text-lg text-slate-900 flex items-center gap-2">
+                      {couponValid && (
+                        <span className="text-xs line-through text-slate-400 font-bold">
+                          R$ {bulkMetrics.finalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      )}
+                      R$ {(bulkMetrics.finalPrice * (1 - couponPercent / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
                   </div>
 
                   <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl text-sm tracking-wide cursor-pointer flex items-center justify-center gap-2 shadow-lg" id="submit-info-btn">

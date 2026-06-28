@@ -6,6 +6,7 @@ import {
 import { ChatMessage } from '../types';
 import { CompanySettings } from '../utils/storage';
 import { useHideOnScroll } from '../utils/useHideOnScroll';
+import { useOffer } from '../utils/useOffer';
 
 interface FloatingWidgetsProps {
   onNavigate: (sectionId: string) => void;
@@ -25,9 +26,9 @@ export default function FloatingWidgets({ onNavigate, ordersCalculatedStat, home
   // Hide the promo bar together with the header on scroll down.
   const hidden = useHideOnScroll();
 
-  // Sticky Top Promo Countdown State
-  const [promoTime, setPromoTime] = useState(899); // 14 min 59 sec
-  
+  // Flash offer (top promo bar) — shared config + live countdown.
+  const { offer, active: offerActive, remaining: promoTime } = useOffer();
+
   // Chat Bot States
   const [showChat, setShowChat] = useState(false);
   const [typing, setTyping] = useState(false);
@@ -52,18 +53,12 @@ export default function FloatingWidgets({ onNavigate, ordersCalculatedStat, home
   // Cookie Consent banner
   const [showCookie, setShowCookie] = useState(true);
 
-  // Promo Timer counting down
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setPromoTime((prev) => (prev <= 0 ? 899 : prev - 1));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
   const formatPromoTimer = (sec: number) => {
-    const m = Math.floor(sec / 60);
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
     const s = sec % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
   };
 
   // Scroll chat to bottom on updates
@@ -163,27 +158,31 @@ export default function FloatingWidgets({ onNavigate, ordersCalculatedStat, home
 
   return (
     <>
-      {/* 1. STICKY TOP FLASH PROMO COUNTDOWN BAR */}
-      <div
-        className="fixed top-0 left-0 right-0 min-h-[3rem] py-2 sm:py-0 sm:h-12 bg-slate-900 text-white z-50 flex items-center justify-center px-4 font-bold text-[10px] sm:text-xs shadow-md border-b border-primary/30 transition-transform duration-300 will-change-transform"
-        style={{ transform: hidden ? 'translateY(-100%)' : 'translateY(0)' }}
-      >
-        <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2.5 text-center">
-          <Clock className="h-3.5 w-3.5 animate-pulse text-accent shrink-0" />
-          <span className="text-slate-100 uppercase tracking-wide">
-            {homeContent?.alertBannerText || "OFERTA RELÂMPAGO DE INVERNO: 20% OFF EXTRA NO PIX"}
-          </span>
-          <span className="text-accent font-mono tracking-wider tabular-nums font-black whitespace-nowrap">
-            Termina em: {formatPromoTimer(promoTime)}
-          </span>
-          <button 
-            onClick={() => onNavigate('calculadora')}
-            className="bg-accent hover:bg-yellow-400 text-slate-900 px-2 sm:px-3 py-0.5 sm:py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition-all shrink-0 hover:scale-105 active:scale-95 cursor-pointer"
-          >
-            Aproveitar
-          </button>
+      {/* 1. STICKY TOP FLASH PROMO COUNTDOWN BAR (only while the offer is active) */}
+      {offerActive && (
+        <div
+          className="fixed top-0 left-0 right-0 min-h-[3rem] py-2 sm:py-0 sm:h-12 bg-slate-900 text-white z-50 flex items-center justify-center px-4 font-bold text-[10px] sm:text-xs shadow-md border-b border-primary/30 transition-transform duration-300 will-change-transform"
+          style={{ transform: hidden ? 'translateY(-100%)' : 'translateY(0)' }}
+        >
+          <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2.5 text-center">
+            <Clock className="h-3.5 w-3.5 animate-pulse text-accent shrink-0" />
+            <span className="text-slate-100 uppercase tracking-wide">
+              {offer?.text || homeContent?.alertBannerText || "OFERTA RELÂMPAGO: 20% OFF EXTRA NO PIX"}
+            </span>
+            {promoTime !== null && promoTime > 0 && (
+              <span className="text-accent font-mono tracking-wider tabular-nums font-black whitespace-nowrap">
+                Termina em: {formatPromoTimer(promoTime)}
+              </span>
+            )}
+            <button
+              onClick={() => onNavigate('calculadora')}
+              className="bg-accent hover:bg-yellow-400 text-slate-900 px-2 sm:px-3 py-0.5 sm:py-1 rounded text-[9px] sm:text-[10px] font-black uppercase transition-all shrink-0 hover:scale-105 active:scale-95 cursor-pointer"
+            >
+              Aproveitar
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 2. FLOATING WHATSAPP BUTTON */}
       <a

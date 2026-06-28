@@ -110,9 +110,9 @@ export default function Footer({ onNavigate, onSetPlatformFilter, siteName, comp
               <button onClick={() => onNavigate('contato')} className="text-left hover:text-white transition-colors cursor-pointer">Fale Conosco</button>
               <button onClick={() => navigate('/blog')} className="text-left hover:text-white transition-colors cursor-pointer">Nossos Artigos</button>
               <button onClick={() => onNavigate('faq')} className="text-left hover:text-white transition-colors cursor-pointer">Perguntas Frequentes</button>
-              <a href="#termos" className="hover:text-white transition-colors">Termos de Serviço</a>
-              <a href="#privacidade" className="hover:text-white transition-colors">Política de Privacidade</a>
-              <a href="#garantia" className="hover:text-white transition-colors">Garantia Integrada</a>
+              <button onClick={() => navigate('/termos')} className="text-left hover:text-white transition-colors cursor-pointer">Termos de Uso</button>
+              <button onClick={() => navigate('/privacidade')} className="text-left hover:text-white transition-colors cursor-pointer">Política de Privacidade</button>
+              <button onClick={() => navigate('/garantia')} className="text-left hover:text-white transition-colors cursor-pointer">Garantia / Devolução</button>
             </div>
           </div>
 
