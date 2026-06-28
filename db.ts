@@ -1181,6 +1181,7 @@ export interface GeneralSettings {
   seoDescription: string;
   timezone: string;
   theme: string;
+  plansEnabled: boolean;
 }
 
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
@@ -1191,12 +1192,15 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   seoDescription:
     'Plataforma premium para impulsionar suas redes sociais com seguidores, curtidas e visualizações reais e brasileiros.',
   timezone: 'America/Recife',
-  theme: 'default'
+  theme: 'default',
+  plansEnabled: true
 };
 
 export async function getGeneralSettings(): Promise<GeneralSettings> {
   const result = await pool.query(`SELECT value FROM settings WHERE key = 'general'`);
-  return { ...DEFAULT_GENERAL_SETTINGS, ...(result.rows[0]?.value || {}) };
+  const merged = { ...DEFAULT_GENERAL_SETTINGS, ...(result.rows[0]?.value || {}) };
+  merged.plansEnabled = merged.plansEnabled !== false; // default on
+  return merged;
 }
 
 export async function saveGeneralSettings(data: Partial<GeneralSettings>): Promise<GeneralSettings> {

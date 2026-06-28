@@ -455,6 +455,7 @@ export interface GeneralSettings {
   seoDescription: string;
   timezone: string;
   theme: string;
+  plansEnabled?: boolean;
 }
 
 const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
