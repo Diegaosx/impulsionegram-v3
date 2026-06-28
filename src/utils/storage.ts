@@ -12,7 +12,11 @@ export interface AdminOrder {
   email: string;
   phone: string;
   date: string;
-  status: 'Pendente' | 'Processando' | 'Aprovado' | 'Entregue' | 'Cancelado';
+  status: string;
+  // Optional fields present on account-linked orders.
+  accountId?: string;
+  serviceType?: string;
+  postUrl?: string;
 }
 
 // REST Backend API calls
@@ -76,6 +80,33 @@ export async function fetchMyOrders(): Promise<AdminOrder[]> {
   } catch (error) {
     console.error('Error fetching my orders:', error);
     return [];
+  }
+}
+
+export interface NewOrderInput {
+  platform: string;
+  serviceType: string;
+  serviceLabel: string;
+  quantity: number;
+  price: number;
+  paymentMethod: 'PIX' | 'Card';
+  targetProfile: string;
+  postUrl?: string;
+}
+
+// Create an order for the logged-in client (status starts awaiting payment).
+export async function createMyOrder(input: NewOrderInput): Promise<{ ok: boolean; order?: AdminOrder; error?: string }> {
+  try {
+    const res = await fetch('/api/my/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data.error || 'Falha ao criar o pedido.' };
+    return { ok: true, order: data.order };
+  } catch {
+    return { ok: false, error: 'Falha de conexão ao criar o pedido.' };
   }
 }
 
