@@ -671,6 +671,9 @@ export interface IntegrationSettings {
   smtpFromName: string;
   smtpFromEmail: string;
   smtpSecure: boolean;
+  recaptchaSiteKey: string;
+  recaptchaSecretKey: string;
+  recaptchaMinScore: string;
 }
 
 export const DEFAULT_INTEGRATIONS: IntegrationSettings = {
@@ -686,7 +689,10 @@ export const DEFAULT_INTEGRATIONS: IntegrationSettings = {
   smtpPassword: '',
   smtpFromName: '',
   smtpFromEmail: '',
-  smtpSecure: false
+  smtpSecure: false,
+  recaptchaSiteKey: '',
+  recaptchaSecretKey: '',
+  recaptchaMinScore: '0.5'
 };
 
 // --- General site settings (branding, SEO, timezone, theme) ---

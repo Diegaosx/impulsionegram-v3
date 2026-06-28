@@ -385,13 +385,14 @@ export async function postComment(
   postSlug: string,
   author: string,
   email: string,
-  content: string
+  content: string,
+  recaptchaToken?: string | null
 ): Promise<BlogComment | null> {
   try {
     const res = await fetch('/api/blog/comments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ postSlug, author, email, content })
+      body: JSON.stringify({ postSlug, author, email, content, recaptchaToken })
     });
     if (!res.ok) throw new Error('Failed to post comment');
     const data = await res.json();
@@ -466,6 +467,19 @@ export interface IntegrationSettings {
   smtpFromName: string;
   smtpFromEmail: string;
   smtpSecure: boolean;
+  recaptchaSiteKey: string;
+  recaptchaSecretKey: string;
+  recaptchaMinScore: string;
+}
+
+export async function fetchPublicConfig(): Promise<{ recaptchaSiteKey: string }> {
+  try {
+    const res = await fetch('/api/public-config');
+    if (!res.ok) throw new Error('failed');
+    return await res.json();
+  } catch (error) {
+    return { recaptchaSiteKey: '' };
+  }
 }
 
 export async function fetchIntegrations(): Promise<IntegrationSettings> {
@@ -488,7 +502,10 @@ export async function fetchIntegrations(): Promise<IntegrationSettings> {
       smtpPassword: '',
       smtpFromName: '',
       smtpFromEmail: '',
-      smtpSecure: false
+      smtpSecure: false,
+      recaptchaSiteKey: '',
+      recaptchaSecretKey: '',
+      recaptchaMinScore: '0.5'
     };
   }
 }

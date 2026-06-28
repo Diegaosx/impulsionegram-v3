@@ -22,6 +22,7 @@ import {
   BlogPost, BlogComment,
   fetchBlogPosts, fetchPostComments, postComment
 } from '../utils/storage';
+import { getRecaptchaToken } from '../utils/recaptcha';
 import { formatDateTime } from '../utils/datetime';
 
 // --- SEO HELPER FUNCTION ---
@@ -102,6 +103,7 @@ export default function BlogView({ onNavigate }: BlogViewProps) {
   const [commentText, setCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [commentSuccess, setCommentSuccess] = useState(false);
+  const [commentError, setCommentError] = useState('');
 
   // Load posts once
   useEffect(() => {
@@ -233,7 +235,9 @@ export default function BlogView({ onNavigate }: BlogViewProps) {
     if (!commentName.trim() || !commentEmail.trim() || !commentText.trim() || !currentSlug) return;
 
     setIsSubmittingComment(true);
-    const created = await postComment(currentSlug, commentName.trim(), commentEmail.trim(), commentText.trim());
+    setCommentError('');
+    const token = await getRecaptchaToken('comment');
+    const created = await postComment(currentSlug, commentName.trim(), commentEmail.trim(), commentText.trim(), token);
     setIsSubmittingComment(false);
 
     if (created) {
@@ -244,6 +248,8 @@ export default function BlogView({ onNavigate }: BlogViewProps) {
         setCommentSuccess(false);
         setIsCommentModalOpen(false);
       }, 2000);
+    } else {
+      setCommentError('Não foi possível enviar o comentário. Verifique sua conexão e tente novamente.');
     }
   };
 
@@ -743,6 +749,12 @@ export default function BlogView({ onNavigate }: BlogViewProps) {
                 </div>
               ) : (
                 <form onSubmit={handleAddComment} className="space-y-4">
+                  {commentError && (
+                    <div className="bg-red-50 text-red-600 border border-red-200 rounded-xl p-3 text-xs font-bold flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      <span>{commentError}</span>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label htmlFor="comment-name" className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Nome Completo</label>
