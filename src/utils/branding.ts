@@ -2,9 +2,11 @@ import { GeneralSettings } from './storage';
 
 // Apply site branding/SEO to the document head at runtime (SPA), so the
 // configurable title, description and favicon take effect without a rebuild.
-export function applyBrandingToHead(s: GeneralSettings) {
+export function applyBrandingToHead(s: GeneralSettings, opts: { skipTitle?: boolean } = {}) {
   const title = s.seoTitle || s.siteName;
-  if (title) document.title = title;
+  // The blog manages its own per-article document.title; skip it there so the
+  // global branding doesn't clobber the article SEO on initial load.
+  if (title && !opts.skipTitle) document.title = title;
 
   if (s.seoDescription) {
     let meta = document.querySelector('meta[name="description"]');

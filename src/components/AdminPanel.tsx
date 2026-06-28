@@ -7,13 +7,14 @@ import {
   CookieConsentRecord, fetchCookieConsents
 } from '../utils/storage';
 import { setAppTimezone, formatDateTime } from '../utils/datetime';
+import BlogAdmin from './BlogAdmin';
 import {
   X, Plus, Pencil, Trash2, RotateCcw, LayoutDashboard, ShoppingBag,
   BarChart3, Settings, ShieldCheck, HelpCircle, Save, Check, AlertCircle,
   TrendingUp, CircleDollarSign, Compass, Layers, Globe, Filter, Sparkles, MessageCircle,
   User, Lock, Users, Ban, UserCheck, CreditCard, KeyRound, Eye, EyeOff, Plug,
   Image as ImageIcon, Upload, Clock, Palette, Type, SlidersHorizontal,
-  Mail, Phone, MapPin, Share2, PanelBottom, Cookie
+  Mail, Phone, MapPin, Share2, PanelBottom, Cookie, Newspaper
 } from 'lucide-react';
 import { SOCIAL_PLATFORMS } from '../data';
 
@@ -44,7 +45,7 @@ export default function AdminPanel({
   onLogout,
   onExit
 }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'users' | 'home' | 'general' | 'contact' | 'integrations' | 'cookies' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'services' | 'plans' | 'orders' | 'users' | 'home' | 'blog' | 'general' | 'contact' | 'integrations' | 'cookies' | 'settings'>('dashboard');
   
   // Users management states
   const [users, setUsers] = useState<any[]>([]);
@@ -615,6 +616,18 @@ export default function AdminPanel({
               >
                 <Globe className="h-4 w-4" />
                 <span>Conteúdo da Home</span>
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('blog'); setEditingService(null); setIsAddingService(false); setEditingPlan(null); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'blog'
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-slate-600 hover:text-primary hover:bg-slate-100'
+                }`}
+              >
+                <Newspaper className="h-4 w-4" />
+                <span>Blog</span>
               </button>
 
               <button
@@ -1582,6 +1595,11 @@ export default function AdminPanel({
                   })()
                 )}
               </div>
+            )}
+
+            {/* =================== TAB: BLOG =================== */}
+            {activeTab === 'blog' && (
+              <BlogAdmin triggerSuccess={triggerSuccess} triggerError={triggerError} />
             )}
 
             {/* =================== TAB: CONFIGURAÇÕES GERAIS =================== */}

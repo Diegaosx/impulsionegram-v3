@@ -18,7 +18,15 @@ import {
   getCompanySettings,
   saveCompanySettings,
   saveCookieConsent,
-  listCookieConsents
+  listCookieConsents,
+  listBlogPosts,
+  saveBlogPost,
+  deleteBlogPost,
+  listComments,
+  listAllComments,
+  addComment,
+  updateCommentStatus,
+  deleteComment
 } from './db';
 import { uploadToR2, isR2Configured } from './r2';
 
@@ -259,6 +267,106 @@ app.get('/api/cookie-consents', async (req, res) => {
   try {
     const records = await listCookieConsents();
     res.json(records);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- BLOG ---
+
+// List all blog posts
+app.get('/api/blog/posts', async (req, res) => {
+  try {
+    res.json(await listBlogPosts());
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Create or update a blog post (admin)
+app.post('/api/blog/posts', async (req, res) => {
+  try {
+    const post = req.body;
+    if (!post || !post.slug || !post.title) {
+      return res.status(400).json({ error: 'slug and title are required' });
+    }
+    const saved = await saveBlogPost({
+      slug: String(post.slug),
+      title: String(post.title),
+      description: String(post.description || ''),
+      content: Array.isArray(post.content) ? post.content : [],
+      category: String(post.category || 'Dicas'),
+      image: String(post.image || ''),
+      author: String(post.author || ''),
+      date: String(post.date || ''),
+      readTime: String(post.readTime || ''),
+      tags: Array.isArray(post.tags) ? post.tags : []
+    }, post.publishedAt);
+    res.json({ success: true, post: saved });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Delete a blog post (admin)
+app.delete('/api/blog/posts/:slug', async (req, res) => {
+  try {
+    await deleteBlogPost(req.params.slug);
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// List comments. ?slug=... approved-only (public); ?all=1 returns every comment (admin)
+app.get('/api/blog/comments', async (req, res) => {
+  try {
+    if (req.query.all === '1') {
+      return res.json(await listAllComments());
+    }
+    const slug = String(req.query.slug || '');
+    if (!slug) return res.status(400).json({ error: 'slug is required' });
+    res.json(await listComments(slug, true));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Add a comment (public). Approved by default so it shows immediately; the
+// admin can hide or delete it afterwards.
+app.post('/api/blog/comments', async (req, res) => {
+  try {
+    const { postSlug, author, email, content } = req.body || {};
+    if (!postSlug || !author || !content) {
+      return res.status(400).json({ error: 'postSlug, author and content are required' });
+    }
+    const id = `c_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+    const comment = await addComment(id, String(postSlug), String(author), String(email || ''), String(content), 'approved');
+    res.json({ success: true, comment });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Update a comment status (admin): approved | hidden
+app.put('/api/blog/comments/:id', async (req, res) => {
+  try {
+    const status = String(req.body?.status || '');
+    if (!['approved', 'hidden', 'pending'].includes(status)) {
+      return res.status(400).json({ error: 'invalid status' });
+    }
+    await updateCommentStatus(req.params.id, status);
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Delete a comment (admin)
+app.delete('/api/blog/comments/:id', async (req, res) => {
+  try {
+    await deleteComment(req.params.id);
+    res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

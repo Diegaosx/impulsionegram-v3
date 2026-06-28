@@ -186,6 +186,145 @@ async function createSchema(client: PoolClient) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`
   );
+  await client.query(
+    `CREATE TABLE IF NOT EXISTS blog_posts (
+      slug         TEXT PRIMARY KEY,
+      data         JSONB NOT NULL,
+      published_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`
+  );
+  await client.query(
+    `CREATE TABLE IF NOT EXISTS blog_comments (
+      id         TEXT PRIMARY KEY,
+      post_slug  TEXT NOT NULL,
+      author     TEXT,
+      email      TEXT,
+      content    TEXT,
+      status     TEXT NOT NULL DEFAULT 'approved',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`
+  );
+}
+
+// --- Blog posts & comments ---
+export interface BlogPostRecord {
+  slug: string;
+  title: string;
+  description: string;
+  content: string[];
+  category: string;
+  image: string;
+  author: string;
+  date: string;
+  readTime: string;
+  tags: string[];
+}
+
+export interface BlogCommentRecord {
+  id: string;
+  postSlug: string;
+  author: string;
+  email: string;
+  content: string;
+  status: 'approved' | 'pending' | 'hidden';
+  createdAt: string;
+}
+
+export async function listBlogPosts(): Promise<BlogPostRecord[]> {
+  const result = await pool.query(`SELECT data FROM blog_posts ORDER BY published_at DESC`);
+  return result.rows.map((r) => r.data);
+}
+
+export async function getBlogPost(slug: string): Promise<BlogPostRecord | null> {
+  const result = await pool.query(`SELECT data FROM blog_posts WHERE slug = $1`, [slug]);
+  return result.rows[0]?.data || null;
+}
+
+export async function saveBlogPost(post: BlogPostRecord, publishedAt?: string): Promise<BlogPostRecord> {
+  await pool.query(
+    `INSERT INTO blog_posts (slug, data, published_at)
+     VALUES ($1, $2::jsonb, COALESCE($3::timestamptz, now()))
+     ON CONFLICT (slug) DO UPDATE SET data = EXCLUDED.data`,
+    [post.slug, JSON.stringify(post), publishedAt || null]
+  );
+  return post;
+}
+
+export async function deleteBlogPost(slug: string): Promise<void> {
+  await pool.query(`DELETE FROM blog_posts WHERE slug = $1`, [slug]);
+  await pool.query(`DELETE FROM blog_comments WHERE post_slug = $1`, [slug]);
+}
+
+function mapComment(r: any): BlogCommentRecord {
+  return {
+    id: r.id,
+    postSlug: r.post_slug,
+    author: r.author || '',
+    email: r.email || '',
+    content: r.content || '',
+    status: r.status,
+    createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at)
+  };
+}
+
+export async function listComments(postSlug: string, approvedOnly: boolean): Promise<BlogCommentRecord[]> {
+  const result = approvedOnly
+    ? await pool.query(`SELECT * FROM blog_comments WHERE post_slug = $1 AND status = 'approved' ORDER BY created_at ASC`, [postSlug])
+    : await pool.query(`SELECT * FROM blog_comments WHERE post_slug = $1 ORDER BY created_at ASC`, [postSlug]);
+  return result.rows.map(mapComment);
+}
+
+export async function listAllComments(): Promise<BlogCommentRecord[]> {
+  const result = await pool.query(`SELECT * FROM blog_comments ORDER BY created_at DESC LIMIT 500`);
+  return result.rows.map(mapComment);
+}
+
+export async function addComment(
+  id: string,
+  postSlug: string,
+  author: string,
+  email: string,
+  content: string,
+  status: string
+): Promise<BlogCommentRecord> {
+  const result = await pool.query(
+    `INSERT INTO blog_comments (id, post_slug, author, email, content, status)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [id, postSlug, author, email, content, status]
+  );
+  return mapComment(result.rows[0]);
+}
+
+export async function updateCommentStatus(id: string, status: string): Promise<void> {
+  await pool.query(`UPDATE blog_comments SET status = $2 WHERE id = $1`, [id, status]);
+}
+
+export async function deleteComment(id: string): Promise<void> {
+  await pool.query(`DELETE FROM blog_comments WHERE id = $1`, [id]);
+}
+
+async function seedBlogIfEmpty(client: PoolClient) {
+  const { rows } = await client.query('SELECT COUNT(*)::int AS count FROM blog_posts');
+  if (rows[0]?.count > 0) return;
+  console.log('Seeding blog posts and comments...');
+  const { BLOG_SEED_POSTS, BLOG_SEED_COMMENTS } = await import('./blogSeed');
+  // Insert posts newest-first so published_at ordering matches the seed array.
+  for (let i = 0; i < BLOG_SEED_POSTS.length; i++) {
+    const post = BLOG_SEED_POSTS[i];
+    const publishedAt = new Date(Date.now() - i * 86400000).toISOString();
+    await client.query(
+      `INSERT INTO blog_posts (slug, data, published_at) VALUES ($1, $2::jsonb, $3)
+       ON CONFLICT (slug) DO NOTHING`,
+      [post.slug, JSON.stringify(post), publishedAt]
+    );
+  }
+  for (const c of BLOG_SEED_COMMENTS) {
+    await client.query(
+      `INSERT INTO blog_comments (id, post_slug, author, email, content, status)
+       VALUES ($1, $2, $3, $4, $5, 'approved') ON CONFLICT (id) DO NOTHING`,
+      [c.id, c.postSlug, c.author, c.email, c.content]
+    );
+  }
 }
 
 // --- Cookie consent (LGPD) records ---
@@ -275,6 +414,9 @@ export async function initDB(): Promise<void> {
        ON CONFLICT (key) DO NOTHING`,
       [JSON.stringify(DEFAULT_HOME_CONTENT)]
     );
+
+    // Seed blog content on a fresh blog table.
+    await seedBlogIfEmpty(client);
 
     console.log('PostgreSQL database initialized successfully.');
   } finally {

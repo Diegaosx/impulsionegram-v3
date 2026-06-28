@@ -265,6 +265,116 @@ export async function saveCompanySettingsToServer(company: CompanySettings): Pro
   if (!res.ok) throw new Error('Failed to save company settings on server');
 }
 
+// --- Blog ---
+export interface BlogPost {
+  slug: string;
+  title: string;
+  description: string;
+  content: string[];
+  category: string;
+  image: string;
+  author: string;
+  date: string;
+  readTime: string;
+  tags: string[];
+  publishedAt?: string;
+}
+
+export interface BlogComment {
+  id: string;
+  postSlug: string;
+  author: string;
+  email: string;
+  content: string;
+  status: 'approved' | 'pending' | 'hidden';
+  createdAt: string;
+}
+
+export async function fetchBlogPosts(): Promise<BlogPost[]> {
+  try {
+    const res = await fetch('/api/blog/posts');
+    if (!res.ok) throw new Error('Failed to fetch blog posts');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching blog posts:', error);
+    return [];
+  }
+}
+
+export async function saveBlogPostToServer(post: BlogPost): Promise<void> {
+  const res = await fetch('/api/blog/posts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(post)
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to save blog post');
+  }
+}
+
+export async function deleteBlogPostFromServer(slug: string): Promise<void> {
+  const res = await fetch(`/api/blog/posts/${encodeURIComponent(slug)}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to delete blog post');
+}
+
+export async function fetchPostComments(slug: string): Promise<BlogComment[]> {
+  try {
+    const res = await fetch(`/api/blog/comments?slug=${encodeURIComponent(slug)}`);
+    if (!res.ok) throw new Error('Failed to fetch comments');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching comments:', error);
+    return [];
+  }
+}
+
+export async function fetchAllComments(): Promise<BlogComment[]> {
+  try {
+    const res = await fetch('/api/blog/comments?all=1');
+    if (!res.ok) throw new Error('Failed to fetch comments');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching all comments:', error);
+    return [];
+  }
+}
+
+export async function postComment(
+  postSlug: string,
+  author: string,
+  email: string,
+  content: string
+): Promise<BlogComment | null> {
+  try {
+    const res = await fetch('/api/blog/comments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ postSlug, author, email, content })
+    });
+    if (!res.ok) throw new Error('Failed to post comment');
+    const data = await res.json();
+    return data.comment;
+  } catch (error) {
+    console.error('Error posting comment:', error);
+    return null;
+  }
+}
+
+export async function setCommentStatus(id: string, status: 'approved' | 'hidden'): Promise<void> {
+  const res = await fetch(`/api/blog/comments/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status })
+  });
+  if (!res.ok) throw new Error('Failed to update comment');
+}
+
+export async function deleteCommentFromServer(id: string): Promise<void> {
+  const res = await fetch(`/api/blog/comments/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to delete comment');
+}
+
 export interface CookieChoices {
   necessary: boolean;
   analytics: boolean;
