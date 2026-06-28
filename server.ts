@@ -46,6 +46,7 @@ import { uploadToR2, isR2Configured } from './r2';
 import { verifyRecaptcha } from './recaptcha';
 import { stripLinks } from './sanitize';
 import { checkSubmissionRate, initRateLimiter } from './rateLimit';
+import { signAdminToken, getAdminCredentials, requireAdmin } from './auth';
 
 const app = express();
 const PORT = 3000;
@@ -64,6 +65,41 @@ function rateLimitMessage(reason?: string, retryAfterSeconds?: number): string {
   const mins = retryAfterSeconds ? Math.max(1, Math.ceil(retryAfterSeconds / 60)) : 10;
   return `Você enviou recentemente. Aguarde cerca de ${mins} minuto(s) antes de enviar novamente.`;
 }
+
+// --- ADMIN AUTH GATE (fail-closed) ---
+// Every /api route requires a valid admin JWT EXCEPT the explicit allowlist of
+// public endpoints below. New routes are protected by default. Paths here are
+// relative to the /api mount (e.g. "/services").
+const PUBLIC_API: { method: string; re: RegExp }[] = [
+  { method: 'POST', re: /^\/login\/?$/ },
+  { method: 'GET', re: /^\/services\/?$/ },
+  { method: 'GET', re: /^\/plans\/?$/ },
+  { method: 'GET', re: /^\/home\/?$/ },
+  { method: 'GET', re: /^\/settings\/?$/ },
+  { method: 'GET', re: /^\/company\/?$/ },
+  { method: 'GET', re: /^\/public-config\/?$/ },
+  { method: 'GET', re: /^\/analytics\/?$/ },
+  { method: 'POST', re: /^\/cookie-consents\/?$/ },
+  { method: 'GET', re: /^\/blog\/posts\/?$/ },
+  { method: 'GET', re: /^\/blog\/comments\/?$/ },
+  { method: 'POST', re: /^\/blog\/comments\/?$/ },
+  { method: 'GET', re: /^\/blog\/categories\/?$/ },
+  { method: 'GET', re: /^\/blog\/tags\/?$/ },
+  { method: 'GET', re: /^\/testimonials\/?$/ },
+  { method: 'POST', re: /^\/testimonials\/?$/ },
+  { method: 'POST', re: /^\/orders\/?$/ }
+];
+
+app.use('/api', (req, res, next) => {
+  const path = req.path; // relative to the /api mount
+  const isPublic = PUBLIC_API.some((r) => r.method === req.method && r.re.test(path));
+  // The list endpoints for comments/testimonials are public for the approved
+  // feed, but the admin "?all=1" variant (which exposes pending/hidden items)
+  // requires authentication.
+  const adminOnlyVariant = (path === '/blog/comments' || path === '/testimonials') && req.query.all === '1';
+  if (isPublic && !adminOnlyVariant) return next();
+  return requireAdmin(req, res, next);
+});
 
 // In-memory upload handling (files are streamed straight to Cloudflare R2).
 const upload = multer({
@@ -190,9 +226,11 @@ app.put('/api/home', async (req, res) => {
 // 5f. Auth Admin Login
 app.post('/api/login', (req, res) => {
   try {
-    const { username, password } = req.body;
-    if (username === 'admin' && password === 'admin') {
-      res.json({ success: true, token: 'admin-token-secure-123', message: 'Autenticado com sucesso' });
+    const { username, password } = req.body || {};
+    const creds = getAdminCredentials();
+    if (username === creds.username && password === creds.password) {
+      const token = signAdminToken(String(username));
+      res.json({ success: true, token, message: 'Autenticado com sucesso' });
     } else {
       res.status(401).json({ success: false, error: 'Usuário ou senha incorretos' });
     }

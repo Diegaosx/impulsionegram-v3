@@ -1,4 +1,5 @@
 import { ServiceItem, PlanItem } from '../types';
+import { setAdminToken } from './authFetch';
 
 export interface AdminOrder {
   id: string;
@@ -676,5 +677,8 @@ export async function loginAdminToServer(credentials: { username: string; passwo
   if (!res.ok) {
     return { success: false, error: 'Erro de comunicação com o servidor' };
   }
-  return await res.json();
+  const data = await res.json();
+  // Persist the signed admin token so subsequent API calls are authorized.
+  if (data?.token) setAdminToken(data.token);
+  return data;
 }
