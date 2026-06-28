@@ -4,6 +4,7 @@
 // is active before any API call runs.
 
 const TOKEN_KEY = 'admin_token';
+const USER_KEY = 'auth_user';
 
 export function getAdminToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
@@ -15,6 +16,25 @@ export function setAdminToken(token: string): void {
 
 export function clearAdminToken(): void {
   localStorage.removeItem(TOKEN_KEY);
+}
+
+// Cached current user (read synchronously on boot to avoid auth flicker).
+export function getCachedUser<T = any>(): T | null {
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setCachedUser(user: any): void {
+  if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
+  else localStorage.removeItem(USER_KEY);
+}
+
+export function clearCachedUser(): void {
+  localStorage.removeItem(USER_KEY);
 }
 
 function isApiUrl(url: string): boolean {
@@ -48,6 +68,7 @@ export function installAuthFetch(): void {
     // and bounce to the login page (unless we're already there).
     if (apiCall && res.status === 401 && token) {
       clearAdminToken();
+      clearCachedUser();
       localStorage.removeItem('admin_authenticated');
       if (!window.location.pathname.startsWith('/login')) {
         window.location.assign('/login');

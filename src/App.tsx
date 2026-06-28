@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import ProfilePage from './pages/ProfilePage';
 import BlogPage from './pages/BlogPage';
 import AdminPanel from './components/AdminPanel';
 import {
@@ -11,12 +13,13 @@ import {
   addOrderToServer, resetServerDatabase,
   fetchHomeContent, saveHomeContentToServer, HomeContent,
   fetchGeneralSettings, fetchCompanySettings, CompanySettings,
-  fetchAnalyticsSettings, AnalyticsSettings
+  fetchAnalyticsSettings, AnalyticsSettings,
+  fetchMe, AuthUser
 } from './utils/storage';
 import { applyBrandingToHead } from './utils/branding';
 import { setAppTimezone } from './utils/datetime';
 import { applySiteCode, clearSiteCode } from './utils/codeInjection';
-import { clearAdminToken } from './utils/authFetch';
+import { clearAdminToken, getAdminToken, getCachedUser, setCachedUser, clearCachedUser } from './utils/authFetch';
 
 export default function App() {
   const navigate = useNavigate();
@@ -36,10 +39,23 @@ export default function App() {
   // Custom JS / Analytics code snippets (injected on public pages)
   const [analytics, setAnalytics] = useState<AnalyticsSettings | null>(null);
 
-  // Admin authentication (persisted in localStorage)
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    () => localStorage.getItem('admin_authenticated') === 'true'
-  );
+  // Current authenticated user (admin or cliente). Seeded synchronously from
+  // the cached user to avoid an auth flicker, then refreshed from the server.
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => getCachedUser<AuthUser>());
+  const isAdmin = currentUser?.role === 'admin';
+
+  // Refresh the session from the server on boot (validates the token).
+  useEffect(() => {
+    if (!getAdminToken()) {
+      setCurrentUser(null);
+      clearCachedUser();
+      return;
+    }
+    fetchMe().then((u) => {
+      setCurrentUser(u);
+      setCachedUser(u);
+    });
+  }, []);
 
   // Load all initial server state from the REST API
   useEffect(() => {
@@ -74,22 +90,23 @@ export default function App() {
   }, []);
 
   // Orders are admin-only data (contain customer details), so they're fetched
-  // only once the admin is authenticated — and refetched when that changes.
+  // only once an admin is authenticated — and refetched when that changes.
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAdmin) {
       setOrders([]);
       return;
     }
     fetchOrders().then(setOrders).catch((e) => console.error('Failed to load orders:', e));
-  }, [isAuthenticated]);
+  }, [isAdmin]);
 
   // Inject the site-wide custom code on public pages only. The admin dashboard
   // and login screen are excluded so analytics/ads don't run inside the panel.
   useEffect(() => {
     if (!analytics) return;
     const path = location.pathname;
-    const isAdminArea = path.startsWith('/dashboard') || path.startsWith('/login');
-    if (isAdminArea) {
+    const privateAreas = ['/dashboard', '/login', '/cadastro', '/perfil', '/minha-conta'];
+    const isPrivate = privateAreas.some((p) => path.startsWith(p));
+    if (isPrivate) {
       clearSiteCode();
     } else {
       applySiteCode(analytics);
@@ -97,15 +114,17 @@ export default function App() {
   }, [analytics, location.pathname]);
 
   // --- Auth handlers ---
-  const handleLoginSuccess = () => {
+  const handleAuthSuccess = (user: AuthUser) => {
     localStorage.setItem('admin_authenticated', 'true');
-    setIsAuthenticated(true);
+    setCurrentUser(user);
+    setCachedUser(user);
   };
 
   const handleLogout = () => {
     localStorage.removeItem('admin_authenticated');
     clearAdminToken();
-    setIsAuthenticated(false);
+    clearCachedUser();
+    setCurrentUser(null);
     navigate('/login', { replace: true });
   };
 
@@ -202,16 +221,40 @@ export default function App() {
       <Route
         path="/login"
         element={
-          isAuthenticated
-            ? <Navigate to="/dashboard" replace />
-            : <LoginPage onLoginSuccess={handleLoginSuccess} />
+          currentUser
+            ? <Navigate to={isAdmin ? '/dashboard' : '/perfil'} replace />
+            : <LoginPage onAuthSuccess={handleAuthSuccess} siteName={siteName} />
+        }
+      />
+
+      <Route
+        path="/cadastro"
+        element={
+          currentUser
+            ? <Navigate to={isAdmin ? '/dashboard' : '/perfil'} replace />
+            : <RegisterPage onAuthSuccess={handleAuthSuccess} siteName={siteName} />
+        }
+      />
+
+      <Route
+        path="/perfil"
+        element={
+          currentUser
+            ? <ProfilePage
+                user={currentUser}
+                onUserUpdate={(u) => { setCurrentUser(u); setCachedUser(u); }}
+                onLogout={handleLogout}
+                siteName={siteName}
+                logoUrl={logoUrl}
+              />
+            : <Navigate to="/login" replace />
         }
       />
 
       <Route
         path="/dashboard"
         element={
-          isAuthenticated ? (
+          isAdmin ? (
             <AdminPanel
               services={services}
               plans={plans}
@@ -225,6 +268,8 @@ export default function App() {
               onLogout={handleLogout}
               onExit={() => navigate('/')}
             />
+          ) : currentUser ? (
+            <Navigate to="/perfil" replace />
           ) : (
             <Navigate to="/login" replace />
           )
