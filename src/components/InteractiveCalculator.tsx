@@ -2,12 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SERVICES, SOCIAL_PLATFORMS } from '../data';
 import { SocialPlatform, ServiceItem } from '../types';
-import { AuthUser, AdminOrder, checkAccountExists, registerAccount, createMyOrder } from '../utils/storage';
+import { AuthUser, AdminOrder, RapidProfile, checkAccountExists, registerAccount, createMyOrder, fetchRapidApiProfile } from '../utils/storage';
 import { useOffer } from '../utils/useOffer';
 import OrderConfirmation from './OrderConfirmation';
 import {
   Instagram, Youtube, Twitter, Facebook, Flame, Zap, Shield,
-  Lock, Sparkles, Smartphone, Mail, User, Compass, ShoppingCart, Loader2, ArrowRight, X, LogIn
+  Lock, Sparkles, Smartphone, Mail, User, Compass, ShoppingCart, Loader2, ArrowRight, X, LogIn,
+  BadgeCheck, AlertTriangle
 } from 'lucide-react';
 
 interface InteractiveCalculatorProps {
@@ -71,6 +72,47 @@ export default function InteractiveCalculator({
   const couponValid = !!(offerActive && offer && coupon.trim() && coupon.trim().toLowerCase() === offer.couponCode.toLowerCase());
   const couponPercent = couponValid ? (offer?.discountPercent || 0) : 0;
   const [accountError, setAccountError] = useState('');
+
+  // Instagram profile preview (RapidAPI). Only runs when the client is buying
+  // Instagram followers and has typed a handle in the checkout — shows a card
+  // above the profile field with the photo + follower/following/post counts.
+  const [profileLookup, setProfileLookup] = useState<{
+    status: 'idle' | 'loading' | 'found' | 'notfound';
+    profile: RapidProfile | null;
+  }>({ status: 'idle', profile: null });
+  const profileLookupEnabled = platform === 'instagram' && serviceType === 'followers';
+
+  useEffect(() => {
+    if (!showCheckout || !profileLookupEnabled) {
+      setProfileLookup({ status: 'idle', profile: null });
+      return;
+    }
+    const handle = username.trim().replace(/^@/, '');
+    if (handle.length < 2) {
+      setProfileLookup({ status: 'idle', profile: null });
+      return;
+    }
+    let cancelled = false;
+    setProfileLookup((p) => ({ status: 'loading', profile: p.profile }));
+    const timer = setTimeout(async () => {
+      const res = await fetchRapidApiProfile(handle);
+      if (cancelled) return;
+      // Integration off → stay silent (no card), don't block the checkout.
+      if (!res.configured) {
+        setProfileLookup({ status: 'idle', profile: null });
+        return;
+      }
+      if (res.profile) {
+        setProfileLookup({ status: 'found', profile: res.profile });
+      } else {
+        setProfileLookup({ status: 'notfound', profile: null });
+      }
+    }, 700);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [username, showCheckout, profileLookupEnabled]);
+
+  const compactNumber = (n: number) =>
+    new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: 1 }).format(n || 0);
 
   // Handle outside notification trigger
   useEffect(() => {
@@ -248,6 +290,8 @@ export default function InteractiveCalculator({
 
     if (!username.trim()) {
       errors.username = 'Informe o perfil/@ de destino';
+    } else if (profileLookupEnabled && profileLookup.status === 'found' && profileLookup.profile?.isPrivate) {
+      errors.username = 'O perfil informado está privado. Deixe-o público para receber a entrega.';
     }
     if (!currentUser && !fullName.trim()) {
       errors.fullName = 'Informe seu nome';
@@ -626,6 +670,70 @@ export default function InteractiveCalculator({
                           className={`w-full bg-slate-50 border ${formErrors.fullName ? 'border-red-500' : 'border-slate-200'} text-sm rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-600 font-semibold text-slate-800`} id="checkout-name-input" />
                       </div>
                       {formErrors.fullName && <p className="text-red-500 text-[11px] font-bold mt-1">{formErrors.fullName}</p>}
+                    </div>
+                  )}
+
+                  {/* Instagram profile preview card (RapidAPI lookup) */}
+                  {profileLookupEnabled && profileLookup.status === 'loading' && (
+                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold text-slate-500">
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-600" /> Buscando perfil...
+                    </div>
+                  )}
+
+                  {profileLookupEnabled && profileLookup.status === 'notfound' && username.trim().length >= 2 && (
+                    <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs font-bold text-amber-700">
+                      <AlertTriangle className="h-4 w-4 shrink-0" /> Não encontramos esse perfil. Confira o @ informado.
+                    </div>
+                  )}
+
+                  {profileLookupEnabled && profileLookup.status === 'found' && profileLookup.profile && (
+                    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3" id="checkout-profile-preview">
+                      <div className="flex items-center gap-3">
+                        {profileLookup.profile.profilePicUrl ? (
+                          <img
+                            src={profileLookup.profile.profilePicUrl}
+                            alt={profileLookup.profile.username}
+                            referrerPolicy="no-referrer"
+                            className="h-14 w-14 rounded-full object-cover border-2 border-slate-100 shrink-0"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }}
+                          />
+                        ) : (
+                          <div className="h-14 w-14 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 shrink-0">
+                            <User className="h-6 w-6" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1 font-black text-slate-900 text-sm truncate">
+                            @{profileLookup.profile.username}
+                            {profileLookup.profile.isVerified && <BadgeCheck className="h-4 w-4 text-blue-500 shrink-0" />}
+                          </div>
+                          {profileLookup.profile.fullName && (
+                            <p className="text-xs font-semibold text-slate-500 truncate">{profileLookup.profile.fullName}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="bg-slate-50 rounded-xl py-2">
+                          <div className="font-display font-black text-slate-900 text-sm">{compactNumber(profileLookup.profile.posts)}</div>
+                          <div className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Posts</div>
+                        </div>
+                        <div className="bg-slate-50 rounded-xl py-2">
+                          <div className="font-display font-black text-slate-900 text-sm">{compactNumber(profileLookup.profile.followers)}</div>
+                          <div className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Seguidores</div>
+                        </div>
+                        <div className="bg-slate-50 rounded-xl py-2">
+                          <div className="font-display font-black text-slate-900 text-sm">{compactNumber(profileLookup.profile.following)}</div>
+                          <div className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Seguindo</div>
+                        </div>
+                      </div>
+
+                      {profileLookup.profile.isPrivate && (
+                        <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-xs font-bold text-red-700">
+                          <Lock className="h-4 w-4 shrink-0 mt-0.5" />
+                          <span>O perfil informado está privado e a entrega não será realizada. Deixe seu perfil público para receber os seguidores.</span>
+                        </div>
+                      )}
                     </div>
                   )}
 

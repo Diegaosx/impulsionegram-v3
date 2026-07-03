@@ -70,6 +70,7 @@ import {
 } from './db';
 import { isMercadoPagoConfigured, createPixPayment, getPaymentStatus } from './mercadopago';
 import { isSmmConfigured, smmAddOrder, smmOrderStatus, smmBalance, smmServices, isSmmCompleted, buildTargetLink } from './smm';
+import { isRapidApiConfigured, fetchInstagramProfile } from './rapidapi';
 import { uploadToR2, isR2Configured } from './r2';
 import { verifyRecaptcha } from './recaptcha';
 import { stripLinks } from './sanitize';
@@ -111,6 +112,7 @@ const PUBLIC_API: { method: string; re: RegExp }[] = [
   { method: 'GET', re: /^\/settings\/?$/ },
   { method: 'GET', re: /^\/company\/?$/ },
   { method: 'GET', re: /^\/public-config\/?$/ },
+  { method: 'GET', re: /^\/rapidapi\/profile\/?$/ },
   { method: 'GET', re: /^\/offer\/?$/ },
   { method: 'GET', re: /^\/pages\/[a-z]+\/?$/ },
   { method: 'GET', re: /^\/chatbot\/?$/ },
@@ -1259,6 +1261,30 @@ app.get('/api/public-config', async (req, res) => {
   try {
     const integ = await getIntegrations();
     res.json({ recaptchaSiteKey: integ.recaptchaSiteKey || '' });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Public: look up an Instagram profile (photo + follower/following/post counts)
+// for the checkout preview card. Returns { configured:false } when no RapidAPI
+// key is set, and { profile:null } when the handle can't be found — never 500s
+// so the checkout modal degrades gracefully.
+app.get('/api/rapidapi/profile', async (req, res) => {
+  try {
+    const username = String(req.query.username || '').trim();
+    if (!username) return res.status(400).json({ error: 'username é obrigatório' });
+    const integ = await getIntegrations();
+    if (!isRapidApiConfigured(integ.rapidApiKey)) {
+      return res.json({ configured: false, profile: null });
+    }
+    try {
+      const profile = await fetchInstagramProfile(integ.rapidApiKey, integ.rapidApiHost, username);
+      return res.json({ configured: true, profile });
+    } catch (err: any) {
+      console.error('RapidAPI profile lookup failed:', err?.message || err);
+      return res.json({ configured: true, profile: null });
+    }
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

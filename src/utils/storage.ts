@@ -921,6 +921,38 @@ export interface IntegrationSettings {
   recaptchaSiteKey: string;
   recaptchaSecretKey: string;
   recaptchaMinScore: string;
+  rapidApiKey: string;
+  rapidApiHost: string;
+}
+
+// --- RapidAPI profile lookup (checkout preview card) ---
+export interface RapidProfile {
+  username: string;
+  fullName: string;
+  profilePicUrl: string;
+  followers: number;
+  following: number;
+  posts: number;
+  isPrivate: boolean;
+  isVerified: boolean;
+}
+
+export interface RapidProfileResult {
+  configured: boolean;
+  profile: RapidProfile | null;
+}
+
+// Look up the target Instagram profile the client typed in checkout. Never
+// throws — returns { configured:false } when the integration is off and
+// { profile:null } when the handle can't be resolved.
+export async function fetchRapidApiProfile(username: string): Promise<RapidProfileResult> {
+  try {
+    const res = await fetch(`/api/rapidapi/profile?username=${encodeURIComponent(username)}`);
+    if (!res.ok) return { configured: false, profile: null };
+    return await res.json();
+  } catch {
+    return { configured: false, profile: null };
+  }
 }
 
 export async function fetchPublicConfig(): Promise<{ recaptchaSiteKey: string }> {
@@ -956,7 +988,9 @@ export async function fetchIntegrations(): Promise<IntegrationSettings> {
       smtpSecure: false,
       recaptchaSiteKey: '',
       recaptchaSecretKey: '',
-      recaptchaMinScore: '0.5'
+      recaptchaMinScore: '0.5',
+      rapidApiKey: '',
+      rapidApiHost: 'social-api4.p.rapidapi.com'
     };
   }
 }
