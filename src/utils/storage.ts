@@ -905,8 +905,10 @@ export async function fetchCookieConsents(): Promise<CookieConsentRecord[]> {
 }
 
 export interface IntegrationSettings {
+  paymentProvider: 'mercadopago' | 'woovi';
   mercadoPagoAccessToken: string;
   mercadoPagoPublicKey: string;
+  wooviAppId: string;
   smmApiUrl: string;
   smmApiKey: string;
   emailProvider: 'smtp' | 'resend';
@@ -973,8 +975,10 @@ export async function fetchIntegrations(): Promise<IntegrationSettings> {
   } catch (error) {
     console.error('Error fetching integrations API:', error);
     return {
+      paymentProvider: 'mercadopago',
       mercadoPagoAccessToken: '',
       mercadoPagoPublicKey: '',
+      wooviAppId: '',
       smmApiUrl: '',
       smmApiKey: '',
       emailProvider: 'smtp',

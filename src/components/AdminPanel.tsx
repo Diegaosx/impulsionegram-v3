@@ -121,8 +121,10 @@ export default function AdminPanel({
 
   // Integration settings (payment gateway + SMM delivery panel)
   const [integrationsForm, setIntegrationsForm] = useState<IntegrationSettings>({
+    paymentProvider: 'mercadopago',
     mercadoPagoAccessToken: '',
     mercadoPagoPublicKey: '',
+    wooviAppId: '',
     smmApiUrl: '',
     smmApiKey: '',
     smtpHost: '',
@@ -2452,14 +2454,52 @@ export default function AdminPanel({
                 ) : (
                   <form onSubmit={handleSaveIntegrations} className="space-y-6">
 
+                    {/* PAYMENT PROVIDER SELECTOR */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-3">
+                      <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+                        <div className="bg-emerald-50 text-emerald-600 p-2 rounded-lg">
+                          <CreditCard className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-slate-800 text-sm">Provedor de Pagamento (PIX)</h4>
+                          <p className="text-slate-400 text-[11px] font-semibold">Escolha qual gateway gera as cobranças PIX no checkout. Só o provedor selecionado é usado.</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {([
+                          { id: 'mercadopago', label: 'Mercado Pago' },
+                          { id: 'woovi', label: 'Woovi' }
+                        ] as const).map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => setIntegrationsForm(prev => ({ ...prev, paymentProvider: opt.id }))}
+                            className={`p-3 rounded-xl border text-sm font-bold transition-all cursor-pointer ${
+                              integrationsForm.paymentProvider === opt.id
+                                ? 'bg-primary/5 border-primary ring-1 ring-primary text-primary'
+                                : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                            }`}
+                          >
+                            {opt.label}
+                            {integrationsForm.paymentProvider === opt.id && <span className="block text-[9px] font-black uppercase tracking-wider mt-0.5">✓ Ativo</span>}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     {/* MERCADO PAGO CARD */}
-                    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+                    <div className={`bg-white border rounded-xl p-6 shadow-sm space-y-4 ${integrationsForm.paymentProvider === 'mercadopago' ? 'border-primary/40' : 'border-slate-200 opacity-70'}`}>
                       <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
                         <div className="bg-sky-50 text-sky-600 p-2 rounded-lg">
                           <CreditCard className="h-5 w-5" />
                         </div>
-                        <div>
-                          <h4 className="font-bold text-slate-800 text-sm">Mercado Pago (Pagamento PIX)</h4>
+                        <div className="flex-1">
+                          <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                            Mercado Pago (Pagamento PIX)
+                            {integrationsForm.paymentProvider === 'mercadopago'
+                              ? <span className="text-[9px] font-black uppercase bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Ativo</span>
+                              : <span className="text-[9px] font-black uppercase bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full">Inativo</span>}
+                          </h4>
                           <p className="text-slate-400 text-[11px] font-semibold">Gera cobranças PIX reais no checkout.</p>
                         </div>
                       </div>
@@ -2487,6 +2527,39 @@ export default function AdminPanel({
                           placeholder="APP_USR-xxxx-xxxx (usada no checkout de cartão)"
                           className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
                         />
+                      </div>
+                    </div>
+
+                    {/* WOOVI CARD */}
+                    <div className={`bg-white border rounded-xl p-6 shadow-sm space-y-4 ${integrationsForm.paymentProvider === 'woovi' ? 'border-primary/40' : 'border-slate-200 opacity-70'}`}>
+                      <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+                        <div className="bg-emerald-50 text-emerald-600 p-2 rounded-lg">
+                          <CreditCard className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                            Woovi (Pagamento PIX)
+                            {integrationsForm.paymentProvider === 'woovi'
+                              ? <span className="text-[9px] font-black uppercase bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Ativo</span>
+                              : <span className="text-[9px] font-black uppercase bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full">Inativo</span>}
+                          </h4>
+                          <p className="text-slate-400 text-[11px] font-semibold">Gera cobranças PIX via Woovi (ex-OpenPix).</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">App ID (Authorization)</label>
+                        <input
+                          type={showSecrets ? 'text' : 'password'}
+                          autoComplete="off"
+                          value={integrationsForm.wooviAppId}
+                          onChange={(e) => setIntegrationsForm(prev => ({ ...prev, wooviAppId: e.target.value.trim() }))}
+                          placeholder="App ID gerado no painel do Woovi (API / Plugins)"
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                        />
+                        <span className="text-[10px] text-slate-400 block font-medium">
+                          No painel do Woovi, configure o webhook apontando para <strong>{`{seu-site}`}/api/woovi/webhook</strong> para confirmação automática. Mesmo sem o webhook, o status é verificado por consulta a cada poucos segundos.
+                        </span>
                       </div>
                     </div>
 
