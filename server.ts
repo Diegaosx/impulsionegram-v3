@@ -1289,7 +1289,7 @@ app.delete('/api/blocked-ips/:ip', async (req, res) => {
 app.get('/api/public-config', async (req, res) => {
   try {
     const integ = await getIntegrations();
-    res.json({ recaptchaSiteKey: integ.recaptchaSiteKey || '' });
+    res.json({ recaptchaSiteKey: integ.recaptchaSiteKey || '', publicUrl: publicBaseUrl(req) });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -1483,6 +1483,10 @@ app.put('/api/analytics', async (req, res) => {
 // Resolve the public base URL from the incoming request (works behind Railway's
 // proxy, which sets x-forwarded-proto/host).
 function publicBaseUrl(req: any): string {
+  // Prefer the explicit PUBLIC_URL env var (stable custom domain); fall back to
+  // the request's forwarded host when it isn't set.
+  const env = String(process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
+  if (env) return env;
   const proto = String(req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim();
   const host = String(req.headers['x-forwarded-host'] || req.headers['host'] || '').trim();
   return `${proto}://${host}`;

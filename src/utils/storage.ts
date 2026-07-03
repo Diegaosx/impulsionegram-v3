@@ -957,7 +957,7 @@ export async function fetchRapidApiProfile(username: string): Promise<RapidProfi
   }
 }
 
-export async function fetchPublicConfig(): Promise<{ recaptchaSiteKey: string }> {
+export async function fetchPublicConfig(): Promise<{ recaptchaSiteKey: string; publicUrl?: string }> {
   try {
     const res = await fetch('/api/public-config');
     if (!res.ok) throw new Error('failed');
