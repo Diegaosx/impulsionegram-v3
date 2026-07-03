@@ -20,17 +20,25 @@ export function XIcon({ className }: IconProps) {
   );
 }
 
-// Kwai's app-icon mark: a rounded square badge with a knocked-out smiling face
-// (two eyes + smile). Uses evenodd so the face shows through in any color,
-// rendered monochrome via currentColor.
+// Kwai's official line mark (two heads + rounded body + play notch), from the
+// uploaded kwai-svgrepo-com.svg. Rendered as strokes in currentColor with a
+// thicker stroke so it stays legible at small sizes.
 export function KwaiIcon({ className }: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M6.5 2h11A4.5 4.5 0 0 1 22 6.5v11a4.5 4.5 0 0 1-4.5 4.5h-11A4.5 4.5 0 0 1 2 17.5v-11A4.5 4.5 0 0 1 6.5 2zM9 8.4a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm-6.7 5.1a1 1 0 0 0-.86 1.5A5 5 0 0 0 12 17.5a5 5 0 0 0 4.56-2.5 1 1 0 0 0-1.73-1 3 3 0 0 1-2.83 1.5 3 3 0 0 1-2.83-1.5 1 1 0 0 0-.87-.5z"
-      />
+    <svg
+      viewBox="0 0 48 48"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={3}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="m20.8501,42.5h13.4776c2.9774,0,5.391-2.4137,5.391-5.391v-7.7644c0-2.9774-2.4137-5.391-5.391-5.391h-13.4776c-2.9774,0-5.391,2.4137-5.391,5.391v7.7644c0,2.9774,2.4137,5.391,5.391,5.391Z" />
+      <circle cx="18.3283" cy="13.2606" r="7.7606" />
+      <circle cx="32.9039" cy="14.2064" r="6.8149" />
+      <path d="m15.4591,30.5937l-4.4824-2.5879c-1.198-.6917-2.6955.1729-2.6955,1.5563v7.3526c0,1.3833,1.4975,2.2479,2.6955,1.5563l4.4824-2.5879" />
     </svg>
   );
 }
