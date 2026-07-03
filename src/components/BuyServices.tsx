@@ -15,6 +15,7 @@ export default function BuyServices({ services, defaultProfile, onCreated }: Buy
   const [platform, setPlatform] = useState<SocialPlatform>('instagram');
   const [serviceType, setServiceType] = useState<string>('followers');
   const [quantity, setQuantity] = useState<number>(1000);
+  const [selectedPackageId, setSelectedPackageId] = useState<string>('');
   const [targetProfile, setTargetProfile] = useState<string>(defaultProfile || '');
   const [postUrl, setPostUrl] = useState<string>('');
   const paymentMethod: 'PIX' | 'Card' = 'PIX'; // PIX only for now
@@ -46,13 +47,40 @@ export default function BuyServices({ services, defaultProfile, onCreated }: Buy
     [services, platform, serviceType]
   );
 
+  // Fixed-price packages for the active service (sorted by quantity). When
+  // present, the buy form shows package cards instead of the quantity slider.
+  const activePackages = useMemo(() => {
+    const list = (activeService?.packages || []).filter((p) => p.quantity > 0 && p.price > 0);
+    return [...list].sort((a, b) => a.quantity - b.quantity);
+  }, [activeService]);
+  const hasPackages = activePackages.length > 0;
+  const selectedPackage = useMemo(
+    () => activePackages.find((p) => p.id === selectedPackageId),
+    [activePackages, selectedPackageId]
+  );
+
   useEffect(() => {
-    if (activeService) {
+    if (!activeService) return;
+    if (activePackages.length > 0) {
+      const preferred = activePackages.find((p) => p.isPopular) || activePackages[0];
+      setSelectedPackageId(preferred.id);
+      setQuantity(preferred.quantity);
+    } else {
+      setSelectedPackageId('');
       setQuantity(Math.max(activeService.minQuantity, Math.min(1000, activeService.maxQuantity)));
     }
-  }, [activeService]);
+  }, [activeService, activePackages]);
+
+  const selectPackage = (pkg: { id: string; quantity: number }) => {
+    setSelectedPackageId(pkg.id);
+    setQuantity(pkg.quantity);
+  };
 
   const pricing = useMemo(() => {
+    if (hasPackages) {
+      const price = selectedPackage ? selectedPackage.price : (activePackages[0]?.price || 0);
+      return { discountPercent: 0, base: price, discount: 0, final: price };
+    }
     let discountPercent = 0;
     if (quantity >= 10000) discountPercent = 30;
     else if (quantity >= 5000) discountPercent = 20;
@@ -60,7 +88,7 @@ export default function BuyServices({ services, defaultProfile, onCreated }: Buy
     const base = activeService ? quantity * activeService.pricePerItem : 0;
     const discount = base * (discountPercent / 100);
     return { discountPercent, base, discount, final: base - discount };
-  }, [quantity, activeService]);
+  }, [quantity, activeService, hasPackages, selectedPackage, activePackages]);
 
   const money = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const needsPostUrl = activeService && activeService.type !== 'followers';
@@ -131,8 +159,46 @@ export default function BuyServices({ services, defaultProfile, onCreated }: Buy
         </div>
       </div>
 
-      {/* Quantity */}
-      {activeService && (
+      {/* Packages (fixed price) OR quantity slider (legacy) */}
+      {activeService && hasPackages && (
+        <div>
+          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block mb-2">3. Escolha o pacote</label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            {activePackages.map((pkg) => {
+              const selected = pkg.id === selectedPackageId;
+              const unit = serviceType === 'followers' ? 'seguidores'
+                : serviceType === 'likes' ? 'curtidas'
+                : serviceType === 'views' ? 'visualizações'
+                : serviceType === 'stories' ? 'views stories'
+                : serviceType === 'comments' ? 'comentários'
+                : 'unidades';
+              return (
+                <button
+                  key={pkg.id}
+                  type="button"
+                  onClick={() => selectPackage(pkg)}
+                  className={`relative text-left p-3 rounded-xl border transition-all cursor-pointer ${
+                    selected ? 'bg-primary/5 border-primary ring-1 ring-primary' : 'bg-white border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  {pkg.isPopular && (
+                    <span className="absolute -top-2 right-2 bg-primary text-white text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full shadow">
+                      Popular
+                    </span>
+                  )}
+                  <div className="font-display font-black text-slate-900 text-lg leading-none">{pkg.quantity.toLocaleString('pt-BR')}</div>
+                  <div className="text-[9px] uppercase font-black tracking-wider text-slate-400 mt-0.5 truncate">
+                    {pkg.label && pkg.label.trim() ? pkg.label : unit}
+                  </div>
+                  <div className="mt-2 font-display font-black text-primary text-sm">{money(pkg.price)}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {activeService && !hasPackages && (
         <div>
           <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block mb-2">3. Quantidade</label>
           <div className="flex items-center gap-3">
