@@ -24,7 +24,7 @@ import {
   TrendingUp, CircleDollarSign, Compass, Layers, Globe, Filter, MessageCircle,
   User, Lock, Users, Ban, UserCheck, CreditCard, KeyRound, Eye, EyeOff, Plug, Flame, ArrowLeftCircle, Bot,
   Image as ImageIcon, Upload, Clock, Palette, Type, SlidersHorizontal,
-  Mail, Phone, MapPin, Share2, PanelBottom, Cookie, Newspaper, Code2, Quote, Inbox
+  Mail, Phone, MapPin, Share2, PanelBottom, Cookie, Newspaper, Code2, Quote, Inbox, Search
 } from 'lucide-react';
 import { SOCIAL_PLATFORMS } from '../data';
 
@@ -134,7 +134,9 @@ export default function AdminPanel({
     smtpSecure: false,
     recaptchaSiteKey: '',
     recaptchaSecretKey: '',
-    recaptchaMinScore: '0.5'
+    recaptchaMinScore: '0.5',
+    rapidApiKey: '',
+    rapidApiHost: 'social-api4.p.rapidapi.com'
   });
   const [integrationsLoading, setIntegrationsLoading] = useState(false);
   const [isSavingIntegrations, setIsSavingIntegrations] = useState(false);
@@ -2403,6 +2405,44 @@ export default function AdminPanel({
                             ))}
                           </div>
                         )}
+                      </div>
+                    </div>
+
+                    {/* RAPIDAPI CARD (consulta de perfil no checkout) */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+                      <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+                        <div className="bg-pink-50 text-pink-600 p-2 rounded-lg">
+                          <Search className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-slate-800 text-sm">RapidAPI (Perfil Instagram)</h4>
+                          <p className="text-slate-400 text-[11px] font-semibold">Consulta a foto e os números do perfil informado no checkout (social-api4).</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">x-rapidapi-key</label>
+                        <input
+                          type={showSecrets ? 'text' : 'password'}
+                          autoComplete="off"
+                          value={integrationsForm.rapidApiKey}
+                          onChange={(e) => setIntegrationsForm(prev => ({ ...prev, rapidApiKey: e.target.value.trim() }))}
+                          placeholder="sua chave x-rapidapi-key"
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">x-rapidapi-host</label>
+                        <input
+                          type="text"
+                          autoComplete="off"
+                          value={integrationsForm.rapidApiHost}
+                          onChange={(e) => setIntegrationsForm(prev => ({ ...prev, rapidApiHost: e.target.value.trim() }))}
+                          placeholder="social-api4.p.rapidapi.com"
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                        />
+                        <p className="text-[10px] text-slate-400 font-semibold">Deixe em branco a chave para desativar a consulta de perfil.</p>
                       </div>
                     </div>
 

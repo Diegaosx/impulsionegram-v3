@@ -1151,6 +1151,8 @@ export interface IntegrationSettings {
   recaptchaSiteKey: string;
   recaptchaSecretKey: string;
   recaptchaMinScore: string;
+  rapidApiKey: string;
+  rapidApiHost: string;
 }
 
 export const DEFAULT_INTEGRATIONS: IntegrationSettings = {
@@ -1169,7 +1171,9 @@ export const DEFAULT_INTEGRATIONS: IntegrationSettings = {
   smtpSecure: false,
   recaptchaSiteKey: '',
   recaptchaSecretKey: '',
-  recaptchaMinScore: '0.5'
+  recaptchaMinScore: '0.5',
+  rapidApiKey: '',
+  rapidApiHost: 'social-api4.p.rapidapi.com'
 };
 
 // --- General site settings (branding, SEO, timezone, theme) ---
