@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ServiceItem, PlanItem, SocialPlatform, ServicePackage } from '../types';
 import {
-  AdminOrder, HomeContent, IntegrationSettings, fetchIntegrations, saveIntegrationsToServer,
+  AdminOrder, HomeContent, IntegrationSettings, fetchIntegrations, saveIntegrationsToServer, fetchPublicConfig,
   GeneralSettings, fetchGeneralSettings, saveGeneralSettingsToServer, uploadAsset,
   CompanySettings, fetchCompanySettings, saveCompanySettingsToServer,
   CookieConsentRecord, fetchCookieConsents,
@@ -20,7 +20,7 @@ import TestimonialsAdmin from './TestimonialsAdmin';
 import MessagesAdmin from './MessagesAdmin';
 import {
   X, Plus, Pencil, Trash2, RotateCcw, LayoutDashboard, ShoppingBag, Star, Package,
-  BarChart3, Settings, ShieldCheck, HelpCircle, Save, Check, AlertCircle,
+  BarChart3, Settings, ShieldCheck, HelpCircle, Save, Check, Copy, AlertCircle,
   TrendingUp, CircleDollarSign, Compass, Layers, Globe, Filter, MessageCircle,
   User, Lock, Users, Ban, UserCheck, CreditCard, KeyRound, Eye, EyeOff, Plug, Flame, ArrowLeftCircle, Bot,
   Image as ImageIcon, Upload, Clock, Palette, Type, SlidersHorizontal,
@@ -143,6 +143,8 @@ export default function AdminPanel({
   const [integrationsLoading, setIntegrationsLoading] = useState(false);
   const [isSavingIntegrations, setIsSavingIntegrations] = useState(false);
   const [showSecrets, setShowSecrets] = useState(false);
+  const [publicUrl, setPublicUrl] = useState('');
+  const [copiedWebhook, setCopiedWebhook] = useState(false);
 
   // SMM panel helpers (balance + services lookup)
   const [smmInfo, setSmmInfo] = useState<{ balance?: string; currency?: string; error?: string } | null>(null);
@@ -169,6 +171,8 @@ export default function AdminPanel({
         setIntegrationsLoading(true);
         const data = await fetchIntegrations();
         setIntegrationsForm(data);
+        const cfg = await fetchPublicConfig();
+        setPublicUrl(cfg.publicUrl || (typeof window !== 'undefined' ? window.location.origin : ''));
       } catch (e) {
         console.error('Error loading integrations:', e);
       } finally {
@@ -2487,19 +2491,15 @@ export default function AdminPanel({
                       </div>
                     </div>
 
-                    {/* MERCADO PAGO CARD */}
-                    <div className={`bg-white border rounded-xl p-6 shadow-sm space-y-4 ${integrationsForm.paymentProvider === 'mercadopago' ? 'border-primary/40' : 'border-slate-200 opacity-70'}`}>
+                    {/* MERCADO PAGO CARD (only shown when it's the active provider) */}
+                    {integrationsForm.paymentProvider === 'mercadopago' && (
+                    <div className="bg-white border border-primary/40 rounded-xl p-6 shadow-sm space-y-4">
                       <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
                         <div className="bg-sky-50 text-sky-600 p-2 rounded-lg">
                           <CreditCard className="h-5 w-5" />
                         </div>
                         <div className="flex-1">
-                          <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                            Mercado Pago (Pagamento PIX)
-                            {integrationsForm.paymentProvider === 'mercadopago'
-                              ? <span className="text-[9px] font-black uppercase bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Ativo</span>
-                              : <span className="text-[9px] font-black uppercase bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full">Inativo</span>}
-                          </h4>
+                          <h4 className="font-bold text-slate-800 text-sm">Mercado Pago (Pagamento PIX)</h4>
                           <p className="text-slate-400 text-[11px] font-semibold">Gera cobranças PIX reais no checkout.</p>
                         </div>
                       </div>
@@ -2529,20 +2529,17 @@ export default function AdminPanel({
                         />
                       </div>
                     </div>
+                    )}
 
-                    {/* WOOVI CARD */}
-                    <div className={`bg-white border rounded-xl p-6 shadow-sm space-y-4 ${integrationsForm.paymentProvider === 'woovi' ? 'border-primary/40' : 'border-slate-200 opacity-70'}`}>
+                    {/* WOOVI CARD (only shown when it's the active provider) */}
+                    {integrationsForm.paymentProvider === 'woovi' && (
+                    <div className="bg-white border border-primary/40 rounded-xl p-6 shadow-sm space-y-4">
                       <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
                         <div className="bg-emerald-50 text-emerald-600 p-2 rounded-lg">
                           <CreditCard className="h-5 w-5" />
                         </div>
                         <div className="flex-1">
-                          <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                            Woovi (Pagamento PIX)
-                            {integrationsForm.paymentProvider === 'woovi'
-                              ? <span className="text-[9px] font-black uppercase bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Ativo</span>
-                              : <span className="text-[9px] font-black uppercase bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full">Inativo</span>}
-                          </h4>
+                          <h4 className="font-bold text-slate-800 text-sm">Woovi (Pagamento PIX)</h4>
                           <p className="text-slate-400 text-[11px] font-semibold">Gera cobranças PIX via Woovi (ex-OpenPix).</p>
                         </div>
                       </div>
@@ -2557,11 +2554,36 @@ export default function AdminPanel({
                           placeholder="App ID gerado no painel do Woovi (API / Plugins)"
                           className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
                         />
+                      </div>
+
+                      {/* Ready-to-copy webhook URL (built from PUBLIC_URL) */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">URL do Webhook (cole no painel do Woovi)</label>
+                        <div className="flex gap-1.5">
+                          <input
+                            readOnly
+                            value={`${(publicUrl || '').replace(/\/+$/, '')}/api/woovi/webhook`}
+                            className="flex-1 bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-600 overflow-hidden text-ellipsis focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(`${(publicUrl || '').replace(/\/+$/, '')}/api/woovi/webhook`);
+                              setCopiedWebhook(true);
+                              setTimeout(() => setCopiedWebhook(false), 2000);
+                            }}
+                            className="bg-primary hover:bg-purple-700 text-white rounded-lg px-3 flex items-center justify-center transition-colors shrink-0"
+                            title="Copiar URL"
+                          >
+                            {copiedWebhook ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                          </button>
+                        </div>
                         <span className="text-[10px] text-slate-400 block font-medium">
-                          No painel do Woovi, configure o webhook apontando para <strong>{`{seu-site}`}/api/woovi/webhook</strong> para confirmação automática. Mesmo sem o webhook, o status é verificado por consulta a cada poucos segundos.
+                          No painel do Woovi (API / Webhooks), cadastre essa URL para confirmação automática. Mesmo sem o webhook, o status é verificado por consulta a cada poucos segundos.
                         </span>
                       </div>
                     </div>
+                    )}
 
                     {/* SMM PANEL CARD */}
                     <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
