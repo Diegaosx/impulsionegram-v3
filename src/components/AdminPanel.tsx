@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { ServiceItem, PlanItem, SocialPlatform } from '../types';
+import { ServiceItem, PlanItem, SocialPlatform, ServicePackage } from '../types';
 import {
   AdminOrder, HomeContent, IntegrationSettings, fetchIntegrations, saveIntegrationsToServer,
   GeneralSettings, fetchGeneralSettings, saveGeneralSettingsToServer, uploadAsset,
@@ -19,7 +19,7 @@ import BlogAdmin from './BlogAdmin';
 import TestimonialsAdmin from './TestimonialsAdmin';
 import MessagesAdmin from './MessagesAdmin';
 import {
-  X, Plus, Pencil, Trash2, RotateCcw, LayoutDashboard, ShoppingBag,
+  X, Plus, Pencil, Trash2, RotateCcw, LayoutDashboard, ShoppingBag, Star, Package,
   BarChart3, Settings, ShieldCheck, HelpCircle, Save, Check, AlertCircle,
   TrendingUp, CircleDollarSign, Compass, Layers, Globe, Filter, MessageCircle,
   User, Lock, Users, Ban, UserCheck, CreditCard, KeyRound, Eye, EyeOff, Plug, Flame, ArrowLeftCircle, Bot,
@@ -529,7 +529,8 @@ export default function AdminPanel({
     maxQuantity: 10000,
     deliverySpeed: 'Início imediato, entrega natural',
     benefits: ['Perfis reais', 'Recarga garantida', 'Sem precisar de senha'],
-    smmServiceId: ''
+    smmServiceId: '',
+    packages: []
   });
 
   // New Benefit helper text
@@ -586,7 +587,8 @@ export default function AdminPanel({
       maxQuantity: service.maxQuantity,
       deliverySpeed: service.deliverySpeed,
       benefits: [...service.benefits],
-      smmServiceId: service.smmServiceId || ''
+      smmServiceId: service.smmServiceId || '',
+      packages: Array.isArray(service.packages) ? service.packages.map(p => ({ ...p })) : []
     });
     setIsAddingService(false);
   };
@@ -602,7 +604,8 @@ export default function AdminPanel({
       maxQuantity: 50000,
       deliverySpeed: 'Entrega rápida (5-15 min)',
       benefits: ['Perfis de alta qualidade', 'Prevenção contra quedas', 'Totalmente seguro'],
-      smmServiceId: ''
+      smmServiceId: '',
+      packages: []
     });
     setIsAddingService(true);
   };
@@ -614,16 +617,29 @@ export default function AdminPanel({
       return;
     }
 
+    // Keep only valid packages (positive quantity + price), sorted by quantity.
+    const cleanPackages: ServicePackage[] = (serviceForm.packages || [])
+      .map(p => ({
+        id: p.id || `pkg-${Date.now()}-${Math.round(p.quantity || 0)}`,
+        quantity: Math.max(0, Math.round(Number(p.quantity) || 0)),
+        price: Math.max(0, Number(p.price) || 0),
+        label: (p.label || '').trim(),
+        isPopular: !!p.isPopular
+      }))
+      .filter(p => p.quantity > 0 && p.price > 0)
+      .sort((a, b) => a.quantity - b.quantity);
+    const payload = { ...serviceForm, packages: cleanPackages };
+
     if (isAddingService) {
       const newService: ServiceItem = {
-        ...serviceForm,
+        ...payload,
         id: `custom-svc-${Date.now()}`
       };
       onUpdateServices([...services, newService]);
       triggerSuccess('Novo serviço criado e ativado com sucesso!');
       setIsAddingService(false);
     } else if (editingService) {
-      const updated = services.map(s => s.id === editingService.id ? { ...s, ...serviceForm } : s);
+      const updated = services.map(s => s.id === editingService.id ? { ...s, ...payload } : s);
       onUpdateServices(updated);
       triggerSuccess('Serviço atualizado com sucesso!');
       setEditingService(null);
@@ -651,6 +667,39 @@ export default function AdminPanel({
     setServiceForm(prev => ({
       ...prev,
       benefits: prev.benefits.filter((_, idx) => idx !== index)
+    }));
+  };
+
+  // --- SERVICE PACKAGE (fixed-price) OPERATIONS ---
+  const handleAddPackage = () => {
+    setServiceForm(prev => ({
+      ...prev,
+      packages: [
+        ...(prev.packages || []),
+        { id: `pkg-${Date.now()}-${(prev.packages || []).length}`, quantity: 1000, price: 0, label: '', isPopular: false }
+      ]
+    }));
+  };
+
+  const handleUpdatePackage = (index: number, patch: Partial<ServicePackage>) => {
+    setServiceForm(prev => ({
+      ...prev,
+      packages: (prev.packages || []).map((p, idx) => (idx === index ? { ...p, ...patch } : p))
+    }));
+  };
+
+  const handleRemovePackage = (index: number) => {
+    setServiceForm(prev => ({
+      ...prev,
+      packages: (prev.packages || []).filter((_, idx) => idx !== index)
+    }));
+  };
+
+  // Only one package can be flagged as "popular" (the highlighted card).
+  const handleTogglePackagePopular = (index: number) => {
+    setServiceForm(prev => ({
+      ...prev,
+      packages: (prev.packages || []).map((p, idx) => ({ ...p, isPopular: idx === index ? !p.isPopular : false }))
     }));
   };
 
@@ -1117,19 +1166,30 @@ export default function AdminPanel({
                   </button>
                 </div>
 
-                {/* FORM PANEL FOR ADD/EDIT (ONLY DOCK-IN WHEN ACTIVE) */}
+                {/* MODAL: ADD/EDIT SERVICE (centered overlay so it's always visible) */}
                 {(editingService || isAddingService) && (
-                  <form onSubmit={handleSaveService} className="bg-white border-2 border-primary/30 p-5 rounded-xl shadow-md space-y-4 animate-in slide-in-from-top duration-300">
-                    <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                      <h4 className="font-bold text-xs text-slate-800 uppercase tracking-wider">
-                        {isAddingService ? '➕ Adição de Novo Serviço' : `✏️ Editando Serviço: ${editingService?.label}`}
+                  <div
+                    className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-150"
+                    onClick={() => { setEditingService(null); setIsAddingService(false); }}
+                  >
+                  <form
+                    onSubmit={handleSaveService}
+                    onClick={(e) => e.stopPropagation()}
+                    className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl my-4 max-h-[92vh] overflow-y-auto space-y-4 p-5 sm:p-6"
+                  >
+                    <div className="flex justify-between items-center pb-3 border-b border-slate-100 sticky top-0 bg-white z-10 -mx-5 sm:-mx-6 px-5 sm:px-6 -mt-5 sm:-mt-6 pt-5 sm:pt-6">
+                      <h4 className="font-bold text-sm text-slate-800 flex items-center gap-2">
+                        {isAddingService
+                          ? (<><Plus className="h-4 w-4 text-primary" /> Novo Serviço</>)
+                          : (<><Pencil className="h-4 w-4 text-primary" /> Editando: {editingService?.label}</>)}
                       </h4>
-                      <button 
+                      <button
                         type="button"
                         onClick={() => { setEditingService(null); setIsAddingService(false); }}
-                        className="text-slate-400 hover:text-slate-600 text-xs font-bold"
+                        className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                        title="Fechar"
                       >
-                        Cancelar
+                        <X className="h-4.5 w-4.5" />
                       </button>
                     </div>
 
@@ -1247,6 +1307,87 @@ export default function AdminPanel({
                       </div>
                     </div>
 
+                    {/* Fixed-price packages editor */}
+                    <div className="space-y-3 border-t border-slate-100 pt-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="text-xs font-black text-slate-500 uppercase flex items-center gap-1.5">
+                          <Package className="h-3.5 w-3.5 text-primary" /> Pacotes de preço fixo
+                        </label>
+                        <button
+                          type="button"
+                          onClick={handleAddPackage}
+                          className="bg-primary/10 hover:bg-primary/20 text-primary font-bold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-colors shrink-0"
+                        >
+                          <Plus className="h-3.5 w-3.5" /> Adicionar pacote
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                        Defina pacotes prontos (ex.: <strong>1.000 seguidores por R$ 7,90</strong>). Quando houver pacotes, a calculadora exibe cards de escolha no lugar da barra de quantidade. Sem pacotes, ela usa o preço unitário + mín/máx acima.
+                      </p>
+
+                      {(serviceForm.packages || []).length === 0 ? (
+                        <div className="text-[11px] text-slate-400 font-semibold bg-slate-50 border border-dashed border-slate-200 rounded-lg p-3 text-center">
+                          Nenhum pacote definido — o serviço usará o modo slider (preço unitário).
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {(serviceForm.packages || []).map((pkg, idx) => (
+                            <div key={pkg.id} className={`flex flex-wrap items-end gap-2 rounded-lg p-2.5 border ${pkg.isPopular ? 'bg-primary/5 border-primary/30' : 'bg-slate-50 border-slate-200'}`}>
+                              <div className="space-y-0.5 w-24">
+                                <label className="text-[9px] font-black text-slate-400 uppercase block">Quantidade</label>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  value={pkg.quantity}
+                                  onChange={(e) => handleUpdatePackage(idx, { quantity: parseInt(e.target.value, 10) || 0 })}
+                                  className="w-full bg-white border border-slate-200 text-xs font-bold rounded-lg p-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary"
+                                />
+                              </div>
+                              <div className="space-y-0.5 w-28">
+                                <label className="text-[9px] font-black text-slate-400 uppercase block">Preço (R$)</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min={0}
+                                  value={pkg.price}
+                                  onChange={(e) => handleUpdatePackage(idx, { price: parseFloat(e.target.value) || 0 })}
+                                  className="w-full bg-white border border-slate-200 text-xs font-bold rounded-lg p-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary"
+                                />
+                              </div>
+                              <div className="space-y-0.5 flex-1 min-w-[140px]">
+                                <label className="text-[9px] font-black text-slate-400 uppercase block">Rótulo (opcional)</label>
+                                <input
+                                  type="text"
+                                  value={pkg.label || ''}
+                                  onChange={(e) => handleUpdatePackage(idx, { label: e.target.value })}
+                                  placeholder={`${(pkg.quantity || 0).toLocaleString('pt-BR')} ${serviceForm.type === 'followers' ? 'seguidores' : 'un.'}`}
+                                  className="w-full bg-white border border-slate-200 text-xs font-semibold rounded-lg p-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary"
+                                />
+                              </div>
+                              <div className="flex items-center gap-1 pb-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleTogglePackagePopular(idx)}
+                                  title={pkg.isPopular ? 'Pacote em destaque' : 'Marcar como destaque'}
+                                  className={`p-2 rounded-lg transition-colors cursor-pointer ${pkg.isPopular ? 'bg-primary text-white' : 'bg-white border border-slate-200 text-slate-400 hover:text-primary'}`}
+                                >
+                                  <Star className="h-3.5 w-3.5" fill={pkg.isPopular ? 'currentColor' : 'none'} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemovePackage(idx)}
+                                  title="Remover pacote"
+                                  className="p-2 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-200 transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
                     {/* Manage benefits list tags */}
                     <div className="space-y-2 border-t border-slate-100 pt-3">
                       <label className="text-xs font-black text-slate-500 uppercase block">Benefícios do Serviço (Pontos de Valor)</label>
@@ -1300,6 +1441,7 @@ export default function AdminPanel({
                       </button>
                     </div>
                   </form>
+                  </div>
                 )}
 
                 {/* PLATFORMS FILTER SUB-BAR */}
@@ -1334,8 +1476,8 @@ export default function AdminPanel({
                     <thead className="bg-slate-50 text-slate-400 font-black text-[10px] uppercase border-b border-slate-100 font-mono tracking-wider">
                       <tr>
                         <th className="p-4">Serviço / Rede</th>
-                        <th className="p-4">Preço por 1k</th>
-                        <th className="p-4">Limites (Min/Max)</th>
+                        <th className="p-4">Preço</th>
+                        <th className="p-4">Pacotes / Modo</th>
                         <th className="p-4">Velocidade</th>
                         <th className="p-4 text-right">Ações</th>
                       </tr>
@@ -1346,7 +1488,11 @@ export default function AdminPanel({
                         .map(service => {
                           const pf = SOCIAL_PLATFORMS.find(p => p.id === service.platform);
                           const formattedPrice = (service.pricePerItem * 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                          
+                          const pkgs = Array.isArray(service.packages) ? service.packages : [];
+                          const hasPackages = pkgs.length > 0;
+                          const pkgPrices = pkgs.map(p => p.price).filter(n => n > 0);
+                          const minPkgPrice = pkgPrices.length ? Math.min(...pkgPrices) : 0;
+
                           return (
                             <tr key={service.id} className="hover:bg-slate-50/50 transition-colors">
                               <td className="p-4">
@@ -1358,10 +1504,14 @@ export default function AdminPanel({
                                 </div>
                               </td>
                               <td className="p-4 font-bold text-slate-950 font-mono text-sm">
-                                R$ {formattedPrice}
+                                {hasPackages
+                                  ? <span>a partir de R$ {minPkgPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                  : <span>R$ {formattedPrice}<span className="text-[10px] text-slate-400 font-sans font-semibold"> /1k</span></span>}
                               </td>
                               <td className="p-4 text-slate-500 font-mono">
-                                {service.minQuantity.toLocaleString('pt-BR')} ~ {service.maxQuantity.toLocaleString('pt-BR')} un.
+                                {hasPackages
+                                  ? <span className="inline-flex items-center gap-1 bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-md text-[11px] font-sans"><Package className="h-3 w-3" /> {pkgs.length} pacote{pkgs.length > 1 ? 's' : ''}</span>
+                                  : <span className="text-[11px] font-sans font-semibold">Slider: {service.minQuantity.toLocaleString('pt-BR')} ~ {service.maxQuantity.toLocaleString('pt-BR')}</span>}
                               </td>
                               <td className="p-4 text-slate-500 font-semibold italic text-[11px]">
                                 {service.deliverySpeed}

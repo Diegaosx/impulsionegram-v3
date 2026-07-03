@@ -38,7 +38,11 @@ export default function InteractiveCalculator({
   
   // Dynamic Input States
   const [customInput, setCustomInput] = useState<string>('1000');
-  
+
+  // Selected fixed-price package (when the active service defines packages, the
+  // calculator shows package cards instead of the quantity slider).
+  const [selectedPackageId, setSelectedPackageId] = useState<string>('');
+
   // Checkout Modal State
   const [showCheckout, setShowCheckout] = useState(false);
   const [checkoutStep, setCheckoutStep] = useState<'info' | 'account' | 'login_prompt' | 'processing' | 'done'>('info');
@@ -164,17 +168,57 @@ export default function InteractiveCalculator({
     return list.find(s => s.platform === platform && s.type === serviceType);
   }, [platform, serviceType, services]);
 
-  // Adjust default quantity limits whenever service changes
+  // Fixed-price packages for the active service (sorted by quantity). When
+  // present, the calculator uses package cards instead of the slider.
+  const activePackages = useMemo(() => {
+    const list = (activeService?.packages || []).filter(p => p.quantity > 0 && p.price > 0);
+    return [...list].sort((a, b) => a.quantity - b.quantity);
+  }, [activeService]);
+  const hasPackages = activePackages.length > 0;
+  const selectedPackage = useMemo(
+    () => activePackages.find(p => p.id === selectedPackageId),
+    [activePackages, selectedPackageId]
+  );
+
+  // When the service changes, either default-select a package (the popular one,
+  // else the first) or reset the slider quantity for the legacy pricing mode.
   useEffect(() => {
-    if (activeService) {
+    if (!activeService) return;
+    if (activePackages.length > 0) {
+      const preferred = activePackages.find(p => p.isPopular) || activePackages[0];
+      setSelectedPackageId(preferred.id);
+      setQuantity(preferred.quantity);
+      setCustomInput(preferred.quantity.toString());
+    } else {
+      setSelectedPackageId('');
       const defaultQty = Math.max(activeService.minQuantity, Math.min(1000, activeService.maxQuantity));
       setQuantity(defaultQty);
       setCustomInput(defaultQty.toString());
     }
-  }, [activeService]);
+  }, [activeService, activePackages]);
 
-  // Calculate bulk progressive discounts
+  // Pick a package card: locks quantity/price to that package.
+  const handleSelectPackage = (pkg: { id: string; quantity: number }) => {
+    setSelectedPackageId(pkg.id);
+    setQuantity(pkg.quantity);
+    setCustomInput(pkg.quantity.toString());
+  };
+
+  // Calculate pricing. With packages, the price is fixed (no progressive
+  // discount); otherwise the legacy slider applies bulk progressive discounts.
   const bulkMetrics = useMemo(() => {
+    if (hasPackages) {
+      const price = selectedPackage ? selectedPackage.price : (activePackages[0]?.price || 0);
+      const qty = selectedPackage ? selectedPackage.quantity : (activePackages[0]?.quantity || 0);
+      return {
+        discountPercent: 0,
+        basePrice: price,
+        discountValue: 0,
+        finalPrice: price,
+        pricePerUnit: qty > 0 ? price / qty : 0
+      };
+    }
+
     let discountPercent = 0;
     if (quantity >= 10000) {
       discountPercent = 30; // 30% reduction
@@ -183,11 +227,11 @@ export default function InteractiveCalculator({
     } else if (quantity >= 2000) {
       discountPercent = 10; // 10% reduction
     }
-    
+
     const basePrice = activeService ? quantity * activeService.pricePerItem : 0;
     const discount = basePrice * (discountPercent / 100);
     const finalPrice = basePrice - discount;
-    
+
     return {
       discountPercent,
       basePrice,
@@ -195,7 +239,7 @@ export default function InteractiveCalculator({
       finalPrice,
       pricePerUnit: quantity > 0 ? finalPrice / quantity : 0
     };
-  }, [quantity, activeService]);
+  }, [quantity, activeService, hasPackages, selectedPackage, activePackages]);
 
   // Sync Slider vs Text Input
   const handleQuantitySliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -427,24 +471,75 @@ export default function InteractiveCalculator({
                 ))}
               </div>
 
-              {/* Step 3: Quantities */}
+              {/* Step 3: Packages (fixed price) OR quantity slider (legacy) */}
               <div className="flex items-center justify-between mb-3">
-                <label className="text-xs uppercase tracking-widest font-mono font-black text-slate-400">3. Defina a Quantidade</label>
-                <div className="flex items-center bg-slate-950 rounded-lg border border-slate-800 p-1">
-                  <button onClick={() => decrementQuantity(100)} className="px-2.5 py-1 text-slate-400 hover:text-white font-bold">-100</button>
-                  <input
-                    type="text"
-                    value={customInput}
-                    onChange={handleCustomInputChange}
-                    onBlur={handleCustomInputBlur}
-                    className="w-16 text-center bg-transparent border-none text-xs font-bold text-accent focus:outline-none"
-                    id="calc-manual-qty-input"
-                  />
-                  <button onClick={() => incrementQuantity(100)} className="px-2.5 py-1 text-slate-400 hover:text-white font-bold">+100</button>
-                </div>
+                <label className="text-xs uppercase tracking-widest font-mono font-black text-slate-400">
+                  {hasPackages ? '3. Escolha o Pacote' : '3. Defina a Quantidade'}
+                </label>
+                {!hasPackages && (
+                  <div className="flex items-center bg-slate-950 rounded-lg border border-slate-800 p-1">
+                    <button onClick={() => decrementQuantity(100)} className="px-2.5 py-1 text-slate-400 hover:text-white font-bold">-100</button>
+                    <input
+                      type="text"
+                      value={customInput}
+                      onChange={handleCustomInputChange}
+                      onBlur={handleCustomInputBlur}
+                      className="w-16 text-center bg-transparent border-none text-xs font-bold text-accent focus:outline-none"
+                      id="calc-manual-qty-input"
+                    />
+                    <button onClick={() => incrementQuantity(100)} className="px-2.5 py-1 text-slate-400 hover:text-white font-bold">+100</button>
+                  </div>
+                )}
               </div>
 
-              {activeService && (
+              {/* PACKAGE CARDS */}
+              {activeService && hasPackages && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  {activePackages.map((pkg) => {
+                    const selected = pkg.id === selectedPackageId;
+                    const unit = serviceType === 'followers' ? 'seguidores'
+                      : serviceType === 'likes' ? 'curtidas'
+                      : serviceType === 'views' ? 'visualizações'
+                      : serviceType === 'stories' ? 'views stories'
+                      : serviceType === 'comments' ? 'comentários'
+                      : 'unidades';
+                    return (
+                      <button
+                        key={pkg.id}
+                        type="button"
+                        onClick={() => handleSelectPackage(pkg)}
+                        className={`relative text-left p-3 rounded-xl border transition-all cursor-pointer ${
+                          selected
+                            ? 'bg-primary/15 border-primary shadow-[0_0_0_1px] shadow-primary/40'
+                            : 'bg-slate-900 border-slate-800 hover:border-slate-600'
+                        }`}
+                        id={`calc-package-${pkg.id}`}
+                      >
+                        {pkg.isPopular && (
+                          <span className="absolute -top-2 right-2 bg-accent text-slate-950 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full shadow">
+                            Popular
+                          </span>
+                        )}
+                        <div className="font-display font-black text-white text-lg leading-none">
+                          {pkg.quantity.toLocaleString('pt-BR')}
+                        </div>
+                        <div className="text-[9px] uppercase font-black tracking-wider text-slate-400 mt-0.5 truncate">
+                          {pkg.label && pkg.label.trim() ? pkg.label : unit}
+                        </div>
+                        <div className="mt-2 font-display font-black text-accent text-sm">
+                          R$ {pkg.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        {selected && (
+                          <div className="absolute top-2 left-2 h-2 w-2 rounded-full bg-primary" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* LEGACY SLIDER (services without packages) */}
+              {activeService && !hasPackages && (
                 <div className="space-y-6">
                   {/* Slider Control */}
                   <div className="relative pt-4">
