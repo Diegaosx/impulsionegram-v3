@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { SERVICES, SOCIAL_PLATFORMS } from '../data';
 import { SocialPlatform, ServiceItem } from '../types';
-import { Instagram, Youtube, Twitter, Facebook, Flame, Check, HelpCircle } from 'lucide-react';
+import { Instagram, Youtube, Twitter, Facebook, Check, HelpCircle } from 'lucide-react';
+import { TikTokIcon, KwaiIcon } from './icons/BrandIcons';
 
 interface ServicesGridProps {
   onSelectService: (platform: SocialPlatform, type: string) => void;
@@ -20,8 +21,8 @@ export default function ServicesGrid({ onSelectService, searchTerm = '', onNavig
       case 'youtube': return <Youtube className={className} />;
       case 'twitter': return <Twitter className={className} />;
       case 'facebook': return <Facebook className={className} />;
-      case 'kwai': return <Flame className={className} />;
-      case 'tiktok': return <Flame className={className} />; // Flame or standard TikTok representation
+      case 'kwai': return <KwaiIcon className={className} />;
+      case 'tiktok': return <TikTokIcon className={className} />;
       default: return <HelpCircle className={className} />;
     }
   };

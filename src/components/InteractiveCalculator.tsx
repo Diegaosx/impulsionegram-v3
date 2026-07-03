@@ -5,6 +5,7 @@ import { SocialPlatform, ServiceItem } from '../types';
 import { AuthUser, AdminOrder, RapidProfile, checkAccountExists, registerAccount, createMyOrder, fetchRapidApiProfile } from '../utils/storage';
 import { useOffer } from '../utils/useOffer';
 import OrderConfirmation from './OrderConfirmation';
+import { TikTokIcon, KwaiIcon } from './icons/BrandIcons';
 import {
   Instagram, Youtube, Twitter, Facebook, Flame, Zap, Shield,
   Lock, Sparkles, Smartphone, Mail, User, Compass, ShoppingCart, Loader2, ArrowRight, X, LogIn,
@@ -395,8 +396,8 @@ export default function InteractiveCalculator({
       case 'youtube': return <Youtube className="h-6 w-6" />;
       case 'twitter': return <Twitter className="h-6 w-6" />;
       case 'facebook': return <Facebook className="h-6 w-6" />;
-      case 'kwai': return <Flame className="h-6 w-6" />;
-      case 'tiktok': return <Flame className="h-6 w-6 text-black" />; // Styled
+      case 'kwai': return <KwaiIcon className="h-6 w-6" />;
+      case 'tiktok': return <TikTokIcon className="h-6 w-6" />;
     }
   };
 
