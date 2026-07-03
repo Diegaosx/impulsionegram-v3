@@ -20,11 +20,17 @@ export function XIcon({ className }: IconProps) {
   );
 }
 
-// Kwai's mark is a stylized video camera; rendered monochrome via currentColor.
+// Kwai's app-icon mark: a rounded square badge with a knocked-out smiling face
+// (two eyes + smile). Uses evenodd so the face shows through in any color,
+// rendered monochrome via currentColor.
 export function KwaiIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-      <path d="M7.2 3.6a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm0 1.8a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zM15 4.2a2.7 2.7 0 1 1 0 5.4 2.7 2.7 0 0 1 0-5.4zm0 1.7a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM5 11.4h8.2a3 3 0 0 1 3 3v.46l3.05-1.76a1 1 0 0 1 1.5.87v5.86a1 1 0 0 1-1.5.86L16.2 19.4v.2a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-5.2a3 3 0 0 1 3-3z" />
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M6.5 2h11A4.5 4.5 0 0 1 22 6.5v11a4.5 4.5 0 0 1-4.5 4.5h-11A4.5 4.5 0 0 1 2 17.5v-11A4.5 4.5 0 0 1 6.5 2zM9 8.4a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm-6.7 5.1a1 1 0 0 0-.86 1.5A5 5 0 0 0 12 17.5a5 5 0 0 0 4.56-2.5 1 1 0 0 0-1.73-1 3 3 0 0 1-2.83 1.5 3 3 0 0 1-2.83-1.5 1 1 0 0 0-.87-.5z"
+      />
     </svg>
   );
 }
