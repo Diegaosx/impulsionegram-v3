@@ -7,6 +7,23 @@ export function isRapidApiConfigured(key?: string): boolean {
   return !!(key && key.trim());
 }
 
+// Instagram/Facebook serve profile pictures from these CDNs and block
+// cross-origin hotlinking (Cross-Origin-Resource-Policy), so the browser can't
+// render them directly. We proxy them through our own origin — this allowlist
+// keeps that proxy from being turned into an open SSRF relay.
+export function isProxyableImageUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== 'https:') return false;
+    const host = u.hostname.toLowerCase();
+    return /(^|\.)cdninstagram\.com$/.test(host) ||
+           /(^|\.)fbcdn\.net$/.test(host) ||
+           /(^|\.)cdninstagram\.net$/.test(host);
+  } catch {
+    return false;
+  }
+}
+
 export interface RapidProfile {
   username: string;
   fullName: string;

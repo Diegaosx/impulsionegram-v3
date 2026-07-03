@@ -70,7 +70,7 @@ import {
 } from './db';
 import { isMercadoPagoConfigured, createPixPayment, getPaymentStatus } from './mercadopago';
 import { isSmmConfigured, smmAddOrder, smmOrderStatus, smmBalance, smmServices, isSmmCompleted, buildTargetLink } from './smm';
-import { isRapidApiConfigured, fetchInstagramProfile } from './rapidapi';
+import { isRapidApiConfigured, fetchInstagramProfile, isProxyableImageUrl } from './rapidapi';
 import { uploadToR2, isR2Configured } from './r2';
 import { verifyRecaptcha } from './recaptcha';
 import { stripLinks } from './sanitize';
@@ -113,6 +113,7 @@ const PUBLIC_API: { method: string; re: RegExp }[] = [
   { method: 'GET', re: /^\/company\/?$/ },
   { method: 'GET', re: /^\/public-config\/?$/ },
   { method: 'GET', re: /^\/rapidapi\/profile\/?$/ },
+  { method: 'GET', re: /^\/rapidapi\/image\/?$/ },
   { method: 'GET', re: /^\/offer\/?$/ },
   { method: 'GET', re: /^\/pages\/[a-z]+\/?$/ },
   { method: 'GET', re: /^\/chatbot\/?$/ },
@@ -1280,6 +1281,12 @@ app.get('/api/rapidapi/profile', async (req, res) => {
     }
     try {
       const profile = await fetchInstagramProfile(integ.rapidApiKey, integ.rapidApiHost, username);
+      // Instagram's CDN blocks cross-origin hotlinking, so rewrite the photo to
+      // go through our same-origin image proxy (below) — otherwise the browser
+      // refuses to render it (ERR_BLOCKED_BY_RESPONSE.NotSameOrigin).
+      if (profile && profile.profilePicUrl && isProxyableImageUrl(profile.profilePicUrl)) {
+        profile.profilePicUrl = `/api/rapidapi/image?url=${encodeURIComponent(profile.profilePicUrl)}`;
+      }
       return res.json({ configured: true, profile });
     } catch (err: any) {
       console.error('RapidAPI profile lookup failed:', err?.message || err);
@@ -1287,6 +1294,28 @@ app.get('/api/rapidapi/profile', async (req, res) => {
     }
   } catch (e: any) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// Public: same-origin proxy for Instagram/Facebook CDN profile pictures. The
+// URL is validated against a strict host allowlist so this can't be abused as
+// an open SSRF relay. Streams the image bytes back with a short cache.
+app.get('/api/rapidapi/image', async (req, res) => {
+  try {
+    const raw = String(req.query.url || '');
+    if (!raw || !isProxyableImageUrl(raw)) return res.status(400).end();
+    const upstream = await fetch(raw, {
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'image/*,*/*' }
+    });
+    if (!upstream.ok) return res.status(502).end();
+    const ct = upstream.headers.get('content-type') || 'image/jpeg';
+    if (!ct.startsWith('image/')) return res.status(415).end();
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    res.setHeader('Content-Type', ct);
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.end(buf);
+  } catch (e: any) {
+    return res.status(500).end();
   }
 });
 
