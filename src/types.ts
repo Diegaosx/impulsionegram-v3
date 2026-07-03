@@ -1,16 +1,28 @@
 export type SocialPlatform = 'instagram' | 'tiktok' | 'youtube' | 'twitter' | 'facebook' | 'kwai';
 
+// A fixed-price package for a service (e.g. "1.000 seguidores por R$ 7,90").
+// When a service defines packages, the calculator shows selectable package
+// cards instead of the quantity slider.
+export interface ServicePackage {
+  id: string;
+  quantity: number;
+  price: number;
+  label?: string;      // optional custom label, else derived from quantity
+  isPopular?: boolean; // highlights the card as the recommended choice
+}
+
 export interface ServiceItem {
   id: string;
   platform: SocialPlatform;
   type: 'followers' | 'likes' | 'views' | 'comments' | 'stories';
   label: string;
-  pricePerItem: number; // Price per unit
+  pricePerItem: number; // Price per unit (used as slider fallback when no packages)
   minQuantity: number;
   maxQuantity: number;
   deliverySpeed: string;
   benefits: string[];
   smmServiceId?: string; // ID do serviço no painel SMM (entrega automática)
+  packages?: ServicePackage[]; // fixed-price packages (preferred over the slider)
 }
 
 export interface PlanItem {
