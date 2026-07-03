@@ -68,7 +68,8 @@ import {
   updateContactMessageStatus,
   deleteContactMessage
 } from './db';
-import { isMercadoPagoConfigured, createPixPayment, getPaymentStatus } from './mercadopago';
+import { isMercadoPagoConfigured, getPaymentStatus } from './mercadopago';
+import { isPixConfigured, createPix, getPixStatus, getActiveProvider } from './payments';
 import { isSmmConfigured, smmAddOrder, smmOrderStatus, smmBalance, smmServices, isSmmCompleted, buildTargetLink } from './smm';
 import { isRapidApiConfigured, fetchInstagramProfile, isProxyableImageUrl } from './rapidapi';
 import { uploadToR2, isR2Configured } from './r2';
@@ -128,7 +129,8 @@ const PUBLIC_API: { method: string; re: RegExp }[] = [
   { method: 'POST', re: /^\/testimonials\/?$/ },
   { method: 'POST', re: /^\/contact\/?$/ },
   { method: 'POST', re: /^\/orders\/?$/ },
-  { method: 'POST', re: /^\/mercadopago\/webhook\/?$/ }
+  { method: 'POST', re: /^\/mercadopago\/webhook\/?$/ },
+  { method: 'POST', re: /^\/woovi\/webhook\/?$/ }
 ];
 
 // Routes any authenticated user (admin OR cliente) may access.
@@ -641,8 +643,8 @@ app.post('/api/my/orders', async (req, res) => {
     if (newOrder.paymentMethod === 'PIX') {
       try {
         const integ = await getIntegrations();
-        if (isMercadoPagoConfigured(integ.mercadoPagoAccessToken)) {
-          const pay = await createPixPayment(integ.mercadoPagoAccessToken, {
+        if (isPixConfigured(integ)) {
+          const pay = await createPix(integ, {
             amount: newOrder.price,
             description: `${newOrder.serviceLabel} (${newOrder.id})`,
             email: account.email,
@@ -651,6 +653,7 @@ app.post('/api/my/orders', async (req, res) => {
             notificationUrl: `${publicBaseUrl(req)}/api/mercadopago/webhook`
           });
           const patch = {
+            paymentProvider: getActiveProvider(integ),
             mpPaymentId: pay.id,
             pixQrCode: pay.qrCode,
             pixQrCodeBase64: pay.qrCodeBase64,
@@ -691,9 +694,9 @@ app.get('/api/my/orders/:id/payment', async (req, res) => {
     let status = order.status;
     if (order.mpPaymentId && order.status !== 'pago' && order.status !== 'entregue') {
       const integ = await getIntegrations();
-      if (isMercadoPagoConfigured(integ.mercadoPagoAccessToken)) {
+      if (isPixConfigured(integ)) {
         try {
-          const pay = await getPaymentStatus(integ.mercadoPagoAccessToken, order.mpPaymentId);
+          const pay = await getPixStatus(integ, order.mpPaymentId);
           if (pay.status === 'approved') {
             await handleOrderPaid(order.id);
             status = 'pago';
@@ -749,12 +752,12 @@ app.post('/api/my/orders/:id/pix', async (req, res) => {
     }
 
     const integ = await getIntegrations();
-    if (!isMercadoPagoConfigured(integ.mercadoPagoAccessToken)) {
+    if (!isPixConfigured(integ)) {
       return res.status(400).json({ error: 'Pagamento via PIX automático não está configurado. A confirmação é feita manualmente pela equipe.' });
     }
 
     try {
-      const pay = await createPixPayment(integ.mercadoPagoAccessToken, {
+      const pay = await createPix(integ, {
         amount: Number(order.price),
         description: `${order.serviceLabel} (${order.id})`,
         email: account!.email,
@@ -763,6 +766,7 @@ app.post('/api/my/orders/:id/pix', async (req, res) => {
         notificationUrl: `${publicBaseUrl(req)}/api/mercadopago/webhook`
       });
       await patchOrderData(order.id, {
+        paymentProvider: getActiveProvider(integ),
         mpPaymentId: pay.id,
         pixQrCode: pay.qrCode,
         pixQrCodeBase64: pay.qrCodeBase64,
@@ -810,6 +814,30 @@ app.post('/api/mercadopago/webhook', async (req, res) => {
     console.error('MP webhook error:', e?.message || e);
   }
   // Always 200 so Mercado Pago doesn't keep retrying.
+  res.sendStatus(200);
+});
+
+// Woovi payment webhook (public). Woovi POSTs { event, charge, pix } to the URL
+// configured in the Woovi dashboard. The charge.correlationID is our order id.
+app.post('/api/woovi/webhook', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const charge = body.charge || {};
+    const correlationID = String(charge.correlationID || body.correlationID || '');
+    const status = String(charge.status || '').toUpperCase();
+    const event = String(body.event || '');
+    if (correlationID) {
+      const completed = status === 'COMPLETED' || status === 'CONFIRMED' || /COMPLETED/i.test(event);
+      if (completed) {
+        await handleOrderPaid(correlationID);
+      } else if (status) {
+        await patchOrderData(correlationID, { paymentStatus: status.toLowerCase() });
+      }
+    }
+  } catch (e: any) {
+    console.error('Woovi webhook error:', e?.message || e);
+  }
+  // Always 200 so Woovi doesn't keep retrying.
   res.sendStatus(200);
 });
 

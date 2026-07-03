@@ -1135,8 +1135,10 @@ export async function saveCompanySettings(data: Partial<CompanySettings>): Promi
 // Stored as a single JSONB row in the settings table so they can be configured
 // from the admin panel instead of environment variables.
 export interface IntegrationSettings {
+  paymentProvider: 'mercadopago' | 'woovi';
   mercadoPagoAccessToken: string;
   mercadoPagoPublicKey: string;
+  wooviAppId: string;
   smmApiUrl: string;
   smmApiKey: string;
   emailProvider: 'smtp' | 'resend';
@@ -1156,8 +1158,10 @@ export interface IntegrationSettings {
 }
 
 export const DEFAULT_INTEGRATIONS: IntegrationSettings = {
+  paymentProvider: 'mercadopago',
   mercadoPagoAccessToken: '',
   mercadoPagoPublicKey: '',
+  wooviAppId: '',
   smmApiUrl: '',
   smmApiKey: '',
   emailProvider: 'smtp',
