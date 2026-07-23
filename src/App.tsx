@@ -22,6 +22,7 @@ import {
   fetchMe, AuthUser
 } from './utils/storage';
 import { applyBrandingToHead } from './utils/branding';
+import { applyBasicSEO } from './utils/seo';
 import { setAppTimezone } from './utils/datetime';
 import { applySiteCode, clearSiteCode } from './utils/codeInjection';
 import { clearAdminToken, getAdminToken, getCachedUser, setCachedUser, clearCachedUser } from './utils/authFetch';
@@ -39,6 +40,8 @@ export default function App() {
   // Site branding (applied to header/head)
   const [siteName, setSiteName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
+  const [seoTitle, setSeoTitle] = useState('');
+  const [seoDescription, setSeoDescription] = useState('');
   const [company, setCompany] = useState<CompanySettings | null>(null);
 
   // Custom JS / Analytics code snippets (injected on public pages)
@@ -83,6 +86,8 @@ export default function App() {
         // Apply configurable branding / SEO / timezone
         setSiteName(loadedGeneral.siteName);
         setLogoUrl(loadedGeneral.logoUrl);
+        setSeoTitle(loadedGeneral.seoTitle || loadedGeneral.siteName);
+        setSeoDescription(loadedGeneral.seoDescription || '');
         setAppTimezone(loadedGeneral.timezone);
         applyBrandingToHead(loadedGeneral, {
           skipTitle: window.location.pathname.startsWith('/blog')
@@ -117,6 +122,29 @@ export default function App() {
       applySiteCode(analytics);
     }
   }, [analytics, location.pathname]);
+
+  // Keep the document <head> SEO in sync with the current route. Service and
+  // blog pages inject their own per-route title/canonical/OG (and clean up
+  // their JSON-LD on unmount); every other public route re-applies the site
+  // baseline here so a service's title, canonical or og:image can't leak onto
+  // the next page during client-side navigation (e.g. going back to the home
+  // page). Private/auth areas are skipped so they stay out of the index.
+  useEffect(() => {
+    if (!siteName) return; // wait until branding has loaded
+    const path = location.pathname;
+    const selfManaged = ['/servico/', '/blog']; // pages that set their own SEO
+    const privateAreas = ['/dashboard', '/login', '/cadastro', '/perfil', '/minha-conta'];
+    if (selfManaged.some((p) => path.startsWith(p))) return;
+    if (privateAreas.some((p) => path.startsWith(p))) return;
+    const origin = window.location.origin;
+    applyBasicSEO({
+      title: seoTitle || siteName,
+      description: seoDescription,
+      canonical: `${origin}${path}`,
+      brand: siteName,
+      type: 'website'
+    });
+  }, [location.pathname, siteName, seoTitle, seoDescription]);
 
   // --- Auth handlers ---
   const handleAuthSuccess = (user: AuthUser) => {

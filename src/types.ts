@@ -27,6 +27,17 @@ export interface ServiceItem {
   pageTitle?: string; // H1 of the service page (can be longer than the card name); slug is derived from it
   pageSubtitle?: string; // subtitle shown next to the calculator on the service page
   pageDescriptionHtml?: string; // rich HTML description below the service page hero
+  pageImageUrl?: string; // featured image (used for the hero + og:image/SEO)
+  pageMetaDescription?: string; // SEO meta description (falls back to the subtitle)
+  faqTitle?: string; // editable title of the service page's FAQ section
+  faqSubtitle?: string; // editable subtitle/description of the FAQ section
+  faqs?: ServiceFaq[]; // per-service FAQ questions (also emitted as FAQPage rich snippet)
+}
+
+export interface ServiceFaq {
+  id: string;
+  question: string;
+  answer: string;
 }
 
 export interface PlanItem {

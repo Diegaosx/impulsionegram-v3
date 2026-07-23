@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, Navigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -8,7 +8,8 @@ import InteractiveCalculator from '../components/InteractiveCalculator';
 import { SOCIAL_PLATFORMS } from '../data';
 import { ServiceItem } from '../types';
 import { AuthUser, HomeContent, CompanySettings, serviceSlug } from '../utils/storage';
-import { Check, ShieldCheck, Zap } from 'lucide-react';
+import { applyBasicSEO, setJsonLd } from '../utils/seo';
+import { Check, ShieldCheck, Zap, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface ServicePageProps {
   services: ServiceItem[];
@@ -32,6 +33,7 @@ const TYPE_LABEL: Record<string, string> = {
 export default function ServicePage({ services, homeContent, company, siteName, logoUrl, currentUser, onAuthSuccess, onAddSimulatedOrder }: ServicePageProps) {
   const navigate = useNavigate();
   const { slug } = useParams<{ slug: string }>();
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   // Match by explicit/derived slug or by id (so links work even before an
   // admin sets a custom slug).
@@ -40,11 +42,84 @@ export default function ServicePage({ services, homeContent, company, siteName, 
     [services, slug]
   );
 
+  const brand = siteName || 'ImpulsioneGram';
+  const platformName = service ? (SOCIAL_PLATFORMS.find((p) => p.id === service.platform)?.name || service.platform) : '';
   const pageTitle = (service?.pageTitle || '').trim() || service?.label || '';
+  const subtitle = service
+    ? ((service.pageSubtitle || '').trim()
+      || `Impulsione seu perfil no ${platformName} com ${(TYPE_LABEL[service.type] || 'engajamento').toLowerCase()} de alta qualidade, entrega segura e reposição garantida.`)
+    : '';
+  const metaDescription = service ? ((service.pageMetaDescription || '').trim() || subtitle) : '';
+  const image = service?.pageImageUrl?.trim() || '';
+  const faqs = useMemo(() => (service?.faqs || []).filter((f) => f.question && f.answer), [service]);
+  const faqTitle = (service?.faqTitle || '').trim() || 'Perguntas Frequentes';
+  const faqSubtitle = (service?.faqSubtitle || '').trim();
 
+  // SEO: title, meta description, canonical, Open Graph + JSON-LD (Product,
+  // FAQPage and BreadcrumbList rich snippets).
   useEffect(() => {
-    if (pageTitle) document.title = `${pageTitle}${siteName ? ' | ' + siteName : ''}`;
-  }, [pageTitle, siteName]);
+    if (!service) return;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const canonical = `${origin}/servico/${serviceSlug(service)}`;
+
+    applyBasicSEO({
+      title: `${pageTitle}${brand ? ' | ' + brand : ''}`,
+      description: metaDescription,
+      canonical,
+      brand,
+      image: image || undefined,
+      type: 'product'
+    });
+
+    const prices = (service.packages || []).map((p) => p.price).filter((n) => n > 0);
+    const lowestPrice = prices.length
+      ? Math.min(...prices)
+      : Math.round(service.pricePerItem * (service.minQuantity || 1000) * 100) / 100;
+
+    setJsonLd('service-product', {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: pageTitle,
+      description: metaDescription,
+      ...(image ? { image: [image] } : {}),
+      brand: { '@type': 'Brand', name: brand },
+      offers: {
+        '@type': 'Offer',
+        priceCurrency: 'BRL',
+        price: lowestPrice.toFixed(2),
+        availability: 'https://schema.org/InStock',
+        url: canonical
+      }
+    });
+
+    setJsonLd('service-breadcrumb', {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Início', item: `${origin}/` },
+        { '@type': 'ListItem', position: 2, name: 'Serviços', item: `${origin}/#servicos` },
+        { '@type': 'ListItem', position: 3, name: pageTitle, item: canonical }
+      ]
+    });
+
+    setJsonLd('service-faq', faqs.length
+      ? {
+          '@context': 'https://schema.org',
+          '@type': 'FAQPage',
+          mainEntity: faqs.map((f) => ({
+            '@type': 'Question',
+            name: f.question,
+            acceptedAnswer: { '@type': 'Answer', text: f.answer }
+          }))
+        }
+      : null);
+
+    return () => {
+      setJsonLd('service-product', null);
+      setJsonLd('service-breadcrumb', null);
+      setJsonLd('service-faq', null);
+    };
+  }, [service, pageTitle, metaDescription, image, brand, faqs]);
 
   const goHome = (sectionId: string) => {
     navigate('/');
@@ -64,9 +139,7 @@ export default function ServicePage({ services, homeContent, company, siteName, 
   }
   if (!service) return <Navigate to="/" replace />;
 
-  const platformName = SOCIAL_PLATFORMS.find((p) => p.id === service.platform)?.name || service.platform;
-  const subtitle = (service.pageSubtitle || '').trim()
-    || `Impulsione seu perfil no ${platformName} com ${(TYPE_LABEL[service.type] || 'engajamento').toLowerCase()} de alta qualidade, entrega segura e reposição garantida.`;
+  const hasDescription = !!(service.pageDescriptionHtml && service.pageDescriptionHtml.trim());
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 antialiased font-sans">
@@ -100,6 +173,15 @@ export default function ServicePage({ services, homeContent, company, siteName, 
                 {subtitle}
               </p>
 
+              {image && (
+                <img
+                  src={image}
+                  alt={pageTitle}
+                  loading="eager"
+                  className="mt-6 w-full max-w-lg rounded-2xl border border-slate-200 object-cover aspect-video shadow-sm"
+                />
+              )}
+
               {service.benefits && service.benefits.length > 0 && (
                 <ul className="mt-6 space-y-2.5">
                   {service.benefits.map((b, i) => (
@@ -132,10 +214,50 @@ export default function ServicePage({ services, homeContent, company, siteName, 
         </section>
 
         {/* Rich description below the hero */}
-        {service.pageDescriptionHtml && service.pageDescriptionHtml.trim() && (
+        {hasDescription && (
           <section className="px-4 sm:px-6 lg:px-8 mt-14">
             <div className="max-w-3xl mx-auto bg-white border border-slate-200 rounded-2xl p-6 sm:p-10 shadow-sm">
-              <div className="blog-content" dangerouslySetInnerHTML={{ __html: service.pageDescriptionHtml }} />
+              <div className="blog-content" dangerouslySetInnerHTML={{ __html: service.pageDescriptionHtml as string }} />
+            </div>
+          </section>
+        )}
+
+        {/* Per-service FAQ (also emitted as FAQPage structured data) */}
+        {faqs.length > 0 && (
+          <section className="px-4 sm:px-6 lg:px-8 mt-14">
+            <div className="max-w-3xl mx-auto">
+              <div className="text-center mb-8">
+                <span className="inline-flex items-center gap-1.5 text-xs uppercase font-black bg-purple-50 border border-primary/20 text-primary px-3 py-1.5 rounded-full tracking-wider">
+                  <HelpCircle className="h-3.5 w-3.5" /> FAQ
+                </span>
+                <h2 className="font-display font-black text-2xl sm:text-3xl text-slate-900 tracking-tight mt-4">{faqTitle}</h2>
+                {faqSubtitle && <p className="text-slate-500 mt-2 text-sm font-semibold max-w-xl mx-auto">{faqSubtitle}</p>}
+              </div>
+              <div className="space-y-3">
+                {faqs.map((faq, idx) => {
+                  const isOpen = openFaq === idx;
+                  return (
+                    <div key={faq.id} className={`bg-white border rounded-xl overflow-hidden shadow-sm transition-all ${isOpen ? 'border-primary' : 'border-slate-200'}`}>
+                      <button
+                        type="button"
+                        onClick={() => setOpenFaq(isOpen ? null : idx)}
+                        className="w-full flex justify-between items-center gap-4 p-4 text-left font-display font-bold text-slate-800 text-sm cursor-pointer"
+                      >
+                        <span className="flex items-start gap-2.5">
+                          <HelpCircle className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                          <span>{faq.question}</span>
+                        </span>
+                        {isOpen ? <ChevronUp className="h-4 w-4 text-primary shrink-0" /> : <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />}
+                      </button>
+                      {isOpen && (
+                        <div className="px-4 pb-4 pt-0 text-slate-500 text-sm leading-relaxed font-semibold whitespace-pre-line">
+                          {faq.answer}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </section>
         )}
