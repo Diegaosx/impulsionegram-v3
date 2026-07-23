@@ -393,12 +393,22 @@ export interface UserItem {
   status: 'Ativo' | 'Bloqueado';
 }
 
+export type FaqCategory = 'geral' | 'seguranca' | 'entrega' | 'pagamento';
+
+export interface FaqEntry {
+  id: string;
+  question: string;
+  answer: string;
+  category: FaqCategory;
+}
+
 export interface HomeContent {
   heroTitle: string;
   heroSubtitle: string;
   alertBannerText: string;
   companyWhatsApp: string;
   companyEmail: string;
+  faqs?: FaqEntry[];
 }
 
 export async function fetchUsers(): Promise<UserItem[]> {

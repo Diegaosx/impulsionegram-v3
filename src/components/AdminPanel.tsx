@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ServiceItem, PlanItem, SocialPlatform, ServicePackage } from '../types';
 import {
-  AdminOrder, HomeContent, IntegrationSettings, fetchIntegrations, saveIntegrationsToServer, fetchPublicConfig,
+  AdminOrder, HomeContent, FaqEntry, FaqCategory, IntegrationSettings, fetchIntegrations, saveIntegrationsToServer, fetchPublicConfig,
   GeneralSettings, fetchGeneralSettings, saveGeneralSettingsToServer, uploadAsset,
   CompanySettings, fetchCompanySettings, saveCompanySettingsToServer,
   CookieConsentRecord, fetchCookieConsents,
@@ -98,12 +98,20 @@ export default function AdminPanel({
   const [editingOrder, setEditingOrder] = useState<AdminOrder | null>(null);
 
   // Home Content Editor Form
-  const [homeForm, setHomeForm] = useState({
+  const [homeForm, setHomeForm] = useState<{
+    heroTitle: string;
+    heroSubtitle: string;
+    alertBannerText: string;
+    companyWhatsApp: string;
+    companyEmail: string;
+    faqs: FaqEntry[];
+  }>({
     heroTitle: '',
     heroSubtitle: '',
     alertBannerText: '',
     companyWhatsApp: '',
-    companyEmail: ''
+    companyEmail: '',
+    faqs: []
   });
 
   // Sync state for homeForm when homeContent loads
@@ -114,7 +122,8 @@ export default function AdminPanel({
         heroSubtitle: homeContent.heroSubtitle || '',
         alertBannerText: homeContent.alertBannerText || '',
         companyWhatsApp: homeContent.companyWhatsApp || '',
-        companyEmail: homeContent.companyEmail || ''
+        companyEmail: homeContent.companyEmail || '',
+        faqs: Array.isArray(homeContent.faqs) ? homeContent.faqs.map(f => ({ ...f })) : []
       });
     }
   }, [homeContent]);
@@ -510,12 +519,37 @@ export default function AdminPanel({
   const handleSaveHomeContent = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await onUpdateHomeContent(homeForm);
+      // Drop blank FAQ rows before saving.
+      const cleanFaqs = homeForm.faqs
+        .map(f => ({ ...f, question: f.question.trim(), answer: f.answer.trim() }))
+        .filter(f => f.question || f.answer);
+      await onUpdateHomeContent({ ...homeForm, faqs: cleanFaqs });
       triggerSuccess('Conteúdo da página inicial atualizado com sucesso no servidor!');
     } catch (err) {
       triggerError('Falha ao atualizar conteúdo da Home.');
     }
   };
+
+  // --- FAQ (Perguntas Frequentes) CRUD helpers ---
+  const addFaq = () => setHomeForm(prev => ({
+    ...prev,
+    faqs: [...prev.faqs, { id: `faq-${Date.now()}`, question: '', answer: '', category: 'geral' }]
+  }));
+  const updateFaq = (idx: number, patch: Partial<FaqEntry>) => setHomeForm(prev => ({
+    ...prev,
+    faqs: prev.faqs.map((f, i) => (i === idx ? { ...f, ...patch } : f))
+  }));
+  const removeFaq = (idx: number) => setHomeForm(prev => ({
+    ...prev,
+    faqs: prev.faqs.filter((_, i) => i !== idx)
+  }));
+  const moveFaq = (idx: number, dir: -1 | 1) => setHomeForm(prev => {
+    const arr = [...prev.faqs];
+    const j = idx + dir;
+    if (j < 0 || j >= arr.length) return prev;
+    [arr[idx], arr[j]] = [arr[j], arr[idx]];
+    return { ...prev, faqs: arr };
+  });
   
   // Platform filter for services
   const [servicesPlatformFilter, setServicesPlatformFilter] = useState<SocialPlatform | 'todos'>('todos');
@@ -3127,6 +3161,75 @@ export default function AdminPanel({
                   <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-[11px] text-slate-500 font-semibold flex items-start gap-2">
                     <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-slate-400" />
                     <span>WhatsApp e e-mail de contato agora ficam em <strong className="text-primary">Contato &amp; Rodapé</strong> (refletem no rodapé, no "Fale Conosco" e no botão flutuante).</span>
+                  </div>
+
+                  {/* FAQ (Perguntas Frequentes) CRUD */}
+                  <div className="space-y-3 border-t border-slate-100 pt-5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider flex items-center gap-1.5">
+                          <HelpCircle className="h-3.5 w-3.5 text-primary" /> Perguntas Frequentes (FAQ)
+                        </label>
+                        <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Gerencie a seção "Perguntas Frequentes" da home. Sem perguntas cadastradas, a home mostra o FAQ padrão.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={addFaq}
+                        className="bg-primary/10 hover:bg-primary/20 text-primary font-bold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1 shrink-0 transition-colors"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Nova pergunta
+                      </button>
+                    </div>
+
+                    {homeForm.faqs.length === 0 ? (
+                      <div className="text-[11px] text-slate-400 font-semibold bg-slate-50 border border-dashed border-slate-200 rounded-lg p-3 text-center">
+                        Nenhuma pergunta personalizada — a home usa o FAQ padrão.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {homeForm.faqs.map((faq, idx) => (
+                          <div key={faq.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-black text-slate-400 shrink-0">#{idx + 1}</span>
+                              <select
+                                value={faq.category}
+                                onChange={(e) => updateFaq(idx, { category: e.target.value as FaqCategory })}
+                                className="bg-white border border-slate-200 text-[11px] font-bold rounded-lg py-1.5 px-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary"
+                              >
+                                <option value="geral">💼 Geral</option>
+                                <option value="seguranca">🛡️ Segurança</option>
+                                <option value="entrega">⚡ Entrega</option>
+                                <option value="pagamento">💳 Pagamento</option>
+                              </select>
+                              <div className="ml-auto flex items-center gap-1">
+                                <button type="button" onClick={() => moveFaq(idx, -1)} disabled={idx === 0}
+                                  className="h-7 w-7 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold" title="Mover para cima">↑</button>
+                                <button type="button" onClick={() => moveFaq(idx, 1)} disabled={idx === homeForm.faqs.length - 1}
+                                  className="h-7 w-7 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold" title="Mover para baixo">↓</button>
+                                <button type="button" onClick={() => removeFaq(idx)}
+                                  className="h-7 w-7 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-200" title="Remover">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                            <input
+                              type="text"
+                              value={faq.question}
+                              onChange={(e) => updateFaq(idx, { question: e.target.value })}
+                              placeholder="Pergunta (ex.: Os seguidores entregues são reais?)"
+                              className="w-full bg-white border border-slate-200 text-xs font-bold rounded-lg py-2 px-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary"
+                            />
+                            <textarea
+                              rows={2}
+                              value={faq.answer}
+                              onChange={(e) => updateFaq(idx, { answer: e.target.value })}
+                              placeholder="Resposta exibida ao expandir a pergunta"
+                              className="w-full bg-white border border-slate-200 text-xs font-semibold rounded-lg py-2 px-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary resize-y"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="pt-3 border-t border-slate-100 flex justify-end">
