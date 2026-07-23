@@ -12,12 +12,13 @@ export function slugify(s: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-// Resolve a service's page slug — explicit slug, else derived from its label,
-// else its id. Used both to build links and to look a service up by URL.
-export function serviceSlug(s: { slug?: string; label?: string; id?: string }): string {
+// Resolve a service's page slug — explicit slug, else derived from the page
+// title (falling back to the card label), else its id. Used both to build
+// links and to look a service up by URL.
+export function serviceSlug(s: { slug?: string; pageTitle?: string; label?: string; id?: string }): string {
   const explicit = (s.slug || '').trim();
   if (explicit) return explicit;
-  return slugify(s.label || '') || (s.id || '');
+  return slugify(s.pageTitle || '') || slugify(s.label || '') || (s.id || '');
 }
 
 export interface AdminOrder {

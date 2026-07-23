@@ -573,6 +573,7 @@ export default function AdminPanel({
     smmServiceId: '',
     packages: [],
     slug: '',
+    pageTitle: '',
     pageSubtitle: '',
     pageDescriptionHtml: ''
   });
@@ -634,6 +635,8 @@ export default function AdminPanel({
       smmServiceId: service.smmServiceId || '',
       packages: Array.isArray(service.packages) ? service.packages.map(p => ({ ...p })) : [],
       slug: service.slug || '',
+      // Existing services without a page title default to the card name.
+      pageTitle: service.pageTitle || service.label || '',
       pageSubtitle: service.pageSubtitle || '',
       pageDescriptionHtml: service.pageDescriptionHtml || ''
     });
@@ -654,6 +657,7 @@ export default function AdminPanel({
       smmServiceId: '',
       packages: [],
       slug: '',
+      pageTitle: '',
       pageSubtitle: '',
       pageDescriptionHtml: ''
     });
@@ -663,7 +667,11 @@ export default function AdminPanel({
   const handleSaveService = (e: React.FormEvent) => {
     e.preventDefault();
     if (!serviceForm.label) {
-      setErrorMessage('O título do serviço é obrigatório.');
+      setErrorMessage('O nome do serviço é obrigatório.');
+      return;
+    }
+    if (!(serviceForm.pageTitle || '').trim()) {
+      setErrorMessage('O título da página do serviço é obrigatório.');
       return;
     }
 
@@ -678,9 +686,10 @@ export default function AdminPanel({
       }))
       .filter(p => p.quantity > 0 && p.price > 0)
       .sort((a, b) => a.quantity - b.quantity);
-    // Auto-derive the page slug from the label when left blank.
-    const slug = slugify(serviceForm.slug || '') || slugify(serviceForm.label);
-    const payload = { ...serviceForm, packages: cleanPackages, slug };
+    // Auto-derive the page slug from the page title when left blank.
+    const pageTitle = (serviceForm.pageTitle || '').trim();
+    const slug = slugify(serviceForm.slug || '') || slugify(pageTitle) || slugify(serviceForm.label);
+    const payload = { ...serviceForm, packages: cleanPackages, pageTitle, slug };
 
     if (isAddingService) {
       const newService: ServiceItem = {
@@ -1489,7 +1498,19 @@ export default function AdminPanel({
                           </a>
                         )}
                       </div>
-                      <p className="text-[10px] text-slate-400 font-medium">O título da página é o próprio nome do serviço. Estrutura: título + subtítulo ao lado da calculadora (só deste serviço) e a descrição abaixo.</p>
+                      <p className="text-[10px] text-slate-400 font-medium">O <strong>nome do serviço</strong> (acima) é o que aparece no card da home. O <strong>título da página</strong> é o H1 da página do serviço (pode ser maior) e é a base do slug. Estrutura: título + subtítulo ao lado da calculadora e a descrição abaixo.</p>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-black text-slate-400 block">Título da página <span className="text-red-500">*</span></label>
+                        <input
+                          type="text"
+                          required
+                          value={serviceForm.pageTitle || ''}
+                          onChange={(e) => setServiceForm(prev => ({ ...prev, pageTitle: e.target.value }))}
+                          placeholder="Ex: Comprar Seguidores Brasileiros Reais para Instagram"
+                          className="w-full bg-slate-50 border border-slate-200 text-sm font-bold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary"
+                        />
+                      </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div className="space-y-1">
@@ -1498,10 +1519,10 @@ export default function AdminPanel({
                             type="text"
                             value={serviceForm.slug || ''}
                             onChange={(e) => setServiceForm(prev => ({ ...prev, slug: e.target.value }))}
-                            placeholder={slugify(serviceForm.label) || 'seguidores-brasileiros'}
+                            placeholder={slugify(serviceForm.pageTitle || '') || slugify(serviceForm.label) || 'seguidores-brasileiros'}
                             className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary"
                           />
-                          <span className="text-[10px] text-slate-400 block">/servico/<strong>{serviceSlug(serviceForm) || '...'}</strong> — vazio = gerado do título.</span>
+                          <span className="text-[10px] text-slate-400 block">/servico/<strong>{serviceSlug(serviceForm) || '...'}</strong> — vazio = gerado do título da página.</span>
                         </div>
                         <div className="space-y-1">
                           <label className="text-[10px] uppercase font-black text-slate-400 block">Subtítulo (hero)</label>
