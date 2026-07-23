@@ -146,6 +146,16 @@ export default function App() {
     });
   }, [location.pathname, siteName, seoTitle, seoDescription]);
 
+  // Reset the scroll position to the top on every route change. Without this,
+  // react-router keeps the previous page's scroll offset, so opening a service
+  // page from a scrolled-down home page would land mid-page. Pages that jump to
+  // a specific in-page section navigate to '/' and then call scrollIntoView on
+  // a short timeout, which runs after this effect, so those section targets
+  // still win.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
+
   // --- Auth handlers ---
   const handleAuthSuccess = (user: AuthUser) => {
     localStorage.setItem('admin_authenticated', 'true');
