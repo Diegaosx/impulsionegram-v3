@@ -87,7 +87,11 @@ const PORT = 3000;
 // proxy makes req.ip resolve to the visitor's address (used for rate limiting).
 app.set('trust proxy', true);
 
-app.use(express.json());
+// The services catalog is saved as a single JSON array that includes each
+// service's rich HTML description, so the payload grows well past Express's
+// default 100kb body limit. Raise it to 2mb to give the catalog (and other
+// admin saves) comfortable headroom.
+app.use(express.json({ limit: '2mb' }));
 
 // Translate a rate-limit verdict into a client-friendly error message.
 function rateLimitMessage(reason?: string, retryAfterSeconds?: number): string {
