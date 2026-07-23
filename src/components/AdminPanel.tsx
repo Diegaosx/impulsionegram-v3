@@ -1221,13 +1221,13 @@ export default function AdminPanel({
                 {/* MODAL: ADD/EDIT SERVICE (centered overlay so it's always visible) */}
                 {(editingService || isAddingService) && (
                   <div
-                    className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-150"
+                    className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/70 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-150"
                     onClick={() => { setEditingService(null); setIsAddingService(false); }}
                   >
                   <form
                     onSubmit={handleSaveService}
                     onClick={(e) => e.stopPropagation()}
-                    className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl my-4 max-h-[92vh] overflow-y-auto space-y-4 p-5 sm:p-6"
+                    className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl my-4 max-h-[calc(100vh-2rem)] overflow-y-auto space-y-4 p-5 sm:p-6"
                   >
                     <div className="flex justify-between items-center pb-3 border-b border-slate-100 sticky top-0 bg-white z-10 -mx-5 sm:-mx-6 px-5 sm:px-6 -mt-5 sm:-mt-6 pt-5 sm:pt-6">
                       <h4 className="font-bold text-sm text-slate-800 flex items-center gap-2">
