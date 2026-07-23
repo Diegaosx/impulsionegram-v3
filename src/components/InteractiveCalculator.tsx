@@ -610,7 +610,9 @@ export default function InteractiveCalculator({
               )}
             </div>
 
-            {/* Quick security trust links for calc */}
+            {/* Quick security trust links for calc (hidden when embedded — the
+                service page shows these on the left side instead) */}
+            {!embedded && (
             <div className="mt-8 pt-4 border-t border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-slate-500 font-semibold">
               <div className="flex items-center gap-1.5">
                 <Zap className="h-4 w-4 text-accent" />
@@ -621,24 +623,21 @@ export default function InteractiveCalculator({
                 <span>Garantidores de recargas por 30 dias</span>
               </div>
             </div>
+            )}
 
           </div>
 
           {/* Pricing Panel Output (5 columns) */}
-          <div className={`${embedded ? '' : 'lg:col-span-5 '}bg-slate-900 border border-slate-850 rounded-xl p-6 sm:p-8 flex flex-col justify-between shadow-lg relative overflow-hidden`} id="calc-summary-panel">
+          <div className={`${embedded ? 'p-5 ' : 'lg:col-span-5 p-6 sm:p-8 '}bg-slate-900 border border-slate-850 rounded-xl flex flex-col justify-between shadow-lg relative overflow-hidden`} id="calc-summary-panel">
             <div className="absolute top-0 right-0 translate-x-4 -translate-y-4 font-mono font-black text-white/5 text-9xl select-none leading-none">
               $
             </div>
 
             <div className="relative z-10">
-              <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-800 text-slate-300 py-1 px-3 rounded mb-6 inline-block">
-                🛒 Demonstrativo de Compra
-              </span>
-
               <h4 className="font-display font-black text-xl mb-1 text-white">
                 Resumo do Pedido
               </h4>
-              <p className="text-slate-400 text-xs font-semibold mb-6 flex items-center gap-1.5">
+              <p className={`text-slate-400 text-xs font-semibold flex items-center gap-1.5 ${embedded ? 'mb-4' : 'mb-6'}`}>
                 <span>Plano Customizado</span>
                 <span className="bg-primary text-white px-2 py-0.5 text-[9px] font-black rounded uppercase">
                   {platform}
@@ -646,7 +645,7 @@ export default function InteractiveCalculator({
               </p>
 
               {/* Quantities descriptor */}
-              <div className="space-y-4 border-b border-slate-800 pb-6 mb-6">
+              <div className={`space-y-4 border-b border-slate-800 ${embedded ? 'pb-4 mb-4' : 'pb-6 mb-6'}`}>
                 <div className="flex justify-between font-bold text-xs text-slate-400">
                   <span>Engajamento:</span>
                   <span className="text-white">{activeService?.label}</span>
