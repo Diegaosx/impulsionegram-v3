@@ -40,9 +40,11 @@ export default function ServicePage({ services, homeContent, company, siteName, 
     [services, slug]
   );
 
+  const pageTitle = (service?.pageTitle || '').trim() || service?.label || '';
+
   useEffect(() => {
-    if (service) document.title = `${service.label}${siteName ? ' | ' + siteName : ''}`;
-  }, [service, siteName]);
+    if (pageTitle) document.title = `${pageTitle}${siteName ? ' | ' + siteName : ''}`;
+  }, [pageTitle, siteName]);
 
   const goHome = (sectionId: string) => {
     navigate('/');
@@ -92,7 +94,7 @@ export default function ServicePage({ services, homeContent, company, siteName, 
                 </span>
               </div>
               <h1 className="font-display font-black text-3xl sm:text-4xl lg:text-5xl text-slate-900 tracking-tight leading-tight">
-                {service.label}
+                {pageTitle}
               </h1>
               <p className="text-slate-500 mt-4 text-sm sm:text-base font-semibold leading-relaxed max-w-lg">
                 {subtitle}
