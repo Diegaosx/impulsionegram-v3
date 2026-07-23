@@ -131,7 +131,7 @@ export default function HomePage({ services, plans, homeContent, siteName, logoU
       <Testimonials />
 
       {/* FAQ Accorion Collapsible Block */}
-      <FAQAccordion onNavigate={handleScrollToSection} company={company} />
+      <FAQAccordion onNavigate={handleScrollToSection} company={company} homeContent={homeContent} />
 
       {/* Customer Contact forms */}
       <ContactForm company={company} />

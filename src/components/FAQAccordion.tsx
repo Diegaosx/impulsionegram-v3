@@ -1,24 +1,26 @@
 import { useState, useMemo } from 'react';
 import { FAQS } from '../data';
-import { FAQItem } from '../types';
-import { ChevronDown, ChevronUp, HelpCircle, MessageCircle, AlertTriangle } from 'lucide-react';
-import { CompanySettings } from '../utils/storage';
+import { ChevronDown, ChevronUp, HelpCircle, MessageCircle } from 'lucide-react';
+import { CompanySettings, HomeContent } from '../utils/storage';
 
 interface FAQAccordionProps {
   onNavigate: (sectionId: string) => void;
   company?: CompanySettings | null;
+  homeContent?: HomeContent | null;
 }
 
-export default function FAQAccordion({ onNavigate, company }: FAQAccordionProps) {
+export default function FAQAccordion({ onNavigate, company, homeContent }: FAQAccordionProps) {
   const waPhone = company?.whatsappNumber || '5511999999999';
-  const [activeId, setActiveId] = useState<string | null>('faq-1'); // Keep first one open by default!
+  // Admin-managed FAQs take precedence; fall back to the built-in defaults.
+  const faqs = (homeContent?.faqs && homeContent.faqs.length > 0) ? homeContent.faqs : FAQS;
   const [activeCategory, setActiveCategory] = useState<'todos' | 'geral' | 'seguranca' | 'entrega' | 'pagamento'>('todos');
+  const [activeId, setActiveId] = useState<string | null>(faqs[0]?.id || null); // Keep first one open by default!
 
   // Filter FAQs
   const filteredFaqs = useMemo(() => {
-    if (activeCategory === 'todos') return FAQS;
-    return FAQS.filter(f => f.category === activeCategory);
-  }, [activeCategory]);
+    if (activeCategory === 'todos') return faqs;
+    return faqs.filter(f => f.category === activeCategory);
+  }, [activeCategory, faqs]);
 
   const toggleAccordion = (id: string) => {
     setActiveId(activeId === id ? null : id);
