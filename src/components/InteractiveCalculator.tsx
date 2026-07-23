@@ -20,6 +20,12 @@ interface InteractiveCalculatorProps {
   onAddSimulatedOrder?: (order: any) => void;
   currentUser?: AuthUser | null;
   onAuthSuccess?: (user: AuthUser) => void;
+  // When set, the calculator is locked to this single service: the platform and
+  // engagement selectors are hidden and only that service can be configured.
+  restrictServiceId?: string;
+  // Renders without the full-width dark section + centered header, as a compact
+  // panel suitable for embedding (e.g. the service page hero).
+  embedded?: boolean;
 }
 
 export default function InteractiveCalculator({
@@ -28,7 +34,9 @@ export default function InteractiveCalculator({
   onAddOrderToStats,
   services,
   currentUser,
-  onAuthSuccess
+  onAuthSuccess,
+  restrictServiceId,
+  embedded
 }: InteractiveCalculatorProps) {
   const navigate = useNavigate();
   
@@ -147,6 +155,18 @@ export default function InteractiveCalculator({
       document.body.style.overflow = 'unset';
     };
   }, [showCheckout]);
+
+  // When locked to a single service, force its platform + type.
+  const restrictedService = useMemo(
+    () => (restrictServiceId ? (services || SERVICES).find(s => s.id === restrictServiceId) : undefined),
+    [restrictServiceId, services]
+  );
+  useEffect(() => {
+    if (restrictedService) {
+      setPlatform(restrictedService.platform);
+      setServiceType(restrictedService.type);
+    }
+  }, [restrictedService]);
 
   // Find all available service categories for current platform
   const categoriesList = useMemo(() => {
@@ -402,15 +422,21 @@ export default function InteractiveCalculator({
   };
 
   return (
-    <section id="calculadora" className="py-20 bg-slate-950 text-white relative border-t border-b border-slate-900">
-      
+    <section
+      id={embedded ? undefined : 'calculadora'}
+      className={embedded
+        ? 'bg-slate-950 text-white rounded-2xl border border-slate-800 relative overflow-hidden'
+        : 'py-20 bg-slate-950 text-white relative border-t border-b border-slate-900'}
+    >
+
       {/* Subtle clean grid overlay */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(37,99,235,0.05),transparent_50%)]" />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        
+      <div className={embedded ? 'p-5 sm:p-6 relative z-10' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10'}>
+
         {/* Header Title */}
+        {!embedded && (
         <div className="text-center max-w-3xl mx-auto mb-16">
           <span className="text-xs font-mono font-black uppercase tracking-wider bg-primary/10 border border-primary/20 text-primary px-3 py-1.5 rounded">
             📈 Ferramenta de Simulação Avançada
@@ -422,14 +448,16 @@ export default function InteractiveCalculator({
             Arraste o controle deslizante abaixo, configure a quantidade de seguidores ou curtidas brasileiras e veja o valor na hora com desconto progressivo!
           </p>
         </div>
+        )}
 
         {/* Dynamic Calculator Panel */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-stretch" id="calculator-widget-panel">
-          
+        <div className={embedded ? 'grid grid-cols-1 gap-5' : 'grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-stretch'} id="calculator-widget-panel">
+
           {/* Configuring Part (8 columns) */}
-          <div className="lg:col-span-7 bg-slate-900/50 rounded-xl p-6 sm:p-8 border border-slate-800 flex flex-col justify-between">
+          <div className={embedded ? 'bg-slate-900/50 rounded-xl p-5 border border-slate-800' : 'lg:col-span-7 bg-slate-900/50 rounded-xl p-6 sm:p-8 border border-slate-800 flex flex-col justify-between'}>
             <div>
-              {/* Step 1: Select Platform */}
+              {/* Step 1: Select Platform (hidden when locked to a single service) */}
+              {!restrictServiceId && (<>
               <label className="text-xs uppercase tracking-widest font-mono font-black text-slate-400 block mb-3">1. Selecione a Rede Social</label>
               <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-8">
                 {SOCIAL_PLATFORMS.map((plat) => (
@@ -471,11 +499,14 @@ export default function InteractiveCalculator({
                   </button>
                 ))}
               </div>
+              </>)}
 
               {/* Step 3: Packages (fixed price) OR quantity slider (legacy) */}
               <div className="flex items-center justify-between mb-3">
                 <label className="text-xs uppercase tracking-widest font-mono font-black text-slate-400">
-                  {hasPackages ? '3. Escolha o Pacote' : '3. Defina a Quantidade'}
+                  {restrictServiceId
+                    ? (hasPackages ? 'Escolha o Pacote' : 'Defina a Quantidade')
+                    : (hasPackages ? '3. Escolha o Pacote' : '3. Defina a Quantidade')}
                 </label>
                 {!hasPackages && (
                   <div className="flex items-center bg-slate-950 rounded-lg border border-slate-800 p-1">
@@ -594,7 +625,7 @@ export default function InteractiveCalculator({
           </div>
 
           {/* Pricing Panel Output (5 columns) */}
-          <div className="lg:col-span-5 bg-slate-900 border border-slate-850 rounded-xl p-6 sm:p-8 flex flex-col justify-between shadow-lg relative overflow-hidden" id="calc-summary-panel">
+          <div className={`${embedded ? '' : 'lg:col-span-5 '}bg-slate-900 border border-slate-850 rounded-xl p-6 sm:p-8 flex flex-col justify-between shadow-lg relative overflow-hidden`} id="calc-summary-panel">
             <div className="absolute top-0 right-0 translate-x-4 -translate-y-4 font-mono font-black text-white/5 text-9xl select-none leading-none">
               $
             </div>

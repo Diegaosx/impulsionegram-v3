@@ -8,6 +8,7 @@ import ClientDashboard from './pages/ClientDashboard';
 import OrderConfirmationPage from './pages/OrderConfirmationPage';
 import HelpPage from './pages/HelpPage';
 import SitePage from './pages/SitePage';
+import ServicePage from './pages/ServicePage';
 import BlogPage from './pages/BlogPage';
 import AdminPanel from './components/AdminPanel';
 import {
@@ -200,6 +201,22 @@ export default function App() {
       <Route
         path="/ajuda"
         element={<HelpPage homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+      />
+
+      <Route
+        path="/servico/:slug"
+        element={
+          <ServicePage
+            services={services}
+            homeContent={homeContent}
+            company={company}
+            siteName={siteName}
+            logoUrl={logoUrl}
+            currentUser={currentUser}
+            onAuthSuccess={handleAuthSuccess}
+            onAddSimulatedOrder={handleAddSimulatedOrder}
+          />
+        }
       />
 
       <Route
