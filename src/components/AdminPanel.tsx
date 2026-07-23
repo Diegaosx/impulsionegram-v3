@@ -1704,7 +1704,15 @@ export default function AdminPanel({
                             <input type="text" value={pageForm.pageImageUrl} onChange={(e) => setPageForm(prev => ({ ...prev, pageImageUrl: e.target.value }))}
                               placeholder="ou cole a URL da imagem"
                               className="w-full bg-slate-50 border border-slate-200 text-[11px] font-mono rounded-lg p-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary" />
-                            {pageImageUploading && <span className="text-[10px] text-primary font-bold">Enviando imagem...</span>}
+                            <div className="flex items-center gap-3">
+                              {pageImageUploading && <span className="text-[10px] text-primary font-bold">Enviando imagem...</span>}
+                              {pageForm.pageImageUrl && !pageImageUploading && (
+                                <button type="button" onClick={() => setPageForm(prev => ({ ...prev, pageImageUrl: '' }))}
+                                  className="inline-flex items-center gap-1 text-[10px] font-bold text-red-500 hover:text-red-600 cursor-pointer">
+                                  <Trash2 className="h-3 w-3" /> Remover imagem
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
