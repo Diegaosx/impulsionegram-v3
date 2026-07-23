@@ -216,7 +216,7 @@ export default function ServicePage({ services, homeContent, company, siteName, 
         {/* Rich description below the hero */}
         {hasDescription && (
           <section className="px-4 sm:px-6 lg:px-8 mt-14">
-            <div className="max-w-3xl mx-auto bg-white border border-slate-200 rounded-2xl p-6 sm:p-10 shadow-sm">
+            <div className="max-w-7xl mx-auto bg-white border border-slate-200 rounded-2xl p-6 sm:p-10 shadow-sm">
               <div className="blog-content" dangerouslySetInnerHTML={{ __html: service.pageDescriptionHtml as string }} />
             </div>
           </section>
