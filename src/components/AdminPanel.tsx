@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { ServiceItem, PlanItem, SocialPlatform, ServicePackage } from '../types';
+import { ServiceItem, PlanItem, SocialPlatform, ServicePackage, ServiceFaq } from '../types';
 import {
   AdminOrder, HomeContent, FaqEntry, FaqCategory, IntegrationSettings, fetchIntegrations, saveIntegrationsToServer, fetchPublicConfig,
   GeneralSettings, fetchGeneralSettings, saveGeneralSettingsToServer, uploadAsset,
@@ -558,6 +558,19 @@ export default function AdminPanel({
   // Modals / Form editing states
   const [editingService, setEditingService] = useState<ServiceItem | null>(null);
   const [isAddingService, setIsAddingService] = useState(false);
+
+  // Dedicated "Página & SEO" modal (per service).
+  const [pageEditingService, setPageEditingService] = useState<ServiceItem | null>(null);
+  const [pageForm, setPageForm] = useState({
+    pageTitle: '', pageSubtitle: '', slug: '', pageImageUrl: '', pageMetaDescription: '', pageDescriptionHtml: ''
+  });
+  const [pageImageUploading, setPageImageUploading] = useState(false);
+
+  // Dedicated per-service FAQ modal.
+  const [faqEditingService, setFaqEditingService] = useState<ServiceItem | null>(null);
+  const [faqForm, setFaqForm] = useState<{ faqTitle: string; faqSubtitle: string; faqs: ServiceFaq[] }>({
+    faqTitle: '', faqSubtitle: '', faqs: []
+  });
   const [editingPlan, setEditingPlan] = useState<PlanItem | null>(null);
 
   // New/Edit Service Form States
@@ -670,10 +683,6 @@ export default function AdminPanel({
       setErrorMessage('O nome do serviço é obrigatório.');
       return;
     }
-    if (!(serviceForm.pageTitle || '').trim()) {
-      setErrorMessage('O título da página do serviço é obrigatório.');
-      return;
-    }
 
     // Keep only valid packages (positive quantity + price), sorted by quantity.
     const cleanPackages: ServicePackage[] = (serviceForm.packages || [])
@@ -686,25 +695,131 @@ export default function AdminPanel({
       }))
       .filter(p => p.quantity > 0 && p.price > 0)
       .sort((a, b) => a.quantity - b.quantity);
-    // Auto-derive the page slug from the page title when left blank.
-    const pageTitle = (serviceForm.pageTitle || '').trim();
-    const slug = slugify(serviceForm.slug || '') || slugify(pageTitle) || slugify(serviceForm.label);
-    const payload = { ...serviceForm, packages: cleanPackages, pageTitle, slug };
+
+    // The core modal only owns the core fields — page content & FAQ are edited
+    // in their own modals, so we never overwrite them here.
+    const corePayload = {
+      platform: serviceForm.platform,
+      type: serviceForm.type,
+      label: serviceForm.label,
+      pricePerItem: serviceForm.pricePerItem,
+      minQuantity: serviceForm.minQuantity,
+      maxQuantity: serviceForm.maxQuantity,
+      deliverySpeed: serviceForm.deliverySpeed,
+      benefits: serviceForm.benefits,
+      smmServiceId: serviceForm.smmServiceId,
+      packages: cleanPackages
+    };
 
     if (isAddingService) {
       const newService: ServiceItem = {
-        ...payload,
+        ...corePayload,
         id: `custom-svc-${Date.now()}`
       };
       onUpdateServices([...services, newService]);
       triggerSuccess('Novo serviço criado e ativado com sucesso!');
       setIsAddingService(false);
     } else if (editingService) {
-      const updated = services.map(s => s.id === editingService.id ? { ...s, ...payload } : s);
+      const updated = services.map(s => s.id === editingService.id ? { ...s, ...corePayload } : s);
       onUpdateServices(updated);
       triggerSuccess('Serviço atualizado com sucesso!');
       setEditingService(null);
     }
+  };
+
+  // --- SERVICE PAGE (content & SEO) modal ---
+  const openServicePageModal = (service: ServiceItem) => {
+    setPageEditingService(service);
+    setPageForm({
+      pageTitle: service.pageTitle || service.label || '',
+      pageSubtitle: service.pageSubtitle || '',
+      slug: service.slug || '',
+      pageImageUrl: service.pageImageUrl || '',
+      pageMetaDescription: service.pageMetaDescription || '',
+      pageDescriptionHtml: service.pageDescriptionHtml || ''
+    });
+  };
+
+  const handlePageImageUpload = async (file?: File | null) => {
+    if (!file) return;
+    setPageImageUploading(true);
+    try {
+      const url = await uploadAsset(file, 'services');
+      setPageForm(prev => ({ ...prev, pageImageUrl: url }));
+      triggerSuccess('Imagem enviada!');
+    } catch (err: any) {
+      triggerError(err?.message || 'Falha no upload da imagem.');
+    } finally {
+      setPageImageUploading(false);
+    }
+  };
+
+  const handleSaveServicePage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pageEditingService) return;
+    if (!pageForm.pageTitle.trim()) {
+      setErrorMessage('O título da página é obrigatório.');
+      return;
+    }
+    const pageTitle = pageForm.pageTitle.trim();
+    const slug = slugify(pageForm.slug) || slugify(pageTitle);
+    const patch = {
+      pageTitle,
+      pageSubtitle: pageForm.pageSubtitle.trim(),
+      slug,
+      pageImageUrl: pageForm.pageImageUrl.trim(),
+      pageMetaDescription: pageForm.pageMetaDescription.trim(),
+      pageDescriptionHtml: pageForm.pageDescriptionHtml
+    };
+    onUpdateServices(services.map(s => s.id === pageEditingService.id ? { ...s, ...patch } : s));
+    triggerSuccess('Conteúdo e SEO da página do serviço salvos!');
+    setPageEditingService(null);
+  };
+
+  // --- SERVICE FAQ modal ---
+  const openServiceFaqModal = (service: ServiceItem) => {
+    setFaqEditingService(service);
+    setFaqForm({
+      faqTitle: service.faqTitle || 'Perguntas Frequentes',
+      faqSubtitle: service.faqSubtitle || '',
+      faqs: Array.isArray(service.faqs) ? service.faqs.map(f => ({ ...f })) : []
+    });
+  };
+
+  const addServiceFaq = () => setFaqForm(prev => ({
+    ...prev,
+    faqs: [...prev.faqs, { id: `sfaq-${Date.now()}`, question: '', answer: '' }]
+  }));
+  const updateServiceFaq = (idx: number, patch: Partial<ServiceFaq>) => setFaqForm(prev => ({
+    ...prev,
+    faqs: prev.faqs.map((f, i) => (i === idx ? { ...f, ...patch } : f))
+  }));
+  const removeServiceFaq = (idx: number) => setFaqForm(prev => ({
+    ...prev,
+    faqs: prev.faqs.filter((_, i) => i !== idx)
+  }));
+  const moveServiceFaq = (idx: number, dir: -1 | 1) => setFaqForm(prev => {
+    const arr = [...prev.faqs];
+    const j = idx + dir;
+    if (j < 0 || j >= arr.length) return prev;
+    [arr[idx], arr[j]] = [arr[j], arr[idx]];
+    return { ...prev, faqs: arr };
+  });
+
+  const handleSaveServiceFaq = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!faqEditingService) return;
+    const cleanFaqs: ServiceFaq[] = faqForm.faqs
+      .map(f => ({ id: f.id, question: f.question.trim(), answer: f.answer.trim() }))
+      .filter(f => f.question || f.answer);
+    const patch = {
+      faqTitle: faqForm.faqTitle.trim() || 'Perguntas Frequentes',
+      faqSubtitle: faqForm.faqSubtitle.trim(),
+      faqs: cleanFaqs
+    };
+    onUpdateServices(services.map(s => s.id === faqEditingService.id ? { ...s, ...patch } : s));
+    triggerSuccess('Perguntas frequentes do serviço salvas!');
+    setFaqEditingService(null);
   };
 
   const handleDeleteService = (id: string) => {
@@ -1238,7 +1353,7 @@ export default function AdminPanel({
                     onClick={(e) => e.stopPropagation()}
                     className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl my-4 max-h-[calc(100vh-2rem)] overflow-y-auto space-y-4 p-5 sm:p-6"
                   >
-                    <div className="flex justify-between items-center pb-3 border-b border-slate-100 sticky top-0 bg-white z-10 -mx-5 sm:-mx-6 px-5 sm:px-6 -mt-5 sm:-mt-6 pt-5 sm:pt-6">
+                    <div className="flex justify-between items-center pb-3 border-b border-slate-100">
                       <h4 className="font-bold text-sm text-slate-800 flex items-center gap-2">
                         {isAddingService
                           ? (<><Plus className="h-4 w-4 text-primary" /> Novo Serviço</>)
@@ -1485,64 +1600,9 @@ export default function AdminPanel({
                       </div>
                     </div>
 
-                    {/* Dedicated service page (title + subtitle + rich description) */}
-                    <div className="space-y-3 border-t border-slate-100 pt-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <label className="text-xs font-black text-slate-500 uppercase flex items-center gap-1.5">
-                          <Globe className="h-3.5 w-3.5 text-primary" /> Página do serviço
-                        </label>
-                        {!isAddingService && (
-                          <a href={`/servico/${serviceSlug(serviceForm)}`} target="_blank" rel="noreferrer"
-                            className="text-[11px] font-bold text-primary hover:underline inline-flex items-center gap-1">
-                            <Eye className="h-3.5 w-3.5" /> Abrir página
-                          </a>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-slate-400 font-medium">O <strong>nome do serviço</strong> (acima) é o que aparece no card da home. O <strong>título da página</strong> é o H1 da página do serviço (pode ser maior) e é a base do slug. Estrutura: título + subtítulo ao lado da calculadora e a descrição abaixo.</p>
-
-                      <div className="space-y-1">
-                        <label className="text-[10px] uppercase font-black text-slate-400 block">Título da página <span className="text-red-500">*</span></label>
-                        <input
-                          type="text"
-                          required
-                          value={serviceForm.pageTitle || ''}
-                          onChange={(e) => setServiceForm(prev => ({ ...prev, pageTitle: e.target.value }))}
-                          placeholder="Ex: Comprar Seguidores Brasileiros Reais para Instagram"
-                          className="w-full bg-slate-50 border border-slate-200 text-sm font-bold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <label className="text-[10px] uppercase font-black text-slate-400 block">Slug (URL)</label>
-                          <input
-                            type="text"
-                            value={serviceForm.slug || ''}
-                            onChange={(e) => setServiceForm(prev => ({ ...prev, slug: e.target.value }))}
-                            placeholder={slugify(serviceForm.pageTitle || '') || slugify(serviceForm.label) || 'seguidores-brasileiros'}
-                            className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary"
-                          />
-                          <span className="text-[10px] text-slate-400 block">/servico/<strong>{serviceSlug(serviceForm) || '...'}</strong> — vazio = gerado do título da página.</span>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] uppercase font-black text-slate-400 block">Subtítulo (hero)</label>
-                          <input
-                            type="text"
-                            value={serviceForm.pageSubtitle || ''}
-                            onChange={(e) => setServiceForm(prev => ({ ...prev, pageSubtitle: e.target.value }))}
-                            placeholder="Texto curto exibido ao lado da calculadora"
-                            className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[10px] uppercase font-black text-slate-400 block">Descrição da página</label>
-                        <RichTextEditor
-                          value={serviceForm.pageDescriptionHtml || ''}
-                          onChange={(html) => setServiceForm(prev => ({ ...prev, pageDescriptionHtml: html }))}
-                        />
-                      </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-[11px] text-slate-500 font-semibold flex items-start gap-2">
+                      <Globe className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
+                      <span>O conteúdo e SEO da página do serviço (título, slug, imagem, descrição) e a seção de <strong>Perguntas Frequentes</strong> são editados pelos botões dedicados na lista de serviços.</span>
                     </div>
 
                     <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
@@ -1562,6 +1622,224 @@ export default function AdminPanel({
                       </button>
                     </div>
                   </form>
+                  </div>
+                )}
+
+                {/* MODAL: SERVICE PAGE CONTENT & SEO */}
+                {pageEditingService && (
+                  <div
+                    className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/70 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-150"
+                    onClick={() => setPageEditingService(null)}
+                  >
+                    <form
+                      onSubmit={handleSaveServicePage}
+                      onClick={(e) => e.stopPropagation()}
+                      className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl my-4 max-h-[calc(100vh-2rem)] overflow-y-auto space-y-4 p-5 sm:p-6"
+                    >
+                      <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                        <h4 className="font-bold text-sm text-slate-800 flex items-center gap-2">
+                          <Globe className="h-4 w-4 text-sky-600" /> Página &amp; SEO: {pageEditingService.label}
+                        </h4>
+                        <div className="flex items-center gap-2">
+                          <a href={`/servico/${serviceSlug({ slug: pageForm.slug, pageTitle: pageForm.pageTitle, label: pageEditingService.label })}`} target="_blank" rel="noreferrer"
+                            className="text-[11px] font-bold text-primary hover:underline inline-flex items-center gap-1">
+                            <Eye className="h-3.5 w-3.5" /> Abrir
+                          </a>
+                          <button type="button" onClick={() => setPageEditingService(null)}
+                            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer" title="Fechar">
+                            <X className="h-4.5 w-4.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-black text-slate-400 block">Título da página <span className="text-red-500">*</span></label>
+                        <input
+                          type="text"
+                          required
+                          value={pageForm.pageTitle}
+                          onChange={(e) => setPageForm(prev => ({ ...prev, pageTitle: e.target.value }))}
+                          placeholder="Ex: Comprar Seguidores Brasileiros Reais para Instagram"
+                          className="w-full bg-slate-50 border border-slate-200 text-sm font-bold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary"
+                        />
+                        <span className="text-[10px] text-slate-400">É o H1 da página e a base do slug. O nome curto do card é editado no botão de editar (lápis).</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-black text-slate-400 block">Slug (URL)</label>
+                          <input
+                            type="text"
+                            value={pageForm.slug}
+                            onChange={(e) => setPageForm(prev => ({ ...prev, slug: e.target.value }))}
+                            placeholder={slugify(pageForm.pageTitle) || 'seguidores-brasileiros'}
+                            className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary"
+                          />
+                          <span className="text-[10px] text-slate-400 block">/servico/<strong>{serviceSlug({ slug: pageForm.slug, pageTitle: pageForm.pageTitle, label: pageEditingService.label }) || '...'}</strong></span>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-black text-slate-400 block">Subtítulo (hero)</label>
+                          <input
+                            type="text"
+                            value={pageForm.pageSubtitle}
+                            onChange={(e) => setPageForm(prev => ({ ...prev, pageSubtitle: e.target.value }))}
+                            placeholder="Texto curto exibido ao lado da calculadora"
+                            className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Featured image */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 block flex items-center gap-1.5"><ImageIcon className="h-3.5 w-3.5" /> Imagem destacada (SEO / og:image)</label>
+                        <div className="flex items-center gap-3">
+                          {pageForm.pageImageUrl ? (
+                            <img src={pageForm.pageImageUrl} alt="Prévia" className="h-16 w-24 object-cover rounded-lg border border-slate-200 shrink-0" />
+                          ) : (
+                            <div className="h-16 w-24 rounded-lg border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-slate-300 shrink-0"><ImageIcon className="h-5 w-5" /></div>
+                          )}
+                          <div className="flex-1 space-y-1.5">
+                            <input type="file" accept="image/*" onChange={(e) => handlePageImageUpload(e.target.files?.[0])}
+                              className="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer" />
+                            <input type="text" value={pageForm.pageImageUrl} onChange={(e) => setPageForm(prev => ({ ...prev, pageImageUrl: e.target.value }))}
+                              placeholder="ou cole a URL da imagem"
+                              className="w-full bg-slate-50 border border-slate-200 text-[11px] font-mono rounded-lg p-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary" />
+                            {pageImageUploading && <span className="text-[10px] text-primary font-bold">Enviando imagem...</span>}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* SEO meta description */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-black text-slate-400 block">Meta descrição (SEO)</label>
+                        <textarea
+                          rows={2}
+                          maxLength={200}
+                          value={pageForm.pageMetaDescription}
+                          onChange={(e) => setPageForm(prev => ({ ...prev, pageMetaDescription: e.target.value }))}
+                          placeholder="Resumo de até ~160 caracteres para o Google. Vazio = usa o subtítulo."
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary resize-y"
+                        />
+                        <span className="text-[10px] text-slate-400">{pageForm.pageMetaDescription.length}/200</span>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-black text-slate-400 block">Descrição da página</label>
+                        <RichTextEditor
+                          value={pageForm.pageDescriptionHtml}
+                          onChange={(html) => setPageForm(prev => ({ ...prev, pageDescriptionHtml: html }))}
+                        />
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                        <button type="button" onClick={() => setPageEditingService(null)}
+                          className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs px-4 py-2 rounded-lg cursor-pointer">Cancelar</button>
+                        <button type="submit"
+                          className="bg-primary hover:bg-purple-700 text-white font-bold text-xs px-5 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer shadow">
+                          <Save className="h-3.5 w-3.5" /> Salvar página
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {/* MODAL: SERVICE FAQ */}
+                {faqEditingService && (
+                  <div
+                    className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/70 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-150"
+                    onClick={() => setFaqEditingService(null)}
+                  >
+                    <form
+                      onSubmit={handleSaveServiceFaq}
+                      onClick={(e) => e.stopPropagation()}
+                      className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl my-4 max-h-[calc(100vh-2rem)] overflow-y-auto space-y-4 p-5 sm:p-6"
+                    >
+                      <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                        <h4 className="font-bold text-sm text-slate-800 flex items-center gap-2">
+                          <HelpCircle className="h-4 w-4 text-amber-600" /> Perguntas Frequentes: {faqEditingService.label}
+                        </h4>
+                        <button type="button" onClick={() => setFaqEditingService(null)}
+                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer" title="Fechar">
+                          <X className="h-4.5 w-4.5" />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-black text-slate-400 block">Título da seção</label>
+                          <input
+                            type="text"
+                            value={faqForm.faqTitle}
+                            onChange={(e) => setFaqForm(prev => ({ ...prev, faqTitle: e.target.value }))}
+                            placeholder="Perguntas Frequentes"
+                            className="w-full bg-slate-50 border border-slate-200 text-sm font-bold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-black text-slate-400 block">Subtítulo / descrição da seção</label>
+                          <input
+                            type="text"
+                            value={faqForm.faqSubtitle}
+                            onChange={(e) => setFaqForm(prev => ({ ...prev, faqSubtitle: e.target.value }))}
+                            placeholder="Texto curto abaixo do título (opcional)"
+                            className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-3 border-t border-slate-100 pt-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="text-xs font-black text-slate-500 uppercase">Perguntas &amp; respostas</label>
+                          <button type="button" onClick={addServiceFaq}
+                            className="bg-primary/10 hover:bg-primary/20 text-primary font-bold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors">
+                            <Plus className="h-3.5 w-3.5" /> Nova pergunta
+                          </button>
+                        </div>
+
+                        {faqForm.faqs.length === 0 ? (
+                          <div className="text-[11px] text-slate-400 font-semibold bg-slate-50 border border-dashed border-slate-200 rounded-lg p-3 text-center">
+                            Nenhuma pergunta — a seção de FAQ não aparece na página deste serviço.
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {faqForm.faqs.map((faq, idx) => (
+                              <div key={faq.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-black text-slate-400 shrink-0">#{idx + 1}</span>
+                                  <div className="ml-auto flex items-center gap-1">
+                                    <button type="button" onClick={() => moveServiceFaq(idx, -1)} disabled={idx === 0}
+                                      className="h-7 w-7 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-primary disabled:opacity-40 text-xs font-bold" title="Subir">↑</button>
+                                    <button type="button" onClick={() => moveServiceFaq(idx, 1)} disabled={idx === faqForm.faqs.length - 1}
+                                      className="h-7 w-7 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-primary disabled:opacity-40 text-xs font-bold" title="Descer">↓</button>
+                                    <button type="button" onClick={() => removeServiceFaq(idx)}
+                                      className="h-7 w-7 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-200" title="Remover">
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                                <input type="text" value={faq.question}
+                                  onChange={(e) => updateServiceFaq(idx, { question: e.target.value })}
+                                  placeholder="Pergunta"
+                                  className="w-full bg-white border border-slate-200 text-xs font-bold rounded-lg py-2 px-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary" />
+                                <textarea rows={2} value={faq.answer}
+                                  onChange={(e) => updateServiceFaq(idx, { answer: e.target.value })}
+                                  placeholder="Resposta"
+                                  className="w-full bg-white border border-slate-200 text-xs font-semibold rounded-lg py-2 px-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary resize-y" />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                        <button type="button" onClick={() => setFaqEditingService(null)}
+                          className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs px-4 py-2 rounded-lg cursor-pointer">Cancelar</button>
+                        <button type="submit"
+                          className="bg-primary hover:bg-purple-700 text-white font-bold text-xs px-5 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer shadow">
+                          <Save className="h-3.5 w-3.5" /> Salvar FAQ
+                        </button>
+                      </div>
+                    </form>
                   </div>
                 )}
 
@@ -1638,13 +1916,27 @@ export default function AdminPanel({
                                 {service.deliverySpeed}
                               </td>
                               <td className="p-4">
-                                <div className="flex gap-2 justify-end">
+                                <div className="flex gap-1.5 justify-end">
                                   <button
                                     onClick={() => handleEditServiceInit(service)}
                                     className="p-1.5 hover:bg-purple-100 hover:text-primary text-slate-500 rounded transition-colors cursor-pointer"
-                                    title="Editar Serviço"
+                                    title="Editar serviço (nome, preço, pacotes)"
                                   >
                                     <Pencil className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => openServicePageModal(service)}
+                                    className="p-1.5 hover:bg-sky-100 hover:text-sky-600 text-slate-500 rounded transition-colors cursor-pointer"
+                                    title="Página & SEO (conteúdo, imagem, descrição)"
+                                  >
+                                    <Globe className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => openServiceFaqModal(service)}
+                                    className="p-1.5 hover:bg-amber-100 hover:text-amber-600 text-slate-500 rounded transition-colors cursor-pointer"
+                                    title="Perguntas frequentes do serviço"
+                                  >
+                                    <HelpCircle className="h-4 w-4" />
                                   </button>
                                   <button
                                     onClick={() => handleDeleteService(service.id)}
