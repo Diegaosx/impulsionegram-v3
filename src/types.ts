@@ -23,6 +23,9 @@ export interface ServiceItem {
   benefits: string[];
   smmServiceId?: string; // ID do serviço no painel SMM (entrega automática)
   packages?: ServicePackage[]; // fixed-price packages (preferred over the slider)
+  slug?: string; // URL slug for the dedicated service page (/servico/:slug)
+  pageSubtitle?: string; // subtitle shown next to the calculator on the service page
+  pageDescriptionHtml?: string; // rich HTML description below the service page hero
 }
 
 export interface PlanItem {

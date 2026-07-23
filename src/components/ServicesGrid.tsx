@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { SERVICES, SOCIAL_PLATFORMS } from '../data';
 import { SocialPlatform, ServiceItem } from '../types';
+import { serviceSlug } from '../utils/storage';
 import { Instagram, Youtube, Twitter, Facebook, Check, HelpCircle } from 'lucide-react';
 import { TikTokIcon, KwaiIcon } from './icons/BrandIcons';
 
@@ -12,7 +14,11 @@ interface ServicesGridProps {
 }
 
 export default function ServicesGrid({ onSelectService, searchTerm = '', onNavigate, services }: ServicesGridProps) {
+  const navigate = useNavigate();
   const [activePlatform, setActivePlatform] = useState<SocialPlatform | 'todos'>('todos');
+  // Suppress unused-prop warnings: these remain part of the public API but the
+  // card now navigates to a dedicated service page instead of scrolling.
+  void onSelectService; void onNavigate;
 
   // Map platform string IDs to Lucide components
   const getIcon = (platform: SocialPlatform, className = "h-5 w-5") => {
@@ -44,9 +50,9 @@ export default function ServicesGrid({ onSelectService, searchTerm = '', onNavig
     });
   }, [activePlatform, searchTerm, services]);
 
-  const handleServiceClick = (platform: SocialPlatform, type: string) => {
-    onSelectService(platform, type);
-    onNavigate('calculadora');
+  // Each card now opens the service's dedicated page.
+  const goToService = (service: ServiceItem) => {
+    navigate(`/servico/${serviceSlug(service)}`);
   };
 
   return (
@@ -172,7 +178,7 @@ export default function ServicesGrid({ onSelectService, searchTerm = '', onNavig
                 {/* Selection Action Button */}
                 <div className="p-5">
                   <button
-                    onClick={() => handleServiceClick(service.platform, service.type)}
+                    onClick={() => goToService(service)}
                     className="w-full text-center py-2.5 rounded border border-primary text-primary hover:bg-primary hover:text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
                     id={`btn-select-${service.id}`}
                   >

@@ -1,6 +1,25 @@
 import { ServiceItem, PlanItem } from '../types';
 import { setAdminToken, setCachedUser } from './authFetch';
 
+// Slugify a label into a URL-safe slug (accent-stripped, dashed).
+export function slugify(s: string): string {
+  return String(s || '')
+    .normalize('NFD')
+    .replace(/[^\x00-\x7F]/g, '') // drop diacritics (combining marks) and other non-ASCII
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+// Resolve a service's page slug — explicit slug, else derived from its label,
+// else its id. Used both to build links and to look a service up by URL.
+export function serviceSlug(s: { slug?: string; label?: string; id?: string }): string {
+  const explicit = (s.slug || '').trim();
+  if (explicit) return explicit;
+  return slugify(s.label || '') || (s.id || '');
+}
+
 export interface AdminOrder {
   id: string;
   username: string;

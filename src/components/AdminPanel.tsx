@@ -11,7 +11,8 @@ import {
   resetAdminAccountPassword, deleteAdminAccount,
   OfferSettings, fetchOfferAdmin, saveOffer,
   PageSlug, fetchPage, savePageContent,
-  ChatbotConfig, fetchChatbot, saveChatbot
+  ChatbotConfig, fetchChatbot, saveChatbot,
+  slugify, serviceSlug
 } from '../utils/storage';
 import RichTextEditor from './RichTextEditor';
 import { setAppTimezone, formatDateTime } from '../utils/datetime';
@@ -570,7 +571,10 @@ export default function AdminPanel({
     deliverySpeed: 'Início imediato, entrega natural',
     benefits: ['Perfis reais', 'Recarga garantida', 'Sem precisar de senha'],
     smmServiceId: '',
-    packages: []
+    packages: [],
+    slug: '',
+    pageSubtitle: '',
+    pageDescriptionHtml: ''
   });
 
   // New Benefit helper text
@@ -628,7 +632,10 @@ export default function AdminPanel({
       deliverySpeed: service.deliverySpeed,
       benefits: [...service.benefits],
       smmServiceId: service.smmServiceId || '',
-      packages: Array.isArray(service.packages) ? service.packages.map(p => ({ ...p })) : []
+      packages: Array.isArray(service.packages) ? service.packages.map(p => ({ ...p })) : [],
+      slug: service.slug || '',
+      pageSubtitle: service.pageSubtitle || '',
+      pageDescriptionHtml: service.pageDescriptionHtml || ''
     });
     setIsAddingService(false);
   };
@@ -645,7 +652,10 @@ export default function AdminPanel({
       deliverySpeed: 'Entrega rápida (5-15 min)',
       benefits: ['Perfis de alta qualidade', 'Prevenção contra quedas', 'Totalmente seguro'],
       smmServiceId: '',
-      packages: []
+      packages: [],
+      slug: '',
+      pageSubtitle: '',
+      pageDescriptionHtml: ''
     });
     setIsAddingService(true);
   };
@@ -668,7 +678,9 @@ export default function AdminPanel({
       }))
       .filter(p => p.quantity > 0 && p.price > 0)
       .sort((a, b) => a.quantity - b.quantity);
-    const payload = { ...serviceForm, packages: cleanPackages };
+    // Auto-derive the page slug from the label when left blank.
+    const slug = slugify(serviceForm.slug || '') || slugify(serviceForm.label);
+    const payload = { ...serviceForm, packages: cleanPackages, slug };
 
     if (isAddingService) {
       const newService: ServiceItem = {
@@ -1461,6 +1473,54 @@ export default function AdminPanel({
                         >
                           Adicionar
                         </button>
+                      </div>
+                    </div>
+
+                    {/* Dedicated service page (title + subtitle + rich description) */}
+                    <div className="space-y-3 border-t border-slate-100 pt-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="text-xs font-black text-slate-500 uppercase flex items-center gap-1.5">
+                          <Globe className="h-3.5 w-3.5 text-primary" /> Página do serviço
+                        </label>
+                        {!isAddingService && (
+                          <a href={`/servico/${serviceSlug(serviceForm)}`} target="_blank" rel="noreferrer"
+                            className="text-[11px] font-bold text-primary hover:underline inline-flex items-center gap-1">
+                            <Eye className="h-3.5 w-3.5" /> Abrir página
+                          </a>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-medium">O título da página é o próprio nome do serviço. Estrutura: título + subtítulo ao lado da calculadora (só deste serviço) e a descrição abaixo.</p>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-black text-slate-400 block">Slug (URL)</label>
+                          <input
+                            type="text"
+                            value={serviceForm.slug || ''}
+                            onChange={(e) => setServiceForm(prev => ({ ...prev, slug: e.target.value }))}
+                            placeholder={slugify(serviceForm.label) || 'seguidores-brasileiros'}
+                            className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary"
+                          />
+                          <span className="text-[10px] text-slate-400 block">/servico/<strong>{serviceSlug(serviceForm) || '...'}</strong> — vazio = gerado do título.</span>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-black text-slate-400 block">Subtítulo (hero)</label>
+                          <input
+                            type="text"
+                            value={serviceForm.pageSubtitle || ''}
+                            onChange={(e) => setServiceForm(prev => ({ ...prev, pageSubtitle: e.target.value }))}
+                            placeholder="Texto curto exibido ao lado da calculadora"
+                            className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-black text-slate-400 block">Descrição da página</label>
+                        <RichTextEditor
+                          value={serviceForm.pageDescriptionHtml || ''}
+                          onChange={(html) => setServiceForm(prev => ({ ...prev, pageDescriptionHtml: html }))}
+                        />
                       </div>
                     </div>
 
