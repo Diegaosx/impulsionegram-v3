@@ -5,10 +5,12 @@
  * VALUES scoped to this theme so another theme can restyle the whole site by
  * shipping its own [data-theme="..."] block — without touching this file.
  *
- * The html[...] prefix is deliberate: it outranks :root, so the override wins
- * regardless of the order Vite injects the stylesheets in. */
+ * The attribute lands on a wrapper element that only the public site renders
+ * (see src/site/ThemeHost.tsx), so these tokens never reach the admin panel or
+ * the client area. Custom properties inherit down the DOM, so this always wins
+ * over the :root values regardless of stylesheet order. */
 
-html[data-theme='default'] {
+[data-theme='default'] {
   --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
   --font-display: 'Space Grotesk', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;

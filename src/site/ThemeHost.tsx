@@ -24,8 +24,20 @@ export function useActiveTheme(): ThemeDefinition {
 type SlotProps<K extends ThemeSlotName> = ComponentProps<ThemeSlots[K]>;
 
 // <ThemeSlot slot="Home" {...props} /> — props are type-checked against the slot.
+//
+// The data-theme wrapper is rendered here rather than stamped on <html> for two
+// reasons. It scopes the theme's design tokens to the public site, so a theme
+// with a different palette cannot repaint the admin panel or the client area
+// (both use the same bg-primary/text-primary utilities but are deliberately
+// out of theme scope). And because it is set during render instead of in an
+// effect, the tokens are already correct on the first paint — the localStorage
+// theme cache would otherwise still flash the previous palette.
 export function ThemeSlot<K extends ThemeSlotName>({ slot, ...props }: { slot: K } & SlotProps<K>) {
   const theme = useActiveTheme();
   const Component = theme.slots[slot] as ComponentType<any>;
-  return <Component {...props} />;
+  return (
+    <div data-theme={theme.id}>
+      <Component {...props} />
+    </div>
+  );
 }

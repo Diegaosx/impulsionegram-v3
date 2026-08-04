@@ -10,7 +10,7 @@ import AdminPanel from './components/AdminPanel';
 import './themes';
 import { resolveThemeId } from './themes/registry';
 import { ThemeProvider, ThemeSlot } from './site/ThemeHost';
-import { applyThemeId, markThemeOnDocument, readCachedThemeId } from './site/activeTheme';
+import { applyThemeId, readCachedThemeId } from './site/activeTheme';
 import {
   fetchServices, saveServicesToServer,
   fetchPlans, savePlansToServer,
@@ -56,12 +56,6 @@ export default function App() {
   // the cached user to avoid an auth flicker, then refreshed from the server.
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => getCachedUser<AuthUser>());
   const isAdmin = currentUser?.role === 'admin';
-
-  // Single owner of <html data-theme="...">, so per-theme CSS scopes always
-  // match the theme actually being rendered.
-  useEffect(() => {
-    markThemeOnDocument(themeId);
-  }, [themeId]);
 
   // Refresh the session from the server on boot (validates the token).
   useEffect(() => {

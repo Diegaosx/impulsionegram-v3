@@ -16,13 +16,9 @@ export function readCachedThemeId(): string | null {
   }
 }
 
-// Mirror the theme onto <html data-theme="..."> so per-theme CSS scopes apply.
-export function markThemeOnDocument(themeId: string) {
-  document.documentElement.dataset.theme = themeId;
-}
-
-// Commit a resolved theme id: state + cache. The <html data-theme> attribute is
-// owned by a single effect in App so it stays in sync with the rendered theme.
+// Commit a resolved theme id: state + cache. The data-theme attribute itself is
+// rendered by ThemeSlot, so it is applied on the first paint and stays scoped to
+// the public site.
 export function applyThemeId(themeId: string, setThemeId: (id: string) => void) {
   setThemeId(themeId);
   try {

@@ -49,12 +49,12 @@ Cada slot recebe, já pronto para renderizar: conteúdo do dashboard
    });
    ```
 
-2. Em `theme.css`, defina os tokens no escopo do tema. O prefixo `html[...]` é
-   proposital: garante que a sobrescrita vença independente da ordem dos
-   stylesheets.
+2. Em `theme.css`, defina os tokens no escopo do tema. O atributo `data-theme`
+   é renderizado num wrapper que só o site público monta, então os tokens do
+   tema nunca vazam para o painel admin nem para a área do cliente.
 
    ```css
-   html[data-theme='meu-tema'] {
+   [data-theme='meu-tema'] {
      --color-primary: #0d9488;
      --color-secondary: #f97316;
      --color-accent: #22d3ee;
