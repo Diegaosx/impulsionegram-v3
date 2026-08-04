@@ -2,6 +2,16 @@ import { ServiceItem, PlanItem } from '../types';
 import { setAdminToken, setCachedUser } from './authFetch';
 
 // Slugify a label into a URL-safe slug (accent-stripped, dashed).
+// Uma resposta de lista que não venha como array (erro serializado, proxy mal
+// configurado, endpoint trocado) derruba a tela que a consome no primeiro
+// .map — e a tela inteira vira branco. Como o try/catch só cobre falha de rede
+// e de parse, o formato precisa ser conferido separadamente.
+function asArray<T>(value: unknown, context: string): T[] {
+  if (Array.isArray(value)) return value as T[];
+  console.error(`Expected an array from ${context}, got:`, value);
+  return [];
+}
+
 export function slugify(s: string): string {
   return String(s || '')
     .normalize('NFD')
@@ -119,7 +129,7 @@ export async function fetchServices(): Promise<ServiceItem[]> {
   try {
     const res = await fetch('/api/services');
     if (!res.ok) throw new Error('Failed to fetch services');
-    return await res.json();
+    return asArray<ServiceItem>(await res.json(), 'fetchServices');
   } catch (error) {
     console.error('Error fetching services API:', error);
     return [];
@@ -139,7 +149,7 @@ export async function fetchPlans(): Promise<PlanItem[]> {
   try {
     const res = await fetch('/api/plans');
     if (!res.ok) throw new Error('Failed to fetch plans');
-    return await res.json();
+    return asArray<PlanItem>(await res.json(), 'fetchPlans');
   } catch (error) {
     console.error('Error fetching plans API:', error);
     return [];
@@ -159,7 +169,7 @@ export async function fetchOrders(): Promise<AdminOrder[]> {
   try {
     const res = await fetch('/api/orders');
     if (!res.ok) throw new Error('Failed to fetch orders');
-    return await res.json();
+    return asArray<AdminOrder>(await res.json(), 'fetchOrders');
   } catch (error) {
     console.error('Error fetching orders API:', error);
     return [];
@@ -171,7 +181,7 @@ export async function fetchMyOrders(): Promise<AdminOrder[]> {
   try {
     const res = await fetch('/api/my/orders');
     if (!res.ok) throw new Error('Failed to fetch my orders');
-    return await res.json();
+    return asArray<AdminOrder>(await res.json(), 'fetchMyOrders');
   } catch (error) {
     console.error('Error fetching my orders:', error);
     return [];
@@ -354,7 +364,7 @@ export interface AdminAccount {
 export async function fetchAdminAccounts(): Promise<AdminAccount[]> {
   const res = await fetch('/api/accounts');
   if (!res.ok) throw new Error('Failed to fetch accounts');
-  return await res.json();
+  return asArray<AdminAccount>(await res.json(), 'fetchAdminAccounts');
 }
 
 export interface AccountInput {
@@ -435,7 +445,7 @@ export async function fetchUsers(): Promise<UserItem[]> {
   try {
     const res = await fetch('/api/users');
     if (!res.ok) throw new Error('Failed to fetch users');
-    return await res.json();
+    return asArray<UserItem>(await res.json(), 'fetchUsers');
   } catch (error) {
     console.error('Error fetching users API:', error);
     return [];
@@ -605,7 +615,7 @@ export async function fetchBlogCategories(): Promise<string[]> {
   try {
     const res = await fetch('/api/blog/categories');
     if (!res.ok) throw new Error('Failed to fetch categories');
-    return await res.json();
+    return asArray<string>(await res.json(), 'fetchBlogCategories');
   } catch (error) {
     console.error('Error fetching blog categories:', error);
     return [];
@@ -630,7 +640,7 @@ export async function fetchBlogTags(): Promise<string[]> {
   try {
     const res = await fetch('/api/blog/tags');
     if (!res.ok) throw new Error('Failed to fetch tags');
-    return await res.json();
+    return asArray<string>(await res.json(), 'fetchBlogTags');
   } catch (error) {
     console.error('Error fetching blog tags:', error);
     return [];
@@ -656,7 +666,7 @@ export async function fetchBlogPosts(): Promise<BlogPost[]> {
   try {
     const res = await fetch('/api/blog/posts');
     if (!res.ok) throw new Error('Failed to fetch blog posts');
-    return await res.json();
+    return asArray<BlogPost>(await res.json(), 'fetchBlogPosts');
   } catch (error) {
     console.error('Error fetching blog posts:', error);
     return [];
@@ -684,7 +694,7 @@ export async function fetchPostComments(slug: string): Promise<BlogComment[]> {
   try {
     const res = await fetch(`/api/blog/comments?slug=${encodeURIComponent(slug)}`);
     if (!res.ok) throw new Error('Failed to fetch comments');
-    return await res.json();
+    return asArray<BlogComment>(await res.json(), 'fetchPostComments');
   } catch (error) {
     console.error('Error fetching comments:', error);
     return [];
@@ -695,7 +705,7 @@ export async function fetchAllComments(): Promise<BlogComment[]> {
   try {
     const res = await fetch('/api/blog/comments?all=1');
     if (!res.ok) throw new Error('Failed to fetch comments');
-    return await res.json();
+    return asArray<BlogComment>(await res.json(), 'fetchAllComments');
   } catch (error) {
     console.error('Error fetching all comments:', error);
     return [];
@@ -757,7 +767,7 @@ export async function fetchTestimonials(): Promise<TestimonialItem[]> {
   try {
     const res = await fetch('/api/testimonials');
     if (!res.ok) throw new Error('Failed to fetch testimonials');
-    return await res.json();
+    return asArray<TestimonialItem>(await res.json(), 'fetchTestimonials');
   } catch (error) {
     console.error('Error fetching testimonials:', error);
     return [];
@@ -768,7 +778,7 @@ export async function fetchAllTestimonials(): Promise<TestimonialItem[]> {
   try {
     const res = await fetch('/api/testimonials?all=1');
     if (!res.ok) throw new Error('Failed to fetch testimonials');
-    return await res.json();
+    return asArray<TestimonialItem>(await res.json(), 'fetchAllTestimonials');
   } catch (error) {
     console.error('Error fetching all testimonials:', error);
     return [];
@@ -832,7 +842,7 @@ export async function fetchBlockedIps(): Promise<BlockedIpRecord[]> {
   try {
     const res = await fetch('/api/blocked-ips');
     if (!res.ok) throw new Error('Failed to fetch blocked IPs');
-    return await res.json();
+    return asArray<BlockedIpRecord>(await res.json(), 'fetchBlockedIps');
   } catch (error) {
     console.error('Error fetching blocked IPs:', error);
     return [];
@@ -877,7 +887,7 @@ export async function fetchContactMessages(): Promise<ContactMessage[]> {
   try {
     const res = await fetch('/api/contact');
     if (!res.ok) throw new Error('Failed to fetch contact messages');
-    return await res.json();
+    return asArray<ContactMessage>(await res.json(), 'fetchContactMessages');
   } catch (error) {
     console.error('Error fetching contact messages:', error);
     return [];
@@ -927,7 +937,7 @@ export async function fetchCookieConsents(): Promise<CookieConsentRecord[]> {
   try {
     const res = await fetch('/api/cookie-consents');
     if (!res.ok) throw new Error('Failed to fetch cookie consents');
-    return await res.json();
+    return asArray<CookieConsentRecord>(await res.json(), 'fetchCookieConsents');
   } catch (error) {
     console.error('Error fetching cookie consents:', error);
     return [];

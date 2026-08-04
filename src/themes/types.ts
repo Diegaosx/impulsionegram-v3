@@ -21,6 +21,10 @@ export interface ThemeBaseProps {
   // Sessão atual: todo tema precisa disso no chrome, para o botão de acesso
   // levar ao painel certo (admin ou cliente) em vez de pedir login de novo.
   currentUser?: AuthUser | null;
+  // Diz se o catálogo já terminou de carregar. Sem isso a página de serviço
+  // não consegue separar "ainda carregando" de "não há serviço nenhum", e um
+  // catálogo vazio a deixa girando o spinner para sempre.
+  servicesLoaded?: boolean;
 }
 
 export interface ThemeHomeProps extends ThemeBaseProps {

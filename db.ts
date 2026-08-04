@@ -1194,7 +1194,7 @@ export interface GeneralSettings {
 
 // Theme ids bundled in the frontend. Keep in sync with src/themes/index.ts —
 // the server cannot import the client registry, so this is a plain mirror.
-const KNOWN_THEME_IDS = ['default', 'jap'];
+const KNOWN_THEME_IDS = ['default', 'jap', 'glass'];
 
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   siteName: 'ImpulsioneGram',
