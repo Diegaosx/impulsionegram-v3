@@ -246,7 +246,7 @@ export default function App() {
 
       <Route
         path="/ajuda"
-        element={<ThemeSlot slot="Help" homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+        element={<ThemeSlot slot="Help" currentUser={currentUser} homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
 
       <Route
@@ -268,28 +268,28 @@ export default function App() {
 
       <Route
         path="/privacidade"
-        element={<ThemeSlot slot="SitePage" slug="privacy" homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+        element={<ThemeSlot slot="SitePage" slug="privacy" currentUser={currentUser} homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
       <Route
         path="/termos"
-        element={<ThemeSlot slot="SitePage" slug="terms" homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+        element={<ThemeSlot slot="SitePage" slug="terms" currentUser={currentUser} homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
       <Route
         path="/garantia"
-        element={<ThemeSlot slot="SitePage" slug="warranty" homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+        element={<ThemeSlot slot="SitePage" slug="warranty" currentUser={currentUser} homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
 
       <Route
         path="/blog"
-        element={<ThemeSlot slot="Blog" homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+        element={<ThemeSlot slot="Blog" currentUser={currentUser} homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
       <Route
         path="/blog/artigo/:slug"
-        element={<ThemeSlot slot="Blog" homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+        element={<ThemeSlot slot="Blog" currentUser={currentUser} homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
       <Route
         path="/blog/categoria/:categoria"
-        element={<ThemeSlot slot="Blog" homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+        element={<ThemeSlot slot="Blog" currentUser={currentUser} homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
 
       <Route

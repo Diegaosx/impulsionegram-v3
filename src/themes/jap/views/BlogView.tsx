@@ -15,7 +15,7 @@ import JapHeader from '../chrome/Header';
 import JapFooter from '../chrome/Footer';
 import { ArrowLeft, ArrowRight, Search, X, MessageSquare, Check, AlertCircle } from 'lucide-react';
 
-export default function JapBlogView({ company, siteName, logoUrl }: ThemeBlogProps) {
+export default function JapBlogView({ company, siteName, logoUrl, currentUser }: ThemeBlogProps) {
   const navigate = useNavigate();
   const blog = useBlogData({ siteName, logoUrl });
 
@@ -28,7 +28,7 @@ export default function JapBlogView({ company, siteName, logoUrl }: ThemeBlogPro
 
   return (
     <div className="jap-page min-h-screen flex flex-col">
-      <JapHeader siteName={siteName} logoUrl={logoUrl} onNavigate={goHome} />
+      <JapHeader siteName={siteName} logoUrl={logoUrl} currentUser={currentUser} onNavigate={goHome} />
 
       <main className="pt-[71px] md:pt-[91px] lg:pt-[111px] flex-1">
         {activePost ? (

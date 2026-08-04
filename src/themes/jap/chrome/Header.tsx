@@ -7,11 +7,13 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
+import { LayoutDashboard, LogIn, Menu, X } from 'lucide-react';
+import { AuthUser } from '../../../utils/storage';
 
 interface HeaderProps {
   siteName?: string;
   logoUrl?: string;
+  currentUser?: AuthUser | null;
   onNavigate: (sectionId: string) => void;
 }
 
@@ -21,7 +23,7 @@ const LINKS: { label: string; section: string }[] = [
   { label: 'Dúvidas', section: 'faq' }
 ];
 
-export default function JapHeader({ siteName, logoUrl, onNavigate }: HeaderProps) {
+export default function JapHeader({ siteName, logoUrl, currentUser, onNavigate }: HeaderProps) {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -42,6 +44,15 @@ export default function JapHeader({ siteName, logoUrl, onNavigate }: HeaderProps
   }, [menuOpen]);
 
   const go = (section: string) => { setMenuOpen(false); onNavigate(section); };
+
+  // Quem já está logado vai direto para o painel que lhe cabe; visitante vai
+  // para o login. Sem isso o botão pediria login de novo a quem já entrou.
+  const accountHref = currentUser
+    ? (currentUser.role === 'admin' ? '/dashboard' : '/minha-conta')
+    : '/login';
+  const accountLabel = currentUser ? 'Painel' : 'Entrar';
+  const AccountIcon = currentUser ? LayoutDashboard : LogIn;
+  const goToAccount = () => { setMenuOpen(false); navigate(accountHref); };
 
   return (
     <>
@@ -66,7 +77,9 @@ export default function JapHeader({ siteName, logoUrl, onNavigate }: HeaderProps
                 {l.label}
               </button>
             ))}
-            <button onClick={() => navigate('/login')} className="jap-btn jap-btn-sm jap-btn-primary">Entrar</button>
+            <button onClick={goToAccount} className="jap-btn jap-btn-sm jap-btn-primary">
+              <AccountIcon className="h-4 w-4" /> {accountLabel}
+            </button>
           </nav>
 
           <button
@@ -95,8 +108,8 @@ export default function JapHeader({ siteName, logoUrl, onNavigate }: HeaderProps
               {l.label}
             </button>
           ))}
-          <button onClick={() => { setMenuOpen(false); navigate('/login'); }} className="jap-btn jap-btn-sm jap-btn-primary w-[200px]">
-            Entrar
+          <button onClick={goToAccount} className="jap-btn jap-btn-sm jap-btn-primary w-[200px]">
+            <AccountIcon className="h-4 w-4" /> {accountLabel}
           </button>
         </div>
       )}
