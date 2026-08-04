@@ -7,6 +7,7 @@
 
 import './default/theme';
 import './jap/theme';
+import './glass/theme';
 
 export { DEFAULT_THEME_ID, getTheme, listThemes, registerTheme, resolveThemeId } from './registry';
 export type { ThemeDefinition, ThemeSlotName, ThemeSlots, ThemeSummary } from './types';

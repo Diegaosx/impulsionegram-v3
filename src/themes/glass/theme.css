@@ -1,0 +1,236 @@
+/* Tokens do tema "Cristal" — glassmorphism claro com gradientes vibrantes.
+ *
+ * Fundo quase branco com duas manchas radiais translúcidas sobre um gradiente
+ * lilás→creme; superfícies brancas a ~78% flutuando com bordas de 1px muito
+ * claras, raios generosos e sombras longas e difusas. O acento é sempre
+ * gradiente 135°, nunca cor plana em superfície.
+ *
+ * Desvios deliberados da referência (todos por acessibilidade — a referência
+ * não define nenhum deles):
+ *  - corpo de texto usa #526178 (5.99:1) em vez de #66758a (4.14:1);
+ *  - botões e campos ganham anel de foco visível;
+ *  - o menu mobile existe (lá os itens simplesmente somem abaixo de 680px);
+ *  - o acordeão ganha indicador de aberto/fechado;
+ *  - a faixa de tablet ganha 2 colunas (lá pula de 1 para 3). */
+
+[data-theme='glass'] {
+  /* tokens globais do projeto */
+  --color-primary: #7b16d8;
+  --color-secondary: #ee2f87;
+  --color-accent: #0872d8;
+
+  /* base */
+  --gl-ink: #10233d;
+  --gl-body: #526178;   /* corpo de texto, contraste 5.99:1 */
+  --gl-muted: #66758a;  /* só decorativo/texto grande */
+  --gl-nav: #263d59;
+  --gl-pink: #ee2f87;
+  --gl-blue: #0872d8;
+  --gl-purple: #7b16d8;
+  --gl-success: #22c55e;
+  --gl-danger: #d92b6b;  /* derivado do rosa, para estados de erro */
+  --gl-warning: #b45c00; /* derivado do âmbar da arte do herói */
+
+  --gl-line: rgba(16, 35, 61, 0.12);
+  --gl-surface: rgba(255, 255, 255, 0.78);
+  --gl-surface-chip: rgba(255, 255, 255, 0.76);
+  --gl-hairline: rgba(255, 255, 255, 0.72);
+
+  /* gradientes de marca — sempre 135° */
+  --gl-grad-cta: linear-gradient(135deg, var(--gl-purple), var(--gl-blue));
+  --gl-grad-brand: linear-gradient(135deg, var(--gl-pink), var(--gl-blue));
+  --gl-grad-art: linear-gradient(135deg, #ee2f87, #ffb451);
+
+  /* sombras */
+  --gl-sh-nav: 0 14px 38px rgba(30, 52, 92, 0.12);
+  --gl-sh-card: 0 18px 46px rgba(16, 35, 61, 0.09);
+  --gl-sh-chip: 0 12px 32px rgba(16, 35, 61, 0.08);
+  --gl-sh-tile: 0 12px 26px rgba(16, 35, 61, 0.16);
+  --gl-sh-cta: 0 16px 36px rgba(123, 22, 216, 0.24);
+  --gl-sh-modal: 0 24px 70px rgba(25, 50, 92, 0.14);
+  --gl-sh-fab: 0 16px 34px rgba(34, 197, 94, 0.35);
+
+  /* raios */
+  --gl-r-pill: 999px;
+  --gl-r-card: 24px;
+  --gl-r-modal: 28px;
+  --gl-r-icon: 18px;
+  --gl-r-field: 16px;
+  --gl-r-tile: 14px;
+
+  /* tipografia — a referência declara Inter mas não carrega webfont nenhuma,
+     então mantemos a mesma pilha e caímos para a do sistema. */
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* Fundo em três camadas. Fica no wrapper do tema, nunca no body, para não
+   vazar para o painel admin nem para a área do cliente. */
+[data-theme='glass'] .gl-page {
+  background:
+    radial-gradient(circle at 82% 18%, rgba(238, 47, 135, 0.16), transparent 28%),
+    radial-gradient(circle at 12% 80%, rgba(8, 114, 216, 0.16), transparent 30%),
+    linear-gradient(#eef0ff 0%, #fffaf3 100%);
+  background-attachment: fixed;
+  color: var(--gl-body);
+}
+
+/* --- primitivos --- */
+
+[data-theme='glass'] .gl-wrap {
+  width: min(1280px, 100% - 40px);
+  margin-inline: auto;
+}
+@media (max-width: 680px) {
+  [data-theme='glass'] .gl-wrap { width: min(1280px, 100% - 28px); }
+}
+
+[data-theme='glass'] .gl-card {
+  background: var(--gl-surface);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--gl-line);
+  border-radius: var(--gl-r-card);
+  box-shadow: var(--gl-sh-card);
+}
+
+[data-theme='glass'] .gl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 48px;
+  padding: 0 26px;
+  border: 0;
+  border-radius: var(--gl-r-pill);
+  font-weight: 900;
+  font-size: 16px;
+  line-height: 1;
+  color: #fff;
+  background: var(--gl-grad-cta);
+  box-shadow: var(--gl-sh-cta);
+  cursor: pointer;
+  transition: transform 0.2s, filter 0.2s;
+}
+[data-theme='glass'] .gl-btn:hover { transform: translateY(-2px); filter: brightness(1.06); }
+[data-theme='glass'] .gl-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; filter: none; }
+
+/* Variante clara, para ações secundárias — a referência não tem, mas um tema
+   inteiro precisa de mais de um nível de ênfase. */
+[data-theme='glass'] .gl-btn-ghost {
+  background: var(--gl-surface);
+  color: var(--gl-ink);
+  border: 1px solid var(--gl-line);
+  box-shadow: var(--gl-sh-chip);
+}
+[data-theme='glass'] .gl-btn-ghost:hover { filter: none; border-color: rgba(238, 47, 135, 0.42); }
+
+/* Foco visível em tudo que é interativo. */
+[data-theme='glass'] .gl-btn:focus-visible,
+[data-theme='glass'] .gl-field:focus-visible,
+[data-theme='glass'] .gl-chip:focus-visible,
+[data-theme='glass'] .gl-net:focus-visible {
+  outline: 3px solid rgba(123, 22, 216, 0.55);
+  outline-offset: 2px;
+}
+
+/* Campo de formulário: 54px, muito arredondado, sem sombra. É o único
+   componente de formulário que a referência define (e não usa). */
+[data-theme='glass'] .gl-field {
+  width: 100%;
+  height: 54px;
+  padding: 0 16px;
+  font: inherit;
+  color: var(--gl-ink);
+  background: #fff;
+  border: 1px solid var(--gl-line);
+  border-radius: var(--gl-r-field);
+}
+[data-theme='glass'] textarea.gl-field { height: auto; padding: 14px 16px; }
+
+/* Chip de filtro/atalho (pílula) */
+[data-theme='glass'] .gl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gl-nav);
+  background: var(--gl-surface-chip);
+  border: 1px solid var(--gl-line);
+  border-radius: var(--gl-r-pill);
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s;
+}
+[data-theme='glass'] .gl-chip:hover { transform: translateY(-2px); border-color: rgba(238, 47, 135, 0.42); }
+[data-theme='glass'] .gl-chip[aria-pressed='true'] {
+  color: #fff;
+  background: var(--gl-grad-cta);
+  border-color: transparent;
+}
+
+/* Chip circular de rede social — a peça mais característica da referência. */
+[data-theme='glass'] .gl-net {
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  border: 1px solid var(--gl-line);
+  background: var(--gl-surface-chip);
+  box-shadow: var(--gl-sh-chip);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s;
+}
+[data-theme='glass'] .gl-net:hover { transform: translateY(-3px); border-color: rgba(238, 47, 135, 0.42); }
+[data-theme='glass'] .gl-net[aria-pressed='true'] { border-color: var(--gl-pink); }
+[data-theme='glass'] .gl-net-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: var(--gl-r-icon);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: var(--gl-grad-brand);
+  flex: 0 0 auto;
+}
+@media (max-width: 680px) {
+  [data-theme='glass'] .gl-net { width: 66px; height: 66px; }
+  [data-theme='glass'] .gl-net-icon { width: 46px; height: 46px; border-radius: 16px; }
+}
+
+/* Ladrilho pequeno: logo, número de etapa */
+[data-theme='glass'] .gl-tile {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--gl-r-tile);
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  color: #fff;
+  background: var(--gl-grad-brand);
+  box-shadow: var(--gl-sh-tile);
+  flex: 0 0 auto;
+}
+
+/* Texto com uma palavra em rosa dentro do título — assinatura da referência. */
+[data-theme='glass'] .gl-accent { color: var(--gl-pink); font-weight: 900; }
+
+/* Conteúdo rico: artigos, páginas legais e descrição de serviço.
+   Coluna de leitura de 820px, herdada do FAQ da referência. */
+[data-theme='glass'] .blog-content { color: var(--gl-body); }
+[data-theme='glass'] .blog-content h2 { font-size: 30px; font-weight: 700; color: var(--gl-ink); margin: 28px 0 12px; line-height: 1.2; }
+[data-theme='glass'] .blog-content h3 { font-size: 22px; font-weight: 700; color: var(--gl-ink); margin: 24px 0 10px; }
+[data-theme='glass'] .blog-content p { margin: 0 0 18px; line-height: 1.6; }
+[data-theme='glass'] .blog-content ul,
+[data-theme='glass'] .blog-content ol { margin: 0 0 18px 20px; list-style: revert; }
+[data-theme='glass'] .blog-content li { margin-bottom: 8px; line-height: 1.6; }
+[data-theme='glass'] .blog-content a { color: var(--gl-purple); text-decoration: underline; }
+[data-theme='glass'] .blog-content blockquote {
+  border-left: 3px solid var(--gl-pink);
+  padding-left: 16px;
+  margin: 0 0 18px;
+  color: var(--gl-ink);
+}
+[data-theme='glass'] .blog-content img { max-width: 100%; border-radius: var(--gl-r-card); }
