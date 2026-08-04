@@ -1,0 +1,183 @@
+/* Tokens do tema "Painel" — linguagem visual inspirada em painéis SMM
+ * (superfície cinza-clara, cartões brancos flutuando, laranja como único
+ * acento forte, azul-bebê nas seções alternadas).
+ *
+ * Os três tokens do topo são os que o Tailwind já usa em todo o projeto
+ * (bg-primary, text-secondary, ...). Os demais são próprios deste tema e ficam
+ * disponíveis como var(--jap-*) dentro da árvore [data-theme='jap'].
+ *
+ * Ajuste em relação à referência: o laranja original (#F15E24) tem contraste
+ * 3.30:1 com texto branco, abaixo do mínimo de 4.5:1 do WCAG AA. Escurecemos
+ * para uso com texto branco e mantivemos o tom original como cor de destaque
+ * em superfícies, onde o contraste não é exigido. */
+
+[data-theme='jap'] {
+  /* tokens globais do projeto */
+  --color-primary: #C74312;
+  --color-secondary: #B55BB4;
+  --color-accent: #F15E24;
+
+  /* superfícies */
+  --jap-bg-app: #E4E3E3;
+  --jap-surface: #FFFFFF;
+  --jap-surface-tint: #EDF8FD;
+  --jap-subtle: #F6F6F6;
+
+  /* texto */
+  --jap-ink: #020E21;
+  --jap-body: #515C6B;
+  --jap-muted: #707EAE;
+  --jap-footer-link: #263138;
+
+  /* bordas */
+  --jap-border: #F2F6F9;
+  --jap-border-soft: rgba(67, 77, 86, 0.14);
+  --jap-border-footer: rgba(26, 33, 40, 0.61);
+
+  /* marca */
+  --jap-orange: #F15E24;
+  --jap-orange-ink: #C74312; /* variante acessível para texto branco */
+  --jap-blue: #24AAE1;
+  --jap-blue-08: rgba(36, 170, 225, 0.08);
+  --jap-success: #1BBA18;
+  --jap-danger: #D85048;
+
+  /* sombras */
+  --jap-shadow-card: 0 6px 12px 0 rgba(28, 39, 49, 0.05);
+  --jap-shadow-header: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+
+  /* raios */
+  --jap-r-card: 16px;
+  --jap-r-tile: 10px;
+  --jap-r-page: 8px;
+  --jap-r-control: 6px;
+  --jap-r-control-sm: 4px;
+
+  /* tipografia: a referência usa fonte de sistema, sem webfont */
+  --font-sans: 'Trebuchet MS', 'Lucida Grande', Tahoma, sans-serif;
+  --font-display: 'Trebuchet MS', 'Lucida Grande', Tahoma, sans-serif;
+}
+
+/* Superfície da página. Fica no wrapper do tema (e não no body) para não
+   vazar para o painel admin nem para a área do cliente. */
+[data-theme='jap'] .jap-page {
+  background-color: var(--jap-bg-app);
+  color: var(--jap-body);
+}
+
+/* --- Primitivos reutilizados pelas seções --- */
+
+[data-theme='jap'] .jap-card {
+  background: var(--jap-surface);
+  border-radius: var(--jap-r-card);
+  box-shadow: var(--jap-shadow-card);
+}
+
+[data-theme='jap'] .jap-card-tint {
+  background: var(--jap-surface-tint);
+  border-radius: var(--jap-r-card);
+}
+
+/* Botões: uppercase, raio pequeno, e o primário inverte para navy no hover —
+   é a assinatura mais reconhecível da referência. */
+[data-theme='jap'] .jap-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  border-radius: var(--jap-r-control);
+  padding: 12px 32px;
+  font-size: 16px;
+  line-height: 1;
+  transition: 0.5s;
+  cursor: pointer;
+}
+
+[data-theme='jap'] .jap-btn-sm {
+  padding: 10px 30px;
+  font-size: 14px;
+  border-radius: var(--jap-r-control-sm);
+}
+
+[data-theme='jap'] .jap-btn-primary {
+  background: var(--jap-orange-ink);
+  color: #fff;
+}
+[data-theme='jap'] .jap-btn-primary:hover {
+  background: var(--jap-ink);
+}
+
+[data-theme='jap'] .jap-btn-outline {
+  border: 1px solid var(--jap-ink);
+  color: var(--jap-ink);
+  background: transparent;
+}
+[data-theme='jap'] .jap-btn-outline:hover {
+  background: var(--jap-ink);
+  color: #fff;
+}
+
+/* Chip de plataforma — usado como seletor no grid e na calculadora. */
+[data-theme='jap'] .jap-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--jap-subtle);
+  color: var(--jap-muted);
+  border-radius: var(--jap-r-control);
+  font-size: 14px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: 0.2s;
+}
+[data-theme='jap'] .jap-chip[aria-pressed='true'] {
+  background: var(--jap-orange-ink);
+  color: #fff;
+}
+
+/* Tile de ícone (72x72 na referência). */
+[data-theme='jap'] .jap-tile {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--jap-r-tile);
+  background: var(--jap-blue-08);
+  color: var(--jap-blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Campos: 50px de altura, raio 6, borda clara.
+   A referência suprime o anel de foco; nós mantemos, por acessibilidade. */
+[data-theme='jap'] .jap-input {
+  width: 100%;
+  height: 50px;
+  padding: 12px;
+  font-size: 16px;
+  border-radius: var(--jap-r-control);
+  border: 1px solid var(--jap-border);
+  background: var(--jap-surface);
+  color: var(--jap-ink);
+}
+[data-theme='jap'] .jap-input:focus {
+  outline: 2px solid var(--jap-blue);
+  outline-offset: 1px;
+}
+
+/* Conteúdo rico (páginas legais, artigos, descrição de serviço). */
+[data-theme='jap'] .blog-content h2 { font-size: 32px; font-weight: 700; color: var(--jap-ink); margin: 24px 0 12px; }
+[data-theme='jap'] .blog-content h3 { font-size: 24px; font-weight: 700; color: var(--jap-ink); margin: 24px 0 12px; }
+[data-theme='jap'] .blog-content p { margin: 0 0 24px; line-height: 1.5; }
+[data-theme='jap'] .blog-content ul,
+[data-theme='jap'] .blog-content ol { margin: 0 0 24px 20px; list-style: revert; }
+[data-theme='jap'] .blog-content li { margin-bottom: 8px; }
+[data-theme='jap'] .blog-content a { color: var(--jap-blue); text-decoration: underline; }
+[data-theme='jap'] .blog-content blockquote {
+  border-left: 3px solid var(--jap-orange);
+  padding-left: 16px;
+  margin: 0 0 24px;
+  color: var(--jap-ink);
+}
