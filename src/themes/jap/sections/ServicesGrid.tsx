@@ -15,7 +15,8 @@ import { Check } from 'lucide-react';
 
 interface ServicesGridProps {
   services: ServiceItem[];
-  onBuy: (service: ServiceItem) => void;
+  /** Abre o checkout direto, já no pacote que o card anunciou. */
+  onBuy: (service: ServiceItem, packageId?: string) => void;
 }
 
 const money = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -35,11 +36,25 @@ export default function JapServicesGrid({ services, onBuy }: ServicesGridProps) 
     [services, platform]
   );
 
-  // Preço de entrada: menor pacote, ou o mínimo pelo preço unitário.
-  const startingPrice = (s: ServiceItem) => {
+  // O pacote que o card anuncia: o mais barato. É ele que abre no checkout e
+  // que já vem selecionado na página de detalhes.
+  const startingPackage = (s: ServiceItem) => {
     const pkgs = sellablePackages(s);
-    if (pkgs.length) return Math.min(...pkgs.map(p => p.price));
+    if (!pkgs.length) return undefined;
+    return pkgs.reduce((cheapest, p) => (p.price < cheapest.price ? p : cheapest), pkgs[0]);
+  };
+
+  const startingPrice = (s: ServiceItem) => {
+    const pkg = startingPackage(s);
+    if (pkg) return pkg.price;
     return Math.round(s.pricePerItem * (s.minQuantity || 1000) * 100) / 100;
+  };
+
+  // Leva o pacote na URL, para a página de detalhes abrir já nele (e o link
+  // continuar compartilhável).
+  const detailsHref = (s: ServiceItem) => {
+    const pkg = startingPackage(s);
+    return `/servico/${serviceSlug(s)}${pkg ? `?pacote=${encodeURIComponent(pkg.id)}` : ''}`;
   };
 
   return (
@@ -102,13 +117,13 @@ export default function JapServicesGrid({ services, onBuy }: ServicesGridProps) 
                   </div>
 
                   <div className="flex flex-wrap gap-2 mt-5">
-                    <button onClick={() => onBuy(s)} className="jap-btn jap-btn-sm jap-btn-primary flex-1">
+                    <button
+                      onClick={() => onBuy(s, startingPackage(s)?.id)}
+                      className="jap-btn jap-btn-sm jap-btn-primary flex-1"
+                    >
                       Comprar
                     </button>
-                    <button
-                      onClick={() => navigate(`/servico/${serviceSlug(s)}`)}
-                      className="jap-btn jap-btn-sm jap-btn-outline"
-                    >
+                    <button onClick={() => navigate(detailsHref(s))} className="jap-btn jap-btn-sm jap-btn-outline">
                       Detalhes
                     </button>
                   </div>
