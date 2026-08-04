@@ -43,7 +43,10 @@ export default function JapCalculator({
   services, initialPlatform, initialType, restrictServiceId, initialPackageId,
   currentUser, onAuthSuccess, onOrderCreated, embedded, modalOnly, autoOpen, onClose
 }: CalculatorProps) {
-  const sel = useServiceSelection({ services, initialPlatform, initialType, restrictServiceId, initialPackageId });
+  const sel = useServiceSelection({
+    services, initialPlatform, initialType, restrictServiceId, initialPackageId,
+    preferMinimumQuantity: true
+  });
   const { platform, serviceType, quantity, activeService, activePackages, hasPackages, selectedPackageId, price } = sel;
 
   const privateProfileRef = useRef(false);
@@ -140,6 +143,21 @@ export default function JapCalculator({
           <p className="text-xs uppercase tracking-wide font-bold mb-3" style={{ color: 'var(--jap-muted)' }}>
             {restrictServiceId ? '1.' : '3.'} Quantidade
           </p>
+          {sel.presets.length > 1 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {sel.presets.map(q => (
+                <button
+                  key={q}
+                  className="jap-chip"
+                  aria-pressed={quantity === q}
+                  onClick={() => sel.applyQuantity(q)}
+                >
+                  {q.toLocaleString('pt-BR')}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="flex items-center gap-2 mb-3">
             <button onClick={() => sel.decrementQuantity(500)} className="jap-btn jap-btn-sm jap-btn-outline !px-3" aria-label="Diminuir quantidade">
               <Minus className="h-4 w-4" />
@@ -270,12 +288,69 @@ export default function JapCalculator({
                     <input className="jap-input" value={fields.coupon} onChange={e => checkout.setField('coupon', e.target.value)} />
                   </Field>
 
-                  <div className="jap-card-tint p-4 flex items-center justify-between">
-                    <span className="text-sm font-bold" style={{ color: 'var(--jap-ink)' }}>Total</span>
-                    <span className="text-xl font-bold" style={{ color: 'var(--jap-orange-ink)' }}>{money(price.finalPrice)}</span>
+                  {/* Mini calculadora: deixa o cliente ajustar o pedido sem
+                      fechar o checkout. Usa a mesma seleção da calculadora, então
+                      o total abaixo acompanha na hora. */}
+                  <div className="jap-card-tint p-4 space-y-3">
+                    <p className="text-xs uppercase tracking-wide font-bold" style={{ color: 'var(--jap-muted)' }}>
+                      Personalizar pedido
+                    </p>
+
+                    {hasPackages ? (
+                      <div className="flex flex-wrap gap-2">
+                        {activePackages.map(pkg => (
+                          <button
+                            key={pkg.id}
+                            type="button"
+                            className="jap-chip"
+                            aria-pressed={pkg.id === selectedPackageId}
+                            onClick={() => sel.selectPackage(pkg)}
+                          >
+                            {pkg.quantity.toLocaleString('pt-BR')} · {money(pkg.price)}
+                          </button>
+                        ))}
+                      </div>
+                    ) : activeService ? (
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min={activeService.minQuantity}
+                          max={activeService.maxQuantity}
+                          step={100}
+                          value={quantity}
+                          onChange={e => sel.applyQuantity(parseInt(e.target.value, 10))}
+                          className="flex-1 accent-[var(--jap-orange)]"
+                          aria-label="Quantidade"
+                        />
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button type="button" onClick={() => sel.decrementQuantity(100)}
+                            className="jap-btn jap-btn-sm jap-btn-outline !px-2 !py-1" aria-label="Diminuir quantidade">
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <span className="text-sm font-bold min-w-[4.5rem] text-center" style={{ color: 'var(--jap-ink)' }}>
+                            {quantity.toLocaleString('pt-BR')}
+                          </span>
+                          <button type="button" onClick={() => sel.incrementQuantity(100)}
+                            className="jap-btn jap-btn-sm jap-btn-outline !px-2 !py-1" aria-label="Aumentar quantidade">
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div className="flex items-end justify-between pt-1">
+                      <div>
+                        <span className="text-sm font-bold block" style={{ color: 'var(--jap-ink)' }}>Total</span>
+                        <span className="text-xs" style={{ color: 'var(--jap-muted)' }}>
+                          {quantity.toLocaleString('pt-BR')} un.
+                          {price.discountPercent > 0 && ` · -${price.discountPercent}%`}
+                        </span>
+                      </div>
+                      <span className="text-xl font-bold" style={{ color: 'var(--jap-orange-ink)' }}>{money(price.finalPrice)}</span>
+                    </div>
                   </div>
 
-                  <button type="submit" className="jap-btn jap-btn-primary w-full">Continuar</button>
+                  <button type="submit" className="jap-btn jap-btn-primary w-full">Avançar</button>
                 </form>
               )}
 
