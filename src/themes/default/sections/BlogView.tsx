@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Calendar,
   User,
@@ -18,82 +18,8 @@ import {
   Flame,
   AlertCircle
 } from 'lucide-react';
-import {
-  BlogPost, BlogComment,
-  fetchBlogPosts, fetchPostComments, postComment,
-  fetchAnalyticsSettings, AnalyticsSettings
-} from '../../../utils/storage';
-import { getRecaptchaToken } from '../../../utils/recaptcha';
 import { formatDateTime } from '../../../utils/datetime';
-import { applyArticleCode, clearArticleCode } from '../../../utils/codeInjection';
-
-// --- SEO HELPERS ---
-
-// Upsert a <meta> tag selected by an attribute/value pair.
-function upsertMeta(attr: 'name' | 'property', key: string, content: string) {
-  let el = document.head.querySelector(`meta[${attr}="${key}"]`);
-  if (!el) {
-    el = document.createElement('meta');
-    el.setAttribute(attr, key);
-    document.head.appendChild(el);
-  }
-  el.setAttribute('content', content);
-}
-
-// Upsert the single <link rel="canonical"> tag.
-function upsertCanonical(url: string) {
-  let el = document.head.querySelector('link[rel="canonical"]');
-  if (!el) {
-    el = document.createElement('link');
-    el.setAttribute('rel', 'canonical');
-    document.head.appendChild(el);
-  }
-  el.setAttribute('href', url);
-}
-
-// Inject (or replace) a JSON-LD structured-data block, tagged by id so it can
-// be swapped on navigation. Pass null to remove it.
-function setJsonLd(id: string, data: object | null) {
-  const selector = `script[type="application/ld+json"][data-seo="${id}"]`;
-  document.head.querySelector(selector)?.remove();
-  if (!data) return;
-  const script = document.createElement('script');
-  script.type = 'application/ld+json';
-  script.setAttribute('data-seo', id);
-  script.text = JSON.stringify(data);
-  document.head.appendChild(script);
-}
-
-interface SEOOptions {
-  title: string;
-  description: string;
-  brand: string;
-  canonical: string;
-  image?: string;
-  type?: 'website' | 'article';
-}
-
-// Apply title, description, canonical, robots and Open Graph / Twitter tags.
-function updateSEO({ title, description, brand, canonical, image, type = 'website' }: SEOOptions) {
-  document.title = `${title} | Blog ${brand}`;
-
-  upsertMeta('name', 'description', description);
-  upsertMeta('name', 'robots', 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1');
-  upsertCanonical(canonical);
-
-  upsertMeta('property', 'og:type', type);
-  upsertMeta('property', 'og:title', title);
-  upsertMeta('property', 'og:description', description);
-  upsertMeta('property', 'og:url', canonical);
-  upsertMeta('property', 'og:site_name', brand);
-  upsertMeta('name', 'twitter:card', image ? 'summary_large_image' : 'summary');
-  upsertMeta('name', 'twitter:title', title);
-  upsertMeta('name', 'twitter:description', description);
-  if (image) {
-    upsertMeta('property', 'og:image', image);
-    upsertMeta('name', 'twitter:image', image);
-  }
-}
+import { useBlogData } from '../../../site/hooks/useBlogData';
 
 interface BlogViewProps {
   // Navigate to a landing-page section (the blog lives on its own route).
@@ -103,295 +29,49 @@ interface BlogViewProps {
 }
 
 export default function BlogView({ onNavigate, siteName, logoUrl }: BlogViewProps) {
-  // Routing is driven by react-router:
-  // - /blog (main page, optional ?q= search)
-  // - /blog/artigo/:slug (individual article)
-  // - /blog/categoria/:categoria (category page)
   const navigate = useNavigate();
-  const { slug, categoria } = useParams<{ slug?: string; categoria?: string }>();
-  const [searchParams] = useSearchParams();
 
-  const currentSlug = slug || null;
-  const currentCategory = categoria ? decodeURIComponent(categoria) : null;
-  const activeSearchFilter = searchParams.get('q') || '';
+  // Dados, rotas, filtros, comentários e SEO vêm do hook compartilhado.
+  const blog = useBlogData({ siteName, logoUrl });
 
-  // Posts loaded from the API
-  const [posts, setPosts] = useState<BlogPost[]>([]);
-  const [loadingPosts, setLoadingPosts] = useState(true);
+  const {
+    currentSlug, currentCategory, activeSearchFilter,
+    loadingPosts, activePost, filteredPosts, categoryCounts, prevNextPosts, comments,
+    searchQuery, setSearchQuery
+  } = blog;
 
-  // Comments for the active article (loaded from the API)
-  const [comments, setComments] = useState<BlogComment[]>([]);
+  // Aliases mantendo a marcação abaixo inalterada.
+  const recentPopularPosts = blog.recentPosts;
+  const navigateToArticle = blog.goToArticle;
+  const navigateToCategory = blog.goToCategory;
+  const handleSearchSubmit = blog.submitSearch;
+  const handleClearSearch = blog.clearSearch;
 
-  // Sidebar Search input (kept in sync with the URL ?q= param)
-  const [searchQuery, setSearchQuery] = useState(activeSearchFilter);
+  const commentName = blog.draft.name;
+  const setCommentName = (v: string) => blog.setDraftField('name', v);
+  const commentEmail = blog.draft.email;
+  const setCommentEmail = (v: string) => blog.setDraftField('email', v);
+  const commentText = blog.draft.text;
+  const setCommentText = (v: string) => blog.setDraftField('text', v);
+  const isSubmittingComment = blog.submitting;
+  const commentSuccess = blog.submitted;
+  const commentError = blog.commentError;
+  const handleAddComment = blog.submitComment;
 
-  // Modal comments state
   const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
-  const [commentName, setCommentName] = useState('');
-  const [commentEmail, setCommentEmail] = useState('');
-  const [commentText, setCommentText] = useState('');
-  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
-  const [commentSuccess, setCommentSuccess] = useState(false);
-  const [commentError, setCommentError] = useState('');
-
-  // Load posts once
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      setLoadingPosts(true);
-      const data = await fetchBlogPosts();
-      if (active) {
-        setPosts(data);
-        setLoadingPosts(false);
-      }
-    })();
-    return () => { active = false; };
-  }, []);
-
-  // Scroll to top whenever the blog route changes
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [slug, categoria, activeSearchFilter]);
-
-  // Keep the search input in sync when the URL ?q= changes
-  useEffect(() => {
-    setSearchQuery(activeSearchFilter);
-  }, [activeSearchFilter]);
-
-  // Find the selected article if slug is active
-  const activePost = useMemo(() => {
-    if (!currentSlug) return null;
-    return posts.find(p => p.slug === currentSlug) || null;
-  }, [currentSlug, posts]);
-
-  // Load comments for the active article
-  useEffect(() => {
-    if (!currentSlug) {
-      setComments([]);
-      return;
-    }
-    let active = true;
-    (async () => {
-      const data = await fetchPostComments(currentSlug);
-      if (active) setComments(data);
-    })();
-    return () => { active = false; };
-  }, [currentSlug]);
-
-  // Compute navigation (prev & next posts)
-  const prevNextPosts = useMemo(() => {
-    if (!activePost) return { prev: null, next: null };
-    const currentIndex = posts.findIndex(p => p.slug === activePost.slug);
-    const prev = currentIndex > 0 ? posts[currentIndex - 1] : null;
-    const next = currentIndex >= 0 && currentIndex < posts.length - 1 ? posts[currentIndex + 1] : null;
-    return { prev, next };
-  }, [activePost, posts]);
-
-  // Load the custom article code snippets once, then inject them only while an
-  // article is open and remove them when leaving the article.
-  const [articleCode, setArticleCode] = useState<AnalyticsSettings | null>(null);
-  useEffect(() => {
-    fetchAnalyticsSettings().then(setArticleCode).catch(() => {});
-  }, []);
-  useEffect(() => {
-    if (articleCode && activePost) {
-      applyArticleCode(articleCode);
-    } else {
-      clearArticleCode();
-    }
-    return () => clearArticleCode();
-  }, [articleCode, activePost]);
-
-  // SEO Update Trigger — title/description/canonical/OG plus JSON-LD structured
-  // data following Google's guidelines (Article + BreadcrumbList).
-  useEffect(() => {
-    const brand = siteName || 'ImpulsioneGram';
-    const origin = window.location.origin;
-    const path = window.location.pathname;
-    const blogUrl = `${origin}/blog`;
-
-    const breadcrumb = (items: { name: string; url: string }[]) => ({
-      '@context': 'https://schema.org',
-      '@type': 'BreadcrumbList',
-      itemListElement: items.map((it, i) => ({
-        '@type': 'ListItem',
-        position: i + 1,
-        name: it.name,
-        item: it.url
-      }))
-    });
-
-    if (activePost) {
-      const canonical = `${origin}/blog/artigo/${activePost.slug}`;
-      updateSEO({
-        title: activePost.title,
-        description: activePost.description,
-        brand,
-        canonical,
-        image: activePost.image,
-        type: 'article'
-      });
-      if (activePost.publishedAt) {
-        upsertMeta('property', 'article:published_time', activePost.publishedAt);
-      }
-      (activePost.categories || []).forEach((c) => upsertMeta('property', 'article:section', c));
-
-      const publisher: any = {
-        '@type': 'Organization',
-        name: brand,
-        url: origin
-      };
-      if (logoUrl) publisher.logo = { '@type': 'ImageObject', url: logoUrl };
-
-      setJsonLd('article', {
-        '@context': 'https://schema.org',
-        '@type': 'BlogPosting',
-        headline: activePost.title,
-        description: activePost.description,
-        image: activePost.image ? [activePost.image] : undefined,
-        author: { '@type': 'Person', name: activePost.author || brand },
-        publisher,
-        datePublished: activePost.publishedAt || undefined,
-        dateModified: activePost.publishedAt || undefined,
-        mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
-        articleSection: activePost.categories && activePost.categories.length ? activePost.categories : undefined,
-        keywords: activePost.tags && activePost.tags.length ? activePost.tags.join(', ') : undefined,
-        url: canonical
-      });
-
-      const crumbs = [
-        { name: 'Início', url: origin + '/' },
-        { name: 'Blog', url: blogUrl }
-      ];
-      if (activePost.categories && activePost.categories[0]) {
-        crumbs.push({ name: activePost.categories[0], url: `${origin}/blog/categoria/${encodeURIComponent(activePost.categories[0])}` });
-      }
-      crumbs.push({ name: activePost.title, url: canonical });
-      setJsonLd('breadcrumb', breadcrumb(crumbs));
-    } else if (currentCategory) {
-      const canonical = `${origin}/blog/categoria/${encodeURIComponent(currentCategory)}`;
-      updateSEO({
-        title: `Artigos sobre ${currentCategory}`,
-        description: `Confira os melhores artigos de marketing e crescimento social na categoria ${currentCategory} do nosso Blog.`,
-        brand,
-        canonical
-      });
-      setJsonLd('article', null);
-      setJsonLd('breadcrumb', breadcrumb([
-        { name: 'Início', url: origin + '/' },
-        { name: 'Blog', url: blogUrl },
-        { name: currentCategory, url: canonical }
-      ]));
-    } else {
-      const canonical = activeSearchFilter ? `${blogUrl}` : `${origin}${path}`;
-      updateSEO({
-        title: 'Blog de Marketing de Redes Sociais e Engajamento',
-        description: `Dicas, estratégias, guias práticos e tendências de Instagram, TikTok e Marketing Digital no Blog oficial ${brand}.`,
-        brand,
-        canonical
-      });
-      setJsonLd('article', null);
-      setJsonLd('breadcrumb', breadcrumb([
-        { name: 'Início', url: origin + '/' },
-        { name: 'Blog', url: blogUrl }
-      ]));
-    }
-  }, [activePost, currentCategory, activeSearchFilter, siteName, logoUrl]);
-
-  // Remove blog-specific structured data when leaving the blog entirely.
-  useEffect(() => {
-    return () => {
-      setJsonLd('article', null);
-      setJsonLd('breadcrumb', null);
-    };
-  }, []);
-
-  // Filter posts based on Category or Search queries
-  const filteredPosts = useMemo(() => {
-    let list = posts;
-
-    if (currentCategory) {
-      list = list.filter(p => (p.categories || []).some(c => c.toLowerCase() === currentCategory.toLowerCase()));
-    }
-
-    if (activeSearchFilter) {
-      const q = activeSearchFilter.toLowerCase();
-      list = list.filter(p =>
-        p.title.toLowerCase().includes(q) ||
-        p.description.toLowerCase().includes(q) ||
-        (p.tags || []).some(t => t.toLowerCase().includes(q))
-      );
-    }
-
-    return list;
-  }, [posts, currentCategory, activeSearchFilter]);
-
-  // Count posts per category for the sidebar
-  const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    posts.forEach(p => {
-      (p.categories || []).forEach(c => {
-        counts[c] = (counts[c] || 0) + 1;
-      });
-    });
-    return counts;
-  }, [posts]);
-
-  // Handle category clicks
-  const navigateToCategory = (catName: string) => {
-    navigate(`/blog/categoria/${encodeURIComponent(catName)}`);
-  };
-
-  // Handle article clicks
-  const navigateToArticle = (postSlug: string) => {
-    navigate(`/blog/artigo/${postSlug}`);
-  };
-
-  // Handle search submission (drives the ?q= URL param)
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const q = searchQuery.trim();
-    navigate(q ? `/blog?q=${encodeURIComponent(q)}` : '/blog');
-  };
-
-  // Clear search filter
-  const handleClearSearch = () => {
-    setSearchQuery('');
-    navigate('/blog');
-  };
-
-  // Handle adding comments via Modal (persisted on the server)
-  const handleAddComment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!commentName.trim() || !commentEmail.trim() || !commentText.trim() || !currentSlug) return;
-
-    setIsSubmittingComment(true);
-    setCommentError('');
-    const token = await getRecaptchaToken('comment');
-    const result = await postComment(currentSlug, commentName.trim(), commentEmail.trim(), commentText.trim(), token);
-    setIsSubmittingComment(false);
-
-    if (result.ok) {
-      // Comments now require admin approval, so we don't add it to the live list.
-      setCommentSuccess(true);
-      setCommentText('');
-      setTimeout(() => {
-        setCommentSuccess(false);
-        setIsCommentModalOpen(false);
-      }, 3500);
-    } else {
-      setCommentError(result.error || 'Não foi possível enviar o comentário. Verifique sua conexão e tente novamente.');
-    }
-  };
-
-  // Clean form and open modal
   const openNewCommentModal = () => {
-    setCommentSuccess(false);
+    blog.resetCommentFeedback();
     setIsCommentModalOpen(true);
   };
-
-  // Static items list for Sidebar
-  const recentPopularPosts = useMemo(() => posts.slice(0, 3), [posts]);
+  // Fecha o modal alguns segundos depois de um envio aceito.
+  useEffect(() => {
+    if (!commentSuccess) return;
+    const t = setTimeout(() => {
+      blog.resetCommentFeedback();
+      setIsCommentModalOpen(false);
+    }, 3500);
+    return () => clearTimeout(t);
+  }, [commentSuccess]);
 
   return (
     <div className="bg-slate-50 text-slate-800 min-h-screen pt-32 sm:pt-36 pb-20 px-4 sm:px-6 lg:px-8 font-sans">
