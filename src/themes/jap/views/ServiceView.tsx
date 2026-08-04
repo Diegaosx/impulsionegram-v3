@@ -22,7 +22,7 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 export default function JapServiceView({
-  services, homeContent, company, siteName, logoUrl, currentUser, onAuthSuccess, onAddSimulatedOrder
+  services, homeContent, company, siteName, logoUrl, currentUser, servicesLoaded, onAuthSuccess, onAddSimulatedOrder
 }: ThemeServiceProps) {
   const navigate = useNavigate();
   const { slug } = useParams<{ slug: string }>();
@@ -86,7 +86,7 @@ export default function JapServiceView({
     setTimeout(() => document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
   };
 
-  if (services.length === 0) {
+  if (!servicesLoaded && services.length === 0) {
     return (
       <div className="jap-page min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: 'var(--jap-orange)' }} />

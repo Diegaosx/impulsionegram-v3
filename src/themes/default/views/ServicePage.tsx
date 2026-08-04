@@ -18,6 +18,7 @@ interface ServicePageProps {
   siteName?: string;
   logoUrl?: string;
   currentUser?: AuthUser | null;
+  servicesLoaded?: boolean;
   onAuthSuccess?: (user: AuthUser) => void;
   onAddSimulatedOrder?: (order: any) => void;
 }
@@ -30,7 +31,7 @@ const TYPE_LABEL: Record<string, string> = {
   stories: 'Views Stories'
 };
 
-export default function ServicePage({ services, homeContent, company, siteName, logoUrl, currentUser, onAuthSuccess, onAddSimulatedOrder }: ServicePageProps) {
+export default function ServicePage({ services, homeContent, company, siteName, logoUrl, currentUser, servicesLoaded, onAuthSuccess, onAddSimulatedOrder }: ServicePageProps) {
   const navigate = useNavigate();
   const { slug } = useParams<{ slug: string }>();
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -130,7 +131,7 @@ export default function ServicePage({ services, homeContent, company, siteName, 
   };
 
   // Services still loading → wait; loaded but not found → back to home.
-  if (services.length === 0) {
+  if (!servicesLoaded && services.length === 0) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />

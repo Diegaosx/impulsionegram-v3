@@ -33,6 +33,7 @@ export default function App() {
 
   // Shared server-backed state
   const [services, setServices] = useState<any[]>([]);
+  const [servicesLoaded, setServicesLoaded] = useState(false);
   const [plans, setPlans] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [homeContent, setHomeContent] = useState<HomeContent | null>(null);
@@ -83,6 +84,7 @@ export default function App() {
           fetchAnalyticsSettings()
         ]);
         setServices(loadedServices);
+        setServicesLoaded(true);
         setPlans(loadedPlans);
         setHomeContent(loadedHome);
         setCompany(loadedCompany);
@@ -100,6 +102,9 @@ export default function App() {
         });
       } catch (err) {
         console.error('Error loading secure REST API endpoints:', err);
+        // Mesmo em falha o carregamento terminou: melhor uma página honesta
+        // de "serviço não encontrado" do que um spinner infinito.
+        setServicesLoaded(true);
       }
     }
     loadBackendData();
@@ -237,7 +242,7 @@ export default function App() {
             siteName={siteName}
             logoUrl={logoUrl}
             company={company}
-            currentUser={currentUser}
+            currentUser={currentUser} servicesLoaded={servicesLoaded}
             onAuthSuccess={handleAuthSuccess}
             onAddSimulatedOrder={handleAddSimulatedOrder}
           />
@@ -246,7 +251,7 @@ export default function App() {
 
       <Route
         path="/ajuda"
-        element={<ThemeSlot slot="Help" currentUser={currentUser} homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+        element={<ThemeSlot slot="Help" currentUser={currentUser} servicesLoaded={servicesLoaded} homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
 
       <Route
@@ -259,7 +264,7 @@ export default function App() {
             company={company}
             siteName={siteName}
             logoUrl={logoUrl}
-            currentUser={currentUser}
+            currentUser={currentUser} servicesLoaded={servicesLoaded}
             onAuthSuccess={handleAuthSuccess}
             onAddSimulatedOrder={handleAddSimulatedOrder}
           />
@@ -268,28 +273,28 @@ export default function App() {
 
       <Route
         path="/privacidade"
-        element={<ThemeSlot slot="SitePage" slug="privacy" currentUser={currentUser} homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+        element={<ThemeSlot slot="SitePage" slug="privacy" currentUser={currentUser} servicesLoaded={servicesLoaded} homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
       <Route
         path="/termos"
-        element={<ThemeSlot slot="SitePage" slug="terms" currentUser={currentUser} homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+        element={<ThemeSlot slot="SitePage" slug="terms" currentUser={currentUser} servicesLoaded={servicesLoaded} homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
       <Route
         path="/garantia"
-        element={<ThemeSlot slot="SitePage" slug="warranty" currentUser={currentUser} homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+        element={<ThemeSlot slot="SitePage" slug="warranty" currentUser={currentUser} servicesLoaded={servicesLoaded} homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
 
       <Route
         path="/blog"
-        element={<ThemeSlot slot="Blog" currentUser={currentUser} homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+        element={<ThemeSlot slot="Blog" currentUser={currentUser} servicesLoaded={servicesLoaded} homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
       <Route
         path="/blog/artigo/:slug"
-        element={<ThemeSlot slot="Blog" currentUser={currentUser} homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+        element={<ThemeSlot slot="Blog" currentUser={currentUser} servicesLoaded={servicesLoaded} homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
       <Route
         path="/blog/categoria/:categoria"
-        element={<ThemeSlot slot="Blog" currentUser={currentUser} homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+        element={<ThemeSlot slot="Blog" currentUser={currentUser} servicesLoaded={servicesLoaded} homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
 
       <Route
