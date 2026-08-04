@@ -1,10 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SERVICES, SOCIAL_PLATFORMS } from '../data';
-import { SocialPlatform, ServiceItem } from '../types';
-import { serviceSlug } from '../utils/storage';
+import { SERVICES, SOCIAL_PLATFORMS } from '../../../data';
+import { SocialPlatform, ServiceItem } from '../../../types';
+import { serviceSlug } from '../../../utils/storage';
 import { Instagram, Youtube, Twitter, Facebook, Check, HelpCircle } from 'lucide-react';
-import { TikTokIcon, KwaiIcon } from './icons/BrandIcons';
+import { TikTokIcon, KwaiIcon } from '../../../components/icons/BrandIcons';
 
 interface ServicesGridProps {
   onSelectService: (platform: SocialPlatform, type: string) => void;

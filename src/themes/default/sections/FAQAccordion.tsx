@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
-import { FAQS } from '../data';
+import { FAQS } from '../../../data';
 import { ChevronDown, ChevronUp, HelpCircle, MessageCircle } from 'lucide-react';
-import { CompanySettings, HomeContent } from '../utils/storage';
+import { CompanySettings, HomeContent } from '../../../utils/storage';
 
 interface FAQAccordionProps {
   onNavigate: (sectionId: string) => void;

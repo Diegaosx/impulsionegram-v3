@@ -1,4 +1,4 @@
-import { STEP_PROCESS } from '../data';
+import { STEP_PROCESS } from '../../../data';
 import { MousePointerClick, UserCheck, Shield, TrendingUp, HelpCircle } from 'lucide-react';
 
 export default function HowItWorks() {

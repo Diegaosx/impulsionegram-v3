@@ -22,10 +22,10 @@ import {
   BlogPost, BlogComment,
   fetchBlogPosts, fetchPostComments, postComment,
   fetchAnalyticsSettings, AnalyticsSettings
-} from '../utils/storage';
-import { getRecaptchaToken } from '../utils/recaptcha';
-import { formatDateTime } from '../utils/datetime';
-import { applyArticleCode, clearArticleCode } from '../utils/codeInjection';
+} from '../../../utils/storage';
+import { getRecaptchaToken } from '../../../utils/recaptcha';
+import { formatDateTime } from '../../../utils/datetime';
+import { applyArticleCode, clearArticleCode } from '../../../utils/codeInjection';
 
 // --- SEO HELPERS ---
 

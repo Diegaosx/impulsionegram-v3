@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
-import { PREBUILT_PLANS } from '../data';
-import { SocialPlatform, PlanItem } from '../types';
+import { PREBUILT_PLANS } from '../../../data';
+import { SocialPlatform, PlanItem } from '../../../types';
 import { Check, Flame, Award, ShieldAlert, Sparkles, Instagram, Plus } from 'lucide-react';
 
 interface PlansGridProps {

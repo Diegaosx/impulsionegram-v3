@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Cookie, Shield, X, Check } from 'lucide-react';
-import { recordCookieConsent, CookieChoices } from '../utils/storage';
+import { recordCookieConsent, CookieChoices } from '../../../utils/storage';
 
 const STORAGE_KEY = 'cookie_consent_v1';
 
