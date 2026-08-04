@@ -4,7 +4,7 @@
 // (utils/seo), não do tema — o tema só decide a marcação.
 
 import { useEffect, useMemo } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ThemeServiceProps } from '../../types';
 import { SOCIAL_PLATFORMS } from '../../../data';
 import { serviceSlug } from '../../../utils/storage';
@@ -26,6 +26,10 @@ export default function JapServiceView({
 }: ThemeServiceProps) {
   const navigate = useNavigate();
   const { slug } = useParams<{ slug: string }>();
+  // ?pacote=<id> vem dos cards do grid, para a calculadora abrir já no pacote
+  // que o cliente clicou na home.
+  const [searchParams] = useSearchParams();
+  const initialPackageId = searchParams.get('pacote') || undefined;
 
   const service = useMemo(
     () => services.find(s => serviceSlug(s) === slug || s.id === slug),
@@ -130,6 +134,7 @@ export default function JapServiceView({
             <JapCalculator
               services={services}
               restrictServiceId={service.id}
+              initialPackageId={initialPackageId}
               embedded
               currentUser={currentUser}
               onAuthSuccess={onAuthSuccess}

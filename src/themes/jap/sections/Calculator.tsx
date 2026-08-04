@@ -23,19 +23,27 @@ interface CalculatorProps {
   initialPlatform?: SocialPlatform;
   initialType?: string;
   restrictServiceId?: string;
+  initialPackageId?: string;
   currentUser?: AuthUser | null;
   onAuthSuccess?: (user: AuthUser) => void;
   onOrderCreated?: () => void;
   embedded?: boolean;
+  // Renderiza só o modal de checkout, sem o painel da calculadora. Usado pelo
+  // botão "Comprar" dos cards do grid, que compra direto sem passar pela
+  // seção da calculadora.
+  modalOnly?: boolean;
+  // Abre o checkout assim que monta (combina com modalOnly).
+  autoOpen?: boolean;
+  onClose?: () => void;
 }
 
 const money = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 export default function JapCalculator({
-  services, initialPlatform, initialType, restrictServiceId,
-  currentUser, onAuthSuccess, onOrderCreated, embedded
+  services, initialPlatform, initialType, restrictServiceId, initialPackageId,
+  currentUser, onAuthSuccess, onOrderCreated, embedded, modalOnly, autoOpen, onClose
 }: CalculatorProps) {
-  const sel = useServiceSelection({ services, initialPlatform, initialType, restrictServiceId });
+  const sel = useServiceSelection({ services, initialPlatform, initialType, restrictServiceId, initialPackageId });
   const { platform, serviceType, quantity, activeService, activePackages, hasPackages, selectedPackageId, price } = sel;
 
   const privateProfileRef = useRef(false);
@@ -50,6 +58,22 @@ export default function JapCalculator({
   useEffect(() => {
     privateProfileRef.current = preview.status === 'found' && !!preview.profile?.isPrivate;
   }, [preview]);
+
+  // Abre o checkout na montagem quando o cliente já escolheu o que comprar.
+  const opened = useRef(false);
+  useEffect(() => {
+    if (autoOpen && !opened.current && activeService) {
+      opened.current = true;
+      checkout.open();
+    }
+  }, [autoOpen, activeService, checkout]);
+
+  // Avisa o pai quando o modal fecha, para ele desmontar este componente.
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (checkout.isOpen) wasOpen.current = true;
+    else if (wasOpen.current) { wasOpen.current = false; onClose?.(); }
+  }, [checkout.isOpen, onClose]);
 
   const { fields, fieldErrors } = checkout;
   const availablePlatforms = SOCIAL_PLATFORMS.filter(p => (services || []).some(s => s.platform === p.id));
@@ -164,7 +188,7 @@ export default function JapCalculator({
 
   return (
     <>
-      {embedded ? body : (
+      {modalOnly ? null : embedded ? body : (
         <section id="calculadora" className="py-[30px] md:py-[50px] lg:py-[90px]" style={{ background: 'var(--jap-surface-tint)' }}>
           <div className="max-w-[1320px] mx-auto px-6 lg:px-3">
             <div className="text-center max-w-2xl mx-auto mb-10">

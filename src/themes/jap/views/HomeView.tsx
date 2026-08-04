@@ -4,10 +4,10 @@
 // são nossas e que ela não tem em lugar nenhum público: o grid de serviços e a
 // calculadora.
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ThemeHomeProps } from '../../types';
-import { ServiceItem, SocialPlatform } from '../../../types';
+import { ServiceItem } from '../../../types';
 import JapHeader from '../chrome/Header';
 import JapFooter from '../chrome/Footer';
 import JapServicesGrid from '../sections/ServicesGrid';
@@ -26,17 +26,17 @@ export default function JapHomeView({
   services, plans, homeContent, company, siteName, logoUrl, currentUser, onAuthSuccess, onAddSimulatedOrder
 }: ThemeHomeProps) {
   const navigate = useNavigate();
-  const calcRef = useRef<HTMLDivElement>(null);
-  const [picked, setPicked] = useState<{ platform?: SocialPlatform; type?: string }>({});
+  // Compra direto pelo card: abre o checkout já no pacote anunciado, sem
+  // passar pela seção da calculadora.
+  const [quickBuy, setQuickBuy] = useState<{ serviceId: string; packageId?: string } | null>(null);
 
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  // "Comprar" num card do grid leva à calculadora já configurada.
-  const handleBuy = (s: ServiceItem) => {
-    setPicked({ platform: s.platform, type: s.type });
-    setTimeout(() => scrollTo('calculadora'), 60);
+  // "Comprar" num card do grid abre o checkout na hora, no pacote do card.
+  const handleBuy = (s: ServiceItem, packageId?: string) => {
+    setQuickBuy({ serviceId: s.id, packageId });
   };
 
   const list: ServiceItem[] = services || [];
@@ -114,16 +114,29 @@ export default function JapHomeView({
         {/* Nossas duas seções: grid de serviços e calculadora */}
         <JapServicesGrid services={list} onBuy={handleBuy} />
 
-        <div ref={calcRef}>
+        {/* Checkout da compra rápida: só o modal, remontado a cada clique. */}
+        {quickBuy && (
+          <div key={`${quickBuy.serviceId}:${quickBuy.packageId || ''}`}>
           <JapCalculator
             services={list}
-            initialPlatform={picked.platform}
-            initialType={picked.type}
+            restrictServiceId={quickBuy.serviceId}
+            initialPackageId={quickBuy.packageId}
+            modalOnly
+            autoOpen
+            onClose={() => setQuickBuy(null)}
             currentUser={currentUser}
             onAuthSuccess={onAuthSuccess}
             onOrderCreated={() => onAddSimulatedOrder?.({})}
           />
-        </div>
+          </div>
+        )}
+
+        <JapCalculator
+          services={list}
+          currentUser={currentUser}
+          onAuthSuccess={onAuthSuccess}
+          onOrderCreated={() => onAddSimulatedOrder?.({})}
+        />
 
         {/* Planos, quando houver */}
         {plans && plans.length > 0 && (

@@ -16,10 +16,13 @@ export interface UseServiceSelectionInput {
   // Locks the selection to a single service (used by the service page, where
   // the platform/type pickers are hidden).
   restrictServiceId?: string;
+  // Pré-seleciona um pacote específico, para o cliente cair já no pacote que
+  // ele clicou (ex.: vindo de um card do grid de serviços).
+  initialPackageId?: string;
 }
 
 export function useServiceSelection({
-  services, initialPlatform, initialType, restrictServiceId
+  services, initialPlatform, initialType, restrictServiceId, initialPackageId
 }: UseServiceSelectionInput) {
   const [platform, setPlatform] = useState<SocialPlatform>('instagram');
   const [serviceType, setServiceType] = useState<string>('followers');
@@ -71,12 +74,14 @@ export function useServiceSelection({
     [activePackages, selectedPackageId]
   );
 
-  // On service change: default-select a package (the popular one, else the
-  // first) or reset the slider quantity for the legacy pricing mode.
+  // On service change: default-select a package or reset the slider quantity
+  // for the legacy pricing mode. Um pacote pedido explicitamente vence o
+  // "popular", para o cliente cair no pacote que ele clicou.
   useEffect(() => {
     if (!activeService) return;
     if (activePackages.length > 0) {
-      const preferred = activePackages.find(p => p.isPopular) || activePackages[0];
+      const requested = initialPackageId ? activePackages.find(p => p.id === initialPackageId) : undefined;
+      const preferred = requested || activePackages.find(p => p.isPopular) || activePackages[0];
       setSelectedPackageId(preferred.id);
       setQuantity(preferred.quantity);
       setCustomInput(preferred.quantity.toString());
@@ -86,7 +91,7 @@ export function useServiceSelection({
       setQuantity(defaultQty);
       setCustomInput(defaultQty.toString());
     }
-  }, [activeService, activePackages]);
+  }, [activeService, activePackages, initialPackageId]);
 
   const selectPackage = useCallback((pkg: Pick<ServicePackage, 'id' | 'quantity'>) => {
     setSelectedPackageId(pkg.id);
