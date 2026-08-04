@@ -48,13 +48,15 @@ export interface UseCheckoutInput {
   onAuthSuccess?: (user: AuthUser) => void;
   onOrderCreated?: () => void;
   // Blocks submission while the typed profile is known to be private, since the
-  // delivery would silently fail.
-  targetProfileIsPrivate?: boolean;
+  // delivery would silently fail. It is a getter rather than a value because the
+  // profile preview is driven by the username this hook owns — reading it at
+  // submit time breaks the cycle and can never see a stale result.
+  isTargetProfilePrivate?: () => boolean;
 }
 
 export function useCheckout({
   platform, serviceType, service, quantity, price,
-  currentUser, onAuthSuccess, onOrderCreated, targetProfileIsPrivate
+  currentUser, onAuthSuccess, onOrderCreated, isTargetProfilePrivate
 }: UseCheckoutInput) {
   const [isOpen, setIsOpen] = useState(false);
   const [step, setStep] = useState<CheckoutStep>('info');
@@ -157,7 +159,7 @@ export function useCheckout({
 
     if (!fields.username.trim()) {
       errors.username = 'Informe o perfil/@ de destino';
-    } else if (targetProfileIsPrivate) {
+    } else if (isTargetProfilePrivate?.()) {
       errors.username = 'O perfil informado está privado. Deixe-o público para receber a entrega.';
     }
     if (!currentUser && !fields.fullName.trim()) {
@@ -188,7 +190,7 @@ export function useCheckout({
     setStep('processing');
     const check = await checkAccountExists(fields.email.trim(), fields.phone.trim());
     setStep(check.exists ? 'login_prompt' : 'account');
-  }, [fields, service, currentUser, targetProfileIsPrivate, createOrder]);
+  }, [fields, service, currentUser, isTargetProfilePrivate, createOrder]);
 
   // Guest creates the account (password) then the order.
   const submitAccount = useCallback(async (e?: { preventDefault?: () => void }) => {
