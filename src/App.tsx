@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
 import ClientDashboard from './pages/ClientDashboard';
 import OrderConfirmationPage from './pages/OrderConfirmationPage';
-import HelpPage from './pages/HelpPage';
-import SitePage from './pages/SitePage';
-import ServicePage from './pages/ServicePage';
-import BlogPage from './pages/BlogPage';
 import AdminPanel from './components/AdminPanel';
+// Registers every bundled theme; the public routes below render theme slots.
+import './themes';
+import { resolveThemeId } from './themes/registry';
+import { ThemeProvider, ThemeSlot } from './site/ThemeHost';
+import { applyThemeId, markThemeOnDocument, readCachedThemeId } from './site/activeTheme';
 import {
   fetchServices, saveServicesToServer,
   fetchPlans, savePlansToServer,
@@ -44,6 +44,11 @@ export default function App() {
   const [seoDescription, setSeoDescription] = useState('');
   const [company, setCompany] = useState<CompanySettings | null>(null);
 
+  // Active public-site theme. Seeded synchronously from the last known value so
+  // returning visitors don't see the default theme flash before settings load;
+  // resolveThemeId coerces anything unknown back to 'default'.
+  const [themeId, setThemeId] = useState<string>(() => resolveThemeId(readCachedThemeId()));
+
   // Custom JS / Analytics code snippets (injected on public pages)
   const [analytics, setAnalytics] = useState<AnalyticsSettings | null>(null);
 
@@ -51,6 +56,12 @@ export default function App() {
   // the cached user to avoid an auth flicker, then refreshed from the server.
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => getCachedUser<AuthUser>());
   const isAdmin = currentUser?.role === 'admin';
+
+  // Single owner of <html data-theme="...">, so per-theme CSS scopes always
+  // match the theme actually being rendered.
+  useEffect(() => {
+    markThemeOnDocument(themeId);
+  }, [themeId]);
 
   // Refresh the session from the server on boot (validates the token).
   useEffect(() => {
@@ -89,6 +100,7 @@ export default function App() {
         setSeoTitle(loadedGeneral.seoTitle || loadedGeneral.siteName);
         setSeoDescription(loadedGeneral.seoDescription || '');
         setAppTimezone(loadedGeneral.timezone);
+        applyThemeId(resolveThemeId(loadedGeneral.theme), setThemeId);
         applyBrandingToHead(loadedGeneral, {
           skipTitle: window.location.pathname.startsWith('/blog')
         });
@@ -218,11 +230,13 @@ export default function App() {
   };
 
   return (
+    <ThemeProvider themeId={themeId}>
     <Routes>
       <Route
         path="/"
         element={
-          <HomePage
+          <ThemeSlot
+            slot="Home"
             services={services}
             plans={plans}
             homeContent={homeContent}
@@ -238,13 +252,14 @@ export default function App() {
 
       <Route
         path="/ajuda"
-        element={<HelpPage homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+        element={<ThemeSlot slot="Help" homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
 
       <Route
         path="/servico/:slug"
         element={
-          <ServicePage
+          <ThemeSlot
+            slot="Service"
             services={services}
             homeContent={homeContent}
             company={company}
@@ -259,28 +274,28 @@ export default function App() {
 
       <Route
         path="/privacidade"
-        element={<SitePage slug="privacy" homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+        element={<ThemeSlot slot="SitePage" slug="privacy" homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
       <Route
         path="/termos"
-        element={<SitePage slug="terms" homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+        element={<ThemeSlot slot="SitePage" slug="terms" homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
       <Route
         path="/garantia"
-        element={<SitePage slug="warranty" homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+        element={<ThemeSlot slot="SitePage" slug="warranty" homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
 
       <Route
         path="/blog"
-        element={<BlogPage homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+        element={<ThemeSlot slot="Blog" homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
       <Route
         path="/blog/artigo/:slug"
-        element={<BlogPage homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+        element={<ThemeSlot slot="Blog" homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
       <Route
         path="/blog/categoria/:categoria"
-        element={<BlogPage homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
+        element={<ThemeSlot slot="Blog" homeContent={homeContent} company={company} siteName={siteName} logoUrl={logoUrl} />}
       />
 
       <Route
@@ -368,5 +383,6 @@ export default function App() {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </ThemeProvider>
   );
 }

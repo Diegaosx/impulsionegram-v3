@@ -1,0 +1,18 @@
+/* Design tokens for the default theme.
+ *
+ * src/index.css declares the tokens in @theme, which is what generates the
+ * Tailwind utilities (bg-primary, font-display, ...). Here we re-declare the
+ * VALUES scoped to this theme so another theme can restyle the whole site by
+ * shipping its own [data-theme="..."] block — without touching this file.
+ *
+ * The html[...] prefix is deliberate: it outranks :root, so the override wins
+ * regardless of the order Vite injects the stylesheets in. */
+
+html[data-theme='default'] {
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  --color-primary: #833ab4;
+  --color-secondary: #e1306c;
+  --color-accent: #fbbf24;
+}

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu, X, ShoppingCart, Search, Sparkles, Settings, ChevronDown } from 'lucide-react';
-import { SocialPlatform } from '../types';
-import { useHideOnScroll } from '../utils/useHideOnScroll';
-import { useOffer } from '../utils/useOffer';
-import { usePlansEnabled } from '../utils/usePlansEnabled';
+import { SocialPlatform } from '../../../types';
+import { useHideOnScroll } from '../../../utils/useHideOnScroll';
+import { useOffer } from '../../../utils/useOffer';
+import { usePlansEnabled } from '../../../utils/usePlansEnabled';
 
 interface HeaderProps {
   onNavigate: (sectionId: string) => void;

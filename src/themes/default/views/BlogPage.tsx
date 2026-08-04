@@ -1,10 +1,10 @@
 import { useNavigate } from 'react-router-dom';
-import Header from '../components/Header';
-import Footer from '../components/Footer';
-import FloatingWidgets from '../components/FloatingWidgets';
-import CookieConsent from '../components/CookieConsent';
-import BlogView from '../components/BlogView';
-import { HomeContent, CompanySettings } from '../utils/storage';
+import Header from '../chrome/Header';
+import Footer from '../chrome/Footer';
+import FloatingWidgets from '../chrome/FloatingWidgets';
+import CookieConsent from '../chrome/CookieConsent';
+import BlogView from '../sections/BlogView';
+import { HomeContent, CompanySettings } from '../../../utils/storage';
 
 interface BlogPageProps {
   homeContent: HomeContent | null;

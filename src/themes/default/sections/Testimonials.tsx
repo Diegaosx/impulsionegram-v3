@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { SocialPlatform } from '../types';
-import { TestimonialItem, fetchTestimonials, submitTestimonial } from '../utils/storage';
-import { getRecaptchaToken } from '../utils/recaptcha';
+import { SocialPlatform } from '../../../types';
+import { TestimonialItem, fetchTestimonials, submitTestimonial } from '../../../utils/storage';
+import { getRecaptchaToken } from '../../../utils/recaptcha';
 import { Star, Plus, CheckCircle2, X } from 'lucide-react';
 
 // Fallback avatar for testimonials without a custom photo.

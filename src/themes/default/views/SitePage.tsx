@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Header from '../components/Header';
-import Footer from '../components/Footer';
-import FloatingWidgets from '../components/FloatingWidgets';
-import CookieConsent from '../components/CookieConsent';
-import { HomeContent, CompanySettings, PageSlug, SitePage as SitePageData, fetchPage } from '../utils/storage';
-import { formatDateTime } from '../utils/datetime';
+import Header from '../chrome/Header';
+import Footer from '../chrome/Footer';
+import FloatingWidgets from '../chrome/FloatingWidgets';
+import CookieConsent from '../chrome/CookieConsent';
+import { HomeContent, CompanySettings, PageSlug, SitePage as SitePageData, fetchPage } from '../../../utils/storage';
+import { formatDateTime } from '../../../utils/datetime';
 
 interface SitePageProps {
   slug: PageSlug;

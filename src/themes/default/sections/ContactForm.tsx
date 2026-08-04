@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Mail, Phone, MapPin, Send, MessageSquareCode, CheckCircle2 } from 'lucide-react';
-import { CompanySettings, submitContactMessage } from '../utils/storage';
-import { getRecaptchaToken } from '../utils/recaptcha';
+import { CompanySettings, submitContactMessage } from '../../../utils/storage';
+import { getRecaptchaToken } from '../../../utils/recaptcha';
 
 interface ContactFormProps {
   company?: CompanySettings | null;

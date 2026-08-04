@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, Navigate } from 'react-router-dom';
-import Header from '../components/Header';
-import Footer from '../components/Footer';
-import FloatingWidgets from '../components/FloatingWidgets';
-import CookieConsent from '../components/CookieConsent';
-import InteractiveCalculator from '../components/InteractiveCalculator';
-import { SOCIAL_PLATFORMS } from '../data';
-import { ServiceItem } from '../types';
-import { AuthUser, HomeContent, CompanySettings, serviceSlug } from '../utils/storage';
-import { applyBasicSEO, setJsonLd } from '../utils/seo';
+import Header from '../chrome/Header';
+import Footer from '../chrome/Footer';
+import FloatingWidgets from '../chrome/FloatingWidgets';
+import CookieConsent from '../chrome/CookieConsent';
+import InteractiveCalculator from '../sections/InteractiveCalculator';
+import { SOCIAL_PLATFORMS } from '../../../data';
+import { ServiceItem } from '../../../types';
+import { AuthUser, HomeContent, CompanySettings, serviceSlug } from '../../../utils/storage';
+import { applyBasicSEO, setJsonLd } from '../../../utils/seo';
 import { Check, ShieldCheck, Zap, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface ServicePageProps {

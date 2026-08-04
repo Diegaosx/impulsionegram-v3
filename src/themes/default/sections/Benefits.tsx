@@ -1,4 +1,4 @@
-import { BENEFITS } from '../data';
+import { BENEFITS } from '../../../data';
 import { Users, Zap, MessageCircle, ShieldCheck, Lock, CreditCard, HelpCircle } from 'lucide-react';
 
 export default function Benefits() {

@@ -1,9 +1,9 @@
 import { useNavigate } from 'react-router-dom';
 import { Instagram, Youtube, Facebook, ShieldAlert, Sparkles } from 'lucide-react';
-import { SocialPlatform } from '../types';
-import { CompanySettings } from '../utils/storage';
-import { usePlansEnabled } from '../utils/usePlansEnabled';
-import { TikTokIcon, KwaiIcon, XIcon } from './icons/BrandIcons';
+import { SocialPlatform } from '../../../types';
+import { CompanySettings } from '../../../utils/storage';
+import { usePlansEnabled } from '../../../utils/usePlansEnabled';
+import { TikTokIcon, KwaiIcon, XIcon } from '../../../components/icons/BrandIcons';
 
 interface FooterProps {
   onNavigate: (sectionId: string) => void;

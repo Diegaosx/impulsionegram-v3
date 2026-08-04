@@ -3,10 +3,10 @@ import {
   MessageCircle, X, Send, Sparkles, Shield, Clock, 
   HelpCircle, Check, ArrowRight, Bot, MessageSquare, Flame 
 } from 'lucide-react';
-import { ChatMessage } from '../types';
-import { CompanySettings, ChatbotConfig, fetchChatbot } from '../utils/storage';
-import { useHideOnScroll } from '../utils/useHideOnScroll';
-import { useOffer } from '../utils/useOffer';
+import { ChatMessage } from '../../../types';
+import { CompanySettings, ChatbotConfig, fetchChatbot } from '../../../utils/storage';
+import { useHideOnScroll } from '../../../utils/useHideOnScroll';
+import { useOffer } from '../../../utils/useOffer';
 
 interface FloatingWidgetsProps {
   onNavigate: (sectionId: string) => void;

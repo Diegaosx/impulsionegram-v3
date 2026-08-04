@@ -1192,6 +1192,10 @@ export interface GeneralSettings {
   plansEnabled: boolean;
 }
 
+// Theme ids bundled in the frontend. Keep in sync with src/themes/index.ts —
+// the server cannot import the client registry, so this is a plain mirror.
+const KNOWN_THEME_IDS = ['default'];
+
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   siteName: 'ImpulsioneGram',
   logoUrl: '',
@@ -1208,6 +1212,9 @@ export async function getGeneralSettings(): Promise<GeneralSettings> {
   const result = await pool.query(`SELECT value FROM settings WHERE key = 'general'`);
   const merged = { ...DEFAULT_GENERAL_SETTINGS, ...(result.rows[0]?.value || {}) };
   merged.plansEnabled = merged.plansEnabled !== false; // default on
+  // Belt-and-braces: a theme removed from the build must not be served. The
+  // client registry is the real authority and coerces unknown ids too.
+  merged.theme = KNOWN_THEME_IDS.includes(merged.theme) ? merged.theme : 'default';
   return merged;
 }
 

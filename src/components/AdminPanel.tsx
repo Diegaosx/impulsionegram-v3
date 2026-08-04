@@ -28,6 +28,7 @@ import {
   Mail, Phone, MapPin, Share2, PanelBottom, Cookie, Newspaper, Code2, Quote, Inbox, Search
 } from 'lucide-react';
 import { SOCIAL_PLATFORMS } from '../data';
+import { listThemes } from '../themes';
 
 interface AdminPanelProps {
   services: ServiceItem[];
@@ -2672,9 +2673,14 @@ export default function AdminPanel({
                           onChange={(e) => setGeneralForm(prev => ({ ...prev, theme: e.target.value }))}
                           className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
                         >
-                          <option value="default">Padrão (Roxo)</option>
+                          {listThemes().map(t => (
+                            <option key={t.id} value={t.id}>{t.label}</option>
+                          ))}
                         </select>
-                        <span className="text-[10px] text-slate-400 block font-medium">Mais temas serão adicionados em breve.</span>
+                        <span className="text-[10px] text-slate-400 block font-medium">
+                          {listThemes().find(t => t.id === generalForm.theme)?.description
+                            || 'Define o visual do site público. Recarregue o site para ver a troca.'}
+                        </span>
                       </div>
                     </div>
 

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SERVICES, SOCIAL_PLATFORMS } from '../data';
-import { SocialPlatform, ServiceItem } from '../types';
-import { AuthUser, AdminOrder, RapidProfile, checkAccountExists, registerAccount, createMyOrder, fetchRapidApiProfile } from '../utils/storage';
-import { useOffer } from '../utils/useOffer';
-import OrderConfirmation from './OrderConfirmation';
-import { TikTokIcon, KwaiIcon } from './icons/BrandIcons';
+import { SERVICES, SOCIAL_PLATFORMS } from '../../../data';
+import { SocialPlatform, ServiceItem } from '../../../types';
+import { AuthUser, AdminOrder, RapidProfile, checkAccountExists, registerAccount, createMyOrder, fetchRapidApiProfile } from '../../../utils/storage';
+import { useOffer } from '../../../utils/useOffer';
+import OrderConfirmation from '../../../components/OrderConfirmation';
+import { TikTokIcon, KwaiIcon } from '../../../components/icons/BrandIcons';
 import {
   Instagram, Youtube, Twitter, Facebook, Flame, Zap, Shield,
   Lock, Sparkles, Smartphone, Mail, User, Compass, ShoppingCart, Loader2, ArrowRight, X, LogIn,
