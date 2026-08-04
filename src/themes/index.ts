@@ -6,6 +6,7 @@
 // admin selector picks the new theme up automatically via listThemes().
 
 import './default/theme';
+import './jap/theme';
 
 export { DEFAULT_THEME_ID, getTheme, listThemes, registerTheme, resolveThemeId } from './registry';
 export type { ThemeDefinition, ThemeSlotName, ThemeSlots, ThemeSummary } from './types';

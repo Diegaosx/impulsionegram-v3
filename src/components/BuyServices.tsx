@@ -3,6 +3,7 @@ import { ServiceItem, SocialPlatform } from '../types';
 import { SOCIAL_PLATFORMS } from '../data';
 import { AdminOrder, createMyOrder } from '../utils/storage';
 import { useOffer } from '../utils/useOffer';
+import { computePrice, sellablePackages } from '../site/pricing';
 import { ShoppingCart, AlertCircle, Minus, Plus, Sparkles } from 'lucide-react';
 
 interface BuyServicesProps {
@@ -49,10 +50,7 @@ export default function BuyServices({ services, defaultProfile, onCreated }: Buy
 
   // Fixed-price packages for the active service (sorted by quantity). When
   // present, the buy form shows package cards instead of the quantity slider.
-  const activePackages = useMemo(() => {
-    const list = (activeService?.packages || []).filter((p) => p.quantity > 0 && p.price > 0);
-    return [...list].sort((a, b) => a.quantity - b.quantity);
-  }, [activeService]);
+  const activePackages = useMemo(() => sellablePackages(activeService), [activeService]);
   const hasPackages = activePackages.length > 0;
   const selectedPackage = useMemo(
     () => activePackages.find((p) => p.id === selectedPackageId),
@@ -76,19 +74,11 @@ export default function BuyServices({ services, defaultProfile, onCreated }: Buy
     setQuantity(pkg.quantity);
   };
 
+  // Same pricing rules as the public calculator — see src/site/pricing.ts.
   const pricing = useMemo(() => {
-    if (hasPackages) {
-      const price = selectedPackage ? selectedPackage.price : (activePackages[0]?.price || 0);
-      return { discountPercent: 0, base: price, discount: 0, final: price };
-    }
-    let discountPercent = 0;
-    if (quantity >= 10000) discountPercent = 30;
-    else if (quantity >= 5000) discountPercent = 20;
-    else if (quantity >= 2000) discountPercent = 10;
-    const base = activeService ? quantity * activeService.pricePerItem : 0;
-    const discount = base * (discountPercent / 100);
-    return { discountPercent, base, discount, final: base - discount };
-  }, [quantity, activeService, hasPackages, selectedPackage, activePackages]);
+    const p = computePrice({ service: activeService, quantity, packages: activePackages, selectedPackage });
+    return { discountPercent: p.discountPercent, base: p.basePrice, discount: p.discountValue, final: p.finalPrice };
+  }, [quantity, activeService, selectedPackage, activePackages]);
 
   const money = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const needsPostUrl = activeService && activeService.type !== 'followers';

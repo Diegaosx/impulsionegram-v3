@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SERVICES, SOCIAL_PLATFORMS } from '../../../data';
-import { SocialPlatform, ServiceItem } from '../../../types';
-import { AuthUser, AdminOrder, RapidProfile, checkAccountExists, registerAccount, createMyOrder, fetchRapidApiProfile } from '../../../utils/storage';
-import { useOffer } from '../../../utils/useOffer';
+import { SOCIAL_PLATFORMS } from '../../../data';
+import { SocialPlatform } from '../../../types';
+import { AuthUser } from '../../../utils/storage';
+import { ServiceItem } from '../../../types';
+import { useServiceSelection } from '../../../site/hooks/useServiceSelection';
+import { useCheckout } from '../../../site/hooks/useCheckout';
+import { useProfilePreview } from '../../../site/hooks/useProfilePreview';
 import OrderConfirmation from '../../../components/OrderConfirmation';
 import { TikTokIcon, KwaiIcon } from '../../../components/icons/BrandIcons';
 import {
@@ -39,38 +42,82 @@ export default function InteractiveCalculator({
   embedded
 }: InteractiveCalculatorProps) {
   const navigate = useNavigate();
-  
-  // Selection States
-  const [platform, setPlatform] = useState<SocialPlatform>('instagram');
-  const [serviceType, setServiceType] = useState<string>('followers');
-  const [quantity, setQuantity] = useState<number>(1000);
-  
-  // Dynamic Input States
-  const [customInput, setCustomInput] = useState<string>('1000');
 
-  // Selected fixed-price package (when the active service defines packages, the
-  // calculator shows package cards instead of the quantity slider).
-  const [selectedPackageId, setSelectedPackageId] = useState<string>('');
+  // ---- Logic lives in shared hooks so a second theme can rewrite all of this
+  // markup without reimplementing pricing, validation or order creation. ----
 
-  // Checkout Modal State
-  const [showCheckout, setShowCheckout] = useState(false);
-  const [checkoutStep, setCheckoutStep] = useState<'info' | 'account' | 'login_prompt' | 'processing' | 'done'>('info');
-  const [createdOrder, setCreatedOrder] = useState<AdminOrder | null>(null);
+  const selection = useServiceSelection({ services, initialPlatform, initialType, restrictServiceId });
+  const {
+    platform, setPlatform, serviceType, setServiceType,
+    quantity, customInput, categoriesList, activeService,
+    activePackages, hasPackages, selectedPackageId,
+    incrementQuantity, decrementQuantity
+  } = selection;
+  const bulkMetrics = selection.price;
 
-  // User Form Inputs
-  const [fullName, setFullName] = useState('');
-  const [username, setUsername] = useState(''); // target profile (@handle)
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [postUrl, setPostUrl] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const paymentMethod: 'PIX' | 'Card' = 'PIX'; // PIX only for now
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const profileLookupEnabled = platform === 'instagram' && serviceType === 'followers';
 
-  // Flash-offer coupon (auto-filled while the offer is active).
-  const { offer, active: offerActive, remaining: offerRemaining } = useOffer();
+  // The private-profile check is read at submit time (see useCheckout), which is
+  // what lets the preview depend on the username the checkout owns.
+  const privateProfileRef = useRef(false);
+
+  const checkout = useCheckout({
+    platform,
+    serviceType,
+    service: activeService,
+    quantity,
+    price: bulkMetrics.finalPrice,
+    currentUser,
+    onAuthSuccess,
+    onOrderCreated: onAddOrderToStats,
+    isTargetProfilePrivate: () => privateProfileRef.current
+  });
+
+  const profileLookup = useProfilePreview({
+    handle: checkout.fields.username,
+    enabled: checkout.isOpen && profileLookupEnabled
+  });
+  useEffect(() => {
+    privateProfileRef.current = profileLookup.status === 'found' && !!profileLookup.profile?.isPrivate;
+  }, [profileLookup]);
+
+  // ---- Aliases keeping the markup below unchanged. ----
+  const showCheckout = checkout.isOpen;
+  const setShowCheckout = (open: boolean) => (open ? checkout.open() : checkout.close());
+  const checkoutStep = checkout.step;
+  const setCheckoutStep = checkout.setStep;
+  const createdOrder = checkout.order;
+  const formErrors = checkout.fieldErrors;
+  const accountError = checkout.error;
+
+  const { fullName, username, email, phone, postUrl, password, confirmPassword, coupon } = checkout.fields;
+  const setFullName = (v: string) => checkout.setField('fullName', v);
+  const setUsername = (v: string) => checkout.setField('username', v);
+  const setEmail = (v: string) => checkout.setField('email', v);
+  const setPhone = (v: string) => checkout.setField('phone', v);
+  const setPostUrl = (v: string) => checkout.setField('postUrl', v);
+  const setPassword = (v: string) => checkout.setField('password', v);
+  const setConfirmPassword = (v: string) => checkout.setField('confirmPassword', v);
+  const setCoupon = (v: string) => checkout.setField('coupon', v);
+
+  const { offer, offerActive, offerRemaining, couponValid, couponPercent } = checkout;
   const offerPercent = offerActive ? (offer?.discountPercent || 0) : 0;
+
+  const handleOpenCheckout = checkout.open;
+  const handleInfoSubmit = checkout.submitInfo;
+  const handleCreateAccount = checkout.submitAccount;
+
+  const handleSelectPackage = (pkg: { id: string; quantity: number }) => selection.selectPackage(pkg);
+  const handleQuantitySliderChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    selection.applyQuantity(parseInt(e.target.value, 10));
+  const handleCustomInputBlur = () => selection.commitCustomInput();
+  const handleCustomInputChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    selection.setCustomInput(e.target.value);
+
+  // ---- Presentation helpers ----
+  const compactNumber = (n: number) =>
+    new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: 1 }).format(n || 0);
+
   const formatOfferTimer = (sec: number) => {
     const h = Math.floor(sec / 3600);
     const m = Math.floor((sec % 3600) / 60);
@@ -78,336 +125,7 @@ export default function InteractiveCalculator({
     const pad = (n: number) => n.toString().padStart(2, '0');
     return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
   };
-  const [coupon, setCoupon] = useState('');
-  useEffect(() => {
-    if (offerActive && offer?.couponCode) setCoupon((c) => (c ? c : offer.couponCode));
-  }, [offerActive, offer?.couponCode]);
-  const couponValid = !!(offerActive && offer && coupon.trim() && coupon.trim().toLowerCase() === offer.couponCode.toLowerCase());
-  const couponPercent = couponValid ? (offer?.discountPercent || 0) : 0;
-  const [accountError, setAccountError] = useState('');
 
-  // Instagram profile preview (RapidAPI). Only runs when the client is buying
-  // Instagram followers and has typed a handle in the checkout — shows a card
-  // above the profile field with the photo + follower/following/post counts.
-  const [profileLookup, setProfileLookup] = useState<{
-    status: 'idle' | 'loading' | 'found' | 'notfound';
-    profile: RapidProfile | null;
-  }>({ status: 'idle', profile: null });
-  const profileLookupEnabled = platform === 'instagram' && serviceType === 'followers';
-
-  useEffect(() => {
-    if (!showCheckout || !profileLookupEnabled) {
-      setProfileLookup({ status: 'idle', profile: null });
-      return;
-    }
-    const handle = username.trim().replace(/^@/, '');
-    if (handle.length < 2) {
-      setProfileLookup({ status: 'idle', profile: null });
-      return;
-    }
-    let cancelled = false;
-    setProfileLookup((p) => ({ status: 'loading', profile: p.profile }));
-    const timer = setTimeout(async () => {
-      const res = await fetchRapidApiProfile(handle);
-      if (cancelled) return;
-      // Integration off → stay silent (no card), don't block the checkout.
-      if (!res.configured) {
-        setProfileLookup({ status: 'idle', profile: null });
-        return;
-      }
-      if (res.profile) {
-        setProfileLookup({ status: 'found', profile: res.profile });
-      } else {
-        setProfileLookup({ status: 'notfound', profile: null });
-      }
-    }, 700);
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [username, showCheckout, profileLookupEnabled]);
-
-  const compactNumber = (n: number) =>
-    new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: 1 }).format(n || 0);
-
-  // Handle outside notification trigger
-  useEffect(() => {
-    if (initialPlatform) {
-      setPlatform(initialPlatform);
-    }
-    if (initialType) {
-      setServiceType(initialType);
-    }
-  }, [initialPlatform, initialType]);
-
-  // Handle ESC key press and body overflow prevention when checkout modal is shown
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && showCheckout) {
-        setShowCheckout(false);
-      }
-    };
-    if (showCheckout) {
-      document.addEventListener('keydown', handleKeyDown, true);
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown, true);
-      document.body.style.overflow = 'unset';
-    };
-  }, [showCheckout]);
-
-  // When locked to a single service, force its platform + type.
-  const restrictedService = useMemo(
-    () => (restrictServiceId ? (services || SERVICES).find(s => s.id === restrictServiceId) : undefined),
-    [restrictServiceId, services]
-  );
-  useEffect(() => {
-    if (restrictedService) {
-      setPlatform(restrictedService.platform);
-      setServiceType(restrictedService.type);
-    }
-  }, [restrictedService]);
-
-  // Find all available service categories for current platform
-  const categoriesList = useMemo(() => {
-    const list = services || SERVICES;
-    const matching = list.filter(s => s.platform === platform);
-    return matching.map(m => ({ type: m.type, label: m.label }));
-  }, [platform, services]);
-
-  // Sync serviceType if it is not in the categories list of the new platform
-  useEffect(() => {
-    const isAvailable = categoriesList.some(c => c.type === serviceType);
-    if (!isAvailable && categoriesList.length > 0) {
-      setServiceType(categoriesList[0].type);
-    }
-  }, [platform, categoriesList, serviceType]);
-
-  // Get active service configuration item
-  const activeService = useMemo<ServiceItem | undefined>(() => {
-    const list = services || SERVICES;
-    return list.find(s => s.platform === platform && s.type === serviceType);
-  }, [platform, serviceType, services]);
-
-  // Fixed-price packages for the active service (sorted by quantity). When
-  // present, the calculator uses package cards instead of the slider.
-  const activePackages = useMemo(() => {
-    const list = (activeService?.packages || []).filter(p => p.quantity > 0 && p.price > 0);
-    return [...list].sort((a, b) => a.quantity - b.quantity);
-  }, [activeService]);
-  const hasPackages = activePackages.length > 0;
-  const selectedPackage = useMemo(
-    () => activePackages.find(p => p.id === selectedPackageId),
-    [activePackages, selectedPackageId]
-  );
-
-  // When the service changes, either default-select a package (the popular one,
-  // else the first) or reset the slider quantity for the legacy pricing mode.
-  useEffect(() => {
-    if (!activeService) return;
-    if (activePackages.length > 0) {
-      const preferred = activePackages.find(p => p.isPopular) || activePackages[0];
-      setSelectedPackageId(preferred.id);
-      setQuantity(preferred.quantity);
-      setCustomInput(preferred.quantity.toString());
-    } else {
-      setSelectedPackageId('');
-      const defaultQty = Math.max(activeService.minQuantity, Math.min(1000, activeService.maxQuantity));
-      setQuantity(defaultQty);
-      setCustomInput(defaultQty.toString());
-    }
-  }, [activeService, activePackages]);
-
-  // Pick a package card: locks quantity/price to that package.
-  const handleSelectPackage = (pkg: { id: string; quantity: number }) => {
-    setSelectedPackageId(pkg.id);
-    setQuantity(pkg.quantity);
-    setCustomInput(pkg.quantity.toString());
-  };
-
-  // Calculate pricing. With packages, the price is fixed (no progressive
-  // discount); otherwise the legacy slider applies bulk progressive discounts.
-  const bulkMetrics = useMemo(() => {
-    if (hasPackages) {
-      const price = selectedPackage ? selectedPackage.price : (activePackages[0]?.price || 0);
-      const qty = selectedPackage ? selectedPackage.quantity : (activePackages[0]?.quantity || 0);
-      return {
-        discountPercent: 0,
-        basePrice: price,
-        discountValue: 0,
-        finalPrice: price,
-        pricePerUnit: qty > 0 ? price / qty : 0
-      };
-    }
-
-    let discountPercent = 0;
-    if (quantity >= 10000) {
-      discountPercent = 30; // 30% reduction
-    } else if (quantity >= 5000) {
-      discountPercent = 20; // 20% reduction
-    } else if (quantity >= 2000) {
-      discountPercent = 10; // 10% reduction
-    }
-
-    const basePrice = activeService ? quantity * activeService.pricePerItem : 0;
-    const discount = basePrice * (discountPercent / 100);
-    const finalPrice = basePrice - discount;
-
-    return {
-      discountPercent,
-      basePrice,
-      discountValue: discount,
-      finalPrice,
-      pricePerUnit: quantity > 0 ? finalPrice / quantity : 0
-    };
-  }, [quantity, activeService, hasPackages, selectedPackage, activePackages]);
-
-  // Sync Slider vs Text Input
-  const handleQuantitySliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseInt(e.target.value, 10);
-    setQuantity(val);
-    setCustomInput(val.toString());
-  };
-
-  const handleCustomInputBlur = () => {
-    if (!activeService) return;
-    let val = parseInt(customInput.replace(/\D/g, ''), 10);
-    if (isNaN(val)) val = activeService.minQuantity;
-    
-    const clamped = Math.max(activeService.minQuantity, Math.min(activeService.maxQuantity, val));
-    setQuantity(clamped);
-    setCustomInput(clamped.toString());
-  };
-
-  const handleCustomInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCustomInput(e.target.value);
-  };
-
-  const incrementQuantity = (amount: number) => {
-    if (!activeService) return;
-    const nextVal = Math.min(activeService.maxQuantity, quantity + amount);
-    setQuantity(nextVal);
-    setCustomInput(nextVal.toString());
-  };
-
-  const decrementQuantity = (amount: number) => {
-    if (!activeService) return;
-    const nextVal = Math.max(activeService.minQuantity, quantity - amount);
-    setQuantity(nextVal);
-    setCustomInput(nextVal.toString());
-  };
-
-  // Launch Checkout Modal
-  const handleOpenCheckout = () => {
-    setFormErrors({});
-    setAccountError('');
-    setCreatedOrder(null);
-    setPostUrl('');
-    setPassword('');
-    setConfirmPassword('');
-    // Prefill from the logged-in user when available.
-    if (currentUser) {
-      setFullName(currentUser.name || '');
-      setEmail(currentUser.email || '');
-      setPhone(currentUser.phone || '');
-    } else {
-      setFullName('');
-      setEmail('');
-      setPhone('');
-    }
-    setUsername('');
-    setCheckoutStep('info');
-    setShowCheckout(true);
-  };
-
-  const targetProfile = () => (username.trim().startsWith('@') || !username.trim() ? username.trim() : '@' + username.trim());
-
-  // Create the order (client is authenticated by now) and show the confirmation
-  // (with the Mercado Pago PIX QR code, when configured) inside the modal.
-  const createOrderAndRedirect = async () => {
-    setCheckoutStep('processing');
-    setAccountError('');
-    const res = await createMyOrder({
-      platform,
-      serviceType,
-      serviceLabel: activeService ? activeService.label : 'Serviço Personalizado',
-      quantity,
-      price: bulkMetrics.finalPrice,
-      paymentMethod,
-      targetProfile: targetProfile(),
-      postUrl: postUrl.trim(),
-      couponCode: couponValid ? coupon.trim() : ''
-    });
-    if (res.ok && res.order) {
-      onAddOrderToStats();
-      setCreatedOrder(res.order);
-      setCheckoutStep('done');
-    } else {
-      setAccountError(res.error || 'Falha ao criar o pedido.');
-      setCheckoutStep(currentUser ? 'info' : 'account');
-    }
-  };
-
-  // Step 1 → validate profile/contact, then branch on account existence.
-  const handleInfoSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const errors: Record<string, string> = {};
-
-    if (!username.trim()) {
-      errors.username = 'Informe o perfil/@ de destino';
-    } else if (profileLookupEnabled && profileLookup.status === 'found' && profileLookup.profile?.isPrivate) {
-      errors.username = 'O perfil informado está privado. Deixe-o público para receber a entrega.';
-    }
-    if (!currentUser && !fullName.trim()) {
-      errors.fullName = 'Informe seu nome';
-    }
-    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errors.email = 'Insira um e-mail válido';
-    }
-    if (!phone.replace(/\D/g, '').trim() || phone.replace(/\D/g, '').length < 10) {
-      errors.phone = 'Insira um telefone com DDD';
-    }
-    if (activeService && activeService.type !== 'followers' && !postUrl.trim()) {
-      errors.postUrl = 'O link da publicação é obrigatório para curtidas/visualizações';
-    }
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
-      return;
-    }
-    setFormErrors({});
-
-    // Already logged in → create the order directly.
-    if (currentUser) {
-      await createOrderAndRedirect();
-      return;
-    }
-
-    // Guest → does an account already exist for this e-mail/phone?
-    setCheckoutStep('processing');
-    const check = await checkAccountExists(email.trim(), phone.trim());
-    if (check.exists) {
-      setCheckoutStep('login_prompt');
-    } else {
-      setCheckoutStep('account');
-    }
-  };
-
-  // Guest creates the account (password) then the order.
-  const handleCreateAccount = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAccountError('');
-    if (password.length < 6) { setAccountError('A senha deve ter ao menos 6 caracteres.'); return; }
-    if (password !== confirmPassword) { setAccountError('As senhas não coincidem.'); return; }
-    setCheckoutStep('processing');
-    const reg = await registerAccount({ name: fullName.trim(), email: email.trim(), phone: phone.trim(), password });
-    if (!reg.ok || !reg.user) {
-      setAccountError(reg.error || 'Não foi possível criar a conta.');
-      setCheckoutStep('account');
-      return;
-    }
-    if (onAuthSuccess) onAuthSuccess(reg.user);
-    await createOrderAndRedirect();
-  };
 
   // Get SVG icon based on active platform style
   const getPlatformIcon = (plat: SocialPlatform) => {
