@@ -18,19 +18,20 @@ export interface ThemeBaseProps {
   company?: CompanySettings | null;
   siteName?: string;
   logoUrl?: string;
+  // Sessão atual: todo tema precisa disso no chrome, para o botão de acesso
+  // levar ao painel certo (admin ou cliente) em vez de pedir login de novo.
+  currentUser?: AuthUser | null;
 }
 
 export interface ThemeHomeProps extends ThemeBaseProps {
   services: any[];
   plans: any[];
-  currentUser?: AuthUser | null;
   onAuthSuccess?: (user: AuthUser) => void;
   onAddSimulatedOrder: (orderInfo: any) => void;
 }
 
 export interface ThemeServiceProps extends ThemeBaseProps {
   services: ServiceItem[];
-  currentUser?: AuthUser | null;
   onAuthSuccess?: (user: AuthUser) => void;
   onAddSimulatedOrder?: (order: any) => void;
 }

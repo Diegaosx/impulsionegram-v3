@@ -18,7 +18,7 @@ const TITLES: Record<PageSlug, string> = {
   warranty: 'Garantia e Reembolso'
 };
 
-export default function JapSitePageView({ slug, company, siteName, logoUrl }: ThemeSitePageProps) {
+export default function JapSitePageView({ slug, company, siteName, logoUrl, currentUser }: ThemeSitePageProps) {
   const navigate = useNavigate();
   const [page, setPage] = useState<SitePageData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,7 +41,7 @@ export default function JapSitePageView({ slug, company, siteName, logoUrl }: Th
 
   return (
     <div className="jap-page min-h-screen flex flex-col">
-      <JapHeader siteName={siteName} logoUrl={logoUrl} onNavigate={goHome} />
+      <JapHeader siteName={siteName} logoUrl={logoUrl} currentUser={currentUser} onNavigate={goHome} />
 
       <main className="pt-[71px] md:pt-[91px] lg:pt-[111px] flex-1">
         <section className="py-[30px] md:py-[50px] lg:py-[90px]">

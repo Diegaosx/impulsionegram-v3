@@ -43,7 +43,7 @@ export default function JapHomeView({
 
   return (
     <div className="jap-page min-h-screen flex flex-col">
-      <JapHeader siteName={siteName} logoUrl={logoUrl} onNavigate={scrollTo} />
+      <JapHeader siteName={siteName} logoUrl={logoUrl} currentUser={currentUser} onNavigate={scrollTo} />
 
       <main className="pt-[71px] md:pt-[91px] lg:pt-[111px] flex-1">
         {/* Hero */}

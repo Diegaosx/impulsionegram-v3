@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SERVICES } from '../../data';
 import { ServiceItem, ServicePackage, SocialPlatform } from '../../types';
-import { PriceBreakdown, computePrice, sellablePackages } from '../pricing';
+import { PriceBreakdown, computePrice, quantityPresets, sellablePackages } from '../pricing';
 
 export interface UseServiceSelectionInput {
   services?: ServiceItem[];
@@ -19,10 +19,13 @@ export interface UseServiceSelectionInput {
   // Pré-seleciona um pacote específico, para o cliente cair já no pacote que
   // ele clicou (ex.: vindo de um card do grid de serviços).
   initialPackageId?: string;
+  // Abre na quantidade mínima do serviço em vez do padrão de 1.000. É o que
+  // deixa a calculadora bater com o "a partir de" anunciado nos cards.
+  preferMinimumQuantity?: boolean;
 }
 
 export function useServiceSelection({
-  services, initialPlatform, initialType, restrictServiceId, initialPackageId
+  services, initialPlatform, initialType, restrictServiceId, initialPackageId, preferMinimumQuantity
 }: UseServiceSelectionInput) {
   const [platform, setPlatform] = useState<SocialPlatform>('instagram');
   const [serviceType, setServiceType] = useState<string>('followers');
@@ -84,25 +87,27 @@ export function useServiceSelection({
       const preferred = requested || activePackages.find(p => p.isPopular) || activePackages[0];
       setSelectedPackageId(preferred.id);
       setQuantity(preferred.quantity);
-      setCustomInput(preferred.quantity.toString());
     } else {
       setSelectedPackageId('');
-      const defaultQty = Math.max(activeService.minQuantity, Math.min(1000, activeService.maxQuantity));
-      setQuantity(defaultQty);
-      setCustomInput(defaultQty.toString());
+      setQuantity(preferMinimumQuantity
+        ? activeService.minQuantity
+        : Math.max(activeService.minQuantity, Math.min(1000, activeService.maxQuantity)));
     }
-  }, [activeService, activePackages, initialPackageId]);
+  }, [activeService, activePackages, initialPackageId, preferMinimumQuantity]);
 
   const selectPackage = useCallback((pkg: Pick<ServicePackage, 'id' | 'quantity'>) => {
     setSelectedPackageId(pkg.id);
     setQuantity(pkg.quantity);
-    setCustomInput(pkg.quantity.toString());
   }, []);
 
-  const applyQuantity = useCallback((value: number) => {
-    setQuantity(value);
-    setCustomInput(value.toString());
-  }, []);
+  const applyQuantity = useCallback((value: number) => setQuantity(value), []);
+
+  // O campo de texto acompanha a quantidade. Digitar livremente só mexe no
+  // texto; é o commit que move a quantidade, e então o texto volta ao valor
+  // já limitado ao que o serviço vende.
+  useEffect(() => {
+    setCustomInput(String(quantity));
+  }, [quantity]);
 
   // Commit a free-typed quantity, clamped to what the service sells.
   const commitCustomInput = useCallback(() => {
@@ -112,15 +117,25 @@ export function useServiceSelection({
     applyQuantity(Math.max(activeService.minQuantity, Math.min(activeService.maxQuantity, val)));
   }, [activeService, customInput, applyQuantity]);
 
+  // Atualização funcional: cliques rápidos no +/- se acumulam em vez de
+  // sobrescreverem uns aos outros lendo o mesmo valor antigo.
   const incrementQuantity = useCallback((amount: number) => {
     if (!activeService) return;
-    applyQuantity(Math.min(activeService.maxQuantity, quantity + amount));
-  }, [activeService, quantity, applyQuantity]);
+    setQuantity(prev => Math.min(activeService.maxQuantity, prev + amount));
+  }, [activeService]);
 
   const decrementQuantity = useCallback((amount: number) => {
     if (!activeService) return;
-    applyQuantity(Math.max(activeService.minQuantity, quantity - amount));
-  }, [activeService, quantity, applyQuantity]);
+    setQuantity(prev => Math.max(activeService.minQuantity, prev - amount));
+  }, [activeService]);
+
+  // Atalhos de quantidade (modo régua). Vazio quando o serviço vende pacotes.
+  const presets = useMemo(
+    () => (!activeService || activePackages.length > 0
+      ? []
+      : quantityPresets(activeService.minQuantity, activeService.maxQuantity)),
+    [activeService, activePackages]
+  );
 
   const price: PriceBreakdown = useMemo(
     () => computePrice({ service: activeService, quantity, packages: activePackages, selectedPackage }),
@@ -136,6 +151,7 @@ export function useServiceSelection({
     categoriesList,
     activeService, restrictedService,
     activePackages, hasPackages, selectedPackage, selectedPackageId, selectPackage,
+    presets,
     price
   };
 }

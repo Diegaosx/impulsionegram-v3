@@ -10,7 +10,7 @@ import JapHeader from '../chrome/Header';
 import JapFooter from '../chrome/Footer';
 import JapFaq from '../sections/Faq';
 
-export default function JapHelpView({ homeContent, company, siteName, logoUrl }: ThemeHelpProps) {
+export default function JapHelpView({ homeContent, company, siteName, logoUrl, currentUser }: ThemeHelpProps) {
   const navigate = useNavigate();
 
   const goHome = (sectionId: string) => {
@@ -20,7 +20,7 @@ export default function JapHelpView({ homeContent, company, siteName, logoUrl }:
 
   return (
     <div className="jap-page min-h-screen flex flex-col">
-      <JapHeader siteName={siteName} logoUrl={logoUrl} onNavigate={goHome} />
+      <JapHeader siteName={siteName} logoUrl={logoUrl} currentUser={currentUser} onNavigate={goHome} />
 
       <main className="pt-[71px] md:pt-[91px] lg:pt-[111px] flex-1">
         <section className="py-[30px] md:py-[50px] lg:py-[90px]">

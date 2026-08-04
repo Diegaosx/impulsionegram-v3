@@ -70,3 +70,31 @@ export function sellablePackages(service?: ServiceItem): ServicePackage[] {
   const list = (service?.packages || []).filter(p => p.quantity > 0 && p.price > 0);
   return [...list].sort((a, b) => a.quantity - b.quantity);
 }
+
+// Atalhos de quantidade para a calculadora: uma escada 1-2-5 entre o mínimo e
+// o máximo que o serviço vende, sempre incluindo os dois extremos.
+//
+// Serve só para facilitar — a régua continua permitindo qualquer valor.
+export function quantityPresets(min: number, max: number, count = 4): number[] {
+  const lo = Math.max(1, Math.floor(min || 1));
+  const hi = Math.floor(max || 0);
+  if (!(hi > lo)) return [lo];
+
+  const ladder: number[] = [];
+  for (let exp = 0; exp <= 9; exp++) {
+    for (const m of [1, 2, 5]) {
+      const v = m * Math.pow(10, exp);
+      if (v > lo && v < hi) ladder.push(v);
+    }
+  }
+
+  const pool = Array.from(new Set([lo, ...ladder, hi])).sort((a, b) => a - b);
+  if (pool.length <= count) return pool;
+
+  // Distribui os índices, mantendo o primeiro e o último.
+  const picked = new Set<number>();
+  for (let i = 0; i < count; i++) {
+    picked.add(pool[Math.round((i * (pool.length - 1)) / (count - 1))]);
+  }
+  return Array.from(picked).sort((a, b) => a - b);
+}
