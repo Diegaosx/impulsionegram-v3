@@ -496,6 +496,9 @@ export interface GeneralSettings {
   timezone: string;
   theme: string;
   plansEnabled?: boolean;
+  // Ordem das seções da home (o herói é fixo e não entra aqui). Vocabulário e
+  // saneamento ficam em src/site/homeSections.ts.
+  homeSections?: string[];
 }
 
 const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {

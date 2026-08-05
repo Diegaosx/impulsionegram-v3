@@ -4,9 +4,10 @@
 // são nossas e que ela não tem em lugar nenhum público: o grid de serviços e a
 // calculadora.
 
-import { useState } from 'react';
+import { Fragment, ReactNode, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ThemeHomeProps } from '../../types';
+import { orderedSections, useHomeLayout } from '../../../site/homeSections';
 import { ServiceItem } from '../../../types';
 import JapHeader from '../chrome/Header';
 import JapFooter from '../chrome/Footer';
@@ -26,6 +27,8 @@ export default function JapHomeView({
   services, plans, homeContent, company, siteName, logoUrl, currentUser, onAuthSuccess, onAddSimulatedOrder
 }: ThemeHomeProps) {
   const navigate = useNavigate();
+  // Ordem das seções e visibilidade dos planos vêm do painel.
+  const { order, plansEnabled } = useHomeLayout();
   // Compra direto pelo card: abre o checkout já no pacote anunciado, sem
   // passar pela seção da calculadora.
   const [quickBuy, setQuickBuy] = useState<{ serviceId: string; packageId?: string } | null>(null);
@@ -40,6 +43,72 @@ export default function JapHomeView({
   };
 
   const list: ServiceItem[] = services || [];
+
+  // Blocos ordenáveis. Ids que este tema não implementa (depoimentos, redes,
+  // contato, newsletter, blog) simplesmente não entram no mapa e são pulados.
+  const blocks: Record<string, ReactNode> = {
+    'como-funciona': (
+      <section id="como-funciona" className="py-[30px] md:py-[50px] lg:py-[90px]" style={{ background: 'var(--jap-surface-tint)' }}>
+        <div className="max-w-[1320px] mx-auto px-6 lg:px-3">
+          <h2 className="text-center font-bold" style={{ color: 'var(--jap-ink)', fontSize: 'clamp(24px, 3vw, 48px)', lineHeight: 1.2 }}>
+            Como funciona
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-10">
+            {STEPS.map((s, i) => (
+              <div key={s.title} className="jap-card p-5 md:p-10">
+                <span className="jap-tile text-lg font-bold">{i + 1}</span>
+                <h3 className="font-bold text-xl mt-4" style={{ color: 'var(--jap-ink)' }}>{s.title}</h3>
+                <p className="text-sm mt-2" style={{ color: 'var(--jap-body)' }}>{s.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    ),
+
+    servicos: <JapServicesGrid services={list} onBuy={handleBuy} />,
+
+    calculadora: (
+      <JapCalculator
+        services={list}
+        currentUser={currentUser}
+        onAuthSuccess={onAuthSuccess}
+        onOrderCreated={() => onAddSimulatedOrder?.({})}
+      />
+    ),
+
+    planos: plansEnabled && plans && plans.length > 0 ? (
+      <section id="planos" className="py-[30px] md:py-[50px] lg:py-[90px]">
+        <div className="max-w-[1320px] mx-auto px-6 lg:px-3">
+          <h2 className="text-center font-bold" style={{ color: 'var(--jap-ink)', fontSize: 'clamp(24px, 3vw, 48px)', lineHeight: 1.2 }}>
+            Planos populares
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-10">
+            {plans.map((p: any) => (
+              <div key={p.id} className="jap-card p-5 md:p-10">
+                <h3 className="font-bold text-xl" style={{ color: 'var(--jap-ink)' }}>{p.name}</h3>
+                <p className="text-3xl font-bold mt-3" style={{ color: 'var(--jap-orange-ink)' }}>
+                  {Number(p.price || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </p>
+                {Array.isArray(p.features) && (
+                  <ul className="mt-4 space-y-2">
+                    {p.features.map((f: string, i: number) => (
+                      <li key={i} className="text-sm" style={{ color: 'var(--jap-body)' }}>• {f}</li>
+                    ))}
+                  </ul>
+                )}
+                <button onClick={() => scrollTo('calculadora')} className="jap-btn jap-btn-sm jap-btn-primary w-full mt-6">
+                  Assinar
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    ) : null,
+
+    faq: <JapFaq faqs={homeContent?.faqs || []} />
+  };
 
   return (
     <div className="jap-page min-h-screen flex flex-col">
@@ -93,27 +162,6 @@ export default function JapHomeView({
           </div>
         </section>
 
-        {/* Como funciona */}
-        <section id="como-funciona" className="py-[30px] md:py-[50px] lg:py-[90px]" style={{ background: 'var(--jap-surface-tint)' }}>
-          <div className="max-w-[1320px] mx-auto px-6 lg:px-3">
-            <h2 className="text-center font-bold" style={{ color: 'var(--jap-ink)', fontSize: 'clamp(24px, 3vw, 48px)', lineHeight: 1.2 }}>
-              Como funciona
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-10">
-              {STEPS.map((s, i) => (
-                <div key={s.title} className="jap-card p-5 md:p-10">
-                  <span className="jap-tile text-lg font-bold">{i + 1}</span>
-                  <h3 className="font-bold text-xl mt-4" style={{ color: 'var(--jap-ink)' }}>{s.title}</h3>
-                  <p className="text-sm mt-2" style={{ color: 'var(--jap-body)' }}>{s.text}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Nossas duas seções: grid de serviços e calculadora */}
-        <JapServicesGrid services={list} onBuy={handleBuy} />
-
         {/* Checkout da compra rápida: só o modal, remontado a cada clique. */}
         {quickBuy && (
           <div key={`${quickBuy.serviceId}:${quickBuy.packageId || ''}`}>
@@ -131,45 +179,10 @@ export default function JapHomeView({
           </div>
         )}
 
-        <JapCalculator
-          services={list}
-          currentUser={currentUser}
-          onAuthSuccess={onAuthSuccess}
-          onOrderCreated={() => onAddSimulatedOrder?.({})}
-        />
-
-        {/* Planos, quando houver */}
-        {plans && plans.length > 0 && (
-          <section id="planos" className="py-[30px] md:py-[50px] lg:py-[90px]">
-            <div className="max-w-[1320px] mx-auto px-6 lg:px-3">
-              <h2 className="text-center font-bold" style={{ color: 'var(--jap-ink)', fontSize: 'clamp(24px, 3vw, 48px)', lineHeight: 1.2 }}>
-                Planos populares
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-10">
-                {plans.map((p: any) => (
-                  <div key={p.id} className="jap-card p-5 md:p-10">
-                    <h3 className="font-bold text-xl" style={{ color: 'var(--jap-ink)' }}>{p.name}</h3>
-                    <p className="text-3xl font-bold mt-3" style={{ color: 'var(--jap-orange-ink)' }}>
-                      {Number(p.price || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                    </p>
-                    {Array.isArray(p.features) && (
-                      <ul className="mt-4 space-y-2">
-                        {p.features.map((f: string, i: number) => (
-                          <li key={i} className="text-sm" style={{ color: 'var(--jap-body)' }}>• {f}</li>
-                        ))}
-                      </ul>
-                    )}
-                    <button onClick={() => scrollTo('calculadora')} className="jap-btn jap-btn-sm jap-btn-primary w-full mt-6">
-                      Assinar
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-        )}
-
-        <JapFaq faqs={homeContent?.faqs || []} />
+        {/* Seções ordenáveis pelo painel */}
+        {orderedSections(order, blocks).map(s => (
+          <Fragment key={s.id}>{s.node}</Fragment>
+        ))}
       </main>
 
       <JapFooter siteName={siteName} logoUrl={logoUrl} company={company} onNavigate={scrollTo} />

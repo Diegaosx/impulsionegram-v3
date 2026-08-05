@@ -33,6 +33,38 @@ Cada slot recebe, já pronto para renderizar: conteúdo do dashboard
 (`services`, `plans`, `homeContent`), dados da empresa (`company`) e a marca
 (`siteName`, `logoUrl`).
 
+## Seções da home
+
+A ordem das seções da home é **do painel, não do tema**. O vocabulário fica em
+`src/site/homeSections.ts` e descreve o *papel* de cada seção (`servicos`,
+`calculadora`, `planos`, `faq`, …), nunca a marcação de um tema específico.
+
+O herói é fixo: abre a home em todos os temas e não entra na lista.
+
+Um tema monta um mapa de blocos e deixa o hook decidir a ordem:
+
+```tsx
+const { order, plansEnabled } = useHomeLayout();
+
+const blocks: Record<string, ReactNode> = {
+  servicos: <MeuGrid … />,
+  calculadora: <MinhaCalculadora … />,
+  // devolver null esconde a seção sem tirá-la do vocabulário
+  planos: plansEnabled && plans.length > 0 ? <MeusPlanos … /> : null,
+  faq: <MeuFaq … />
+};
+
+{orderedSections(order, blocks).map(s => <Fragment key={s.id}>{s.node}</Fragment>)}
+```
+
+Um tema **não precisa implementar todas as seções**: ids ausentes do mapa são
+simplesmente pulados. E `normalizeHomeOrder()` acrescenta no fim da lista as
+seções que um registro antigo não conhece, então criar uma seção nova nunca a
+deixa invisível para quem já salvou a ordem alguma vez.
+
+Ao acrescentar um id novo ao vocabulário, espelhe-o em `KNOWN_HOME_SECTIONS`
+(`db.ts`) — o servidor não importa módulos do cliente.
+
 ## Como criar um tema novo
 
 1. Crie `src/themes/<id>/` com um `theme.ts` que chama `registerTheme()`:

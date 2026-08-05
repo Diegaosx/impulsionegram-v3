@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SocialPlatform } from '../../../types';
 import Header from '../chrome/Header';
@@ -16,7 +16,7 @@ import Footer from '../chrome/Footer';
 import FloatingWidgets from '../chrome/FloatingWidgets';
 import CookieConsent from '../chrome/CookieConsent';
 import { HomeContent, CompanySettings, AuthUser } from '../../../utils/storage';
-import { usePlansEnabled } from '../../../utils/usePlansEnabled';
+import { orderedSections, useHomeLayout } from '../../../site/homeSections';
 
 interface HomePageProps {
   services: any[];
@@ -32,7 +32,8 @@ interface HomePageProps {
 
 export default function HomePage({ services, plans, homeContent, siteName, logoUrl, company, currentUser, onAuthSuccess, onAddSimulatedOrder }: HomePageProps) {
   const navigate = useNavigate();
-  const plansEnabled = usePlansEnabled();
+  // Ordem das seções e visibilidade dos planos vêm do painel.
+  const { order, plansEnabled } = useHomeLayout();
 
   // Navigation scrolling logic
   const handleScrollToSection = (id: string) => {
@@ -73,6 +74,44 @@ export default function HomePage({ services, plans, homeContent, siteName, logoU
     handleUpdatePlatformStats();
   };
 
+  // Cada seção da home vira uma entrada aqui; a ordem é decidida pelo painel.
+  // Blocos ausentes (ids que este tema não implementa) são simplesmente
+  // pulados, e "planos" some quando a seção está desativada.
+  const blocks: Record<string, React.ReactNode> = {
+    servicos: (
+      <ServicesGrid
+        services={services}
+        onSelectService={(plat, type) => handleCustomizerSelection(plat, type, 1000)}
+        searchTerm={searchFilter}
+        onNavigate={handleScrollToSection}
+      />
+    ),
+    beneficios: <Benefits />,
+    calculadora: (
+      <InteractiveCalculator
+        services={services}
+        initialPlatform={selectedPlatform}
+        initialType={selectedServiceType}
+        onAddOrderToStats={handleUpdatePlatformStats}
+        onAddSimulatedOrder={handleAddSimulatedOrder}
+        currentUser={currentUser}
+        onAuthSuccess={onAuthSuccess}
+      />
+    ),
+    planos: plansEnabled ? (
+      <PlansGrid
+        plans={plans}
+        onSelectPlanCustomizer={handleCustomizerSelection}
+        onNavigate={handleScrollToSection}
+      />
+    ) : null,
+    'como-funciona': <HowItWorks />,
+    depoimentos: <Testimonials />,
+    faq: <FAQAccordion onNavigate={handleScrollToSection} company={company} homeContent={homeContent} />,
+    contato: <ContactForm company={company} />,
+    newsletter: <Newsletter />
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 antialiased font-sans flex flex-col justify-between selection:bg-blue-600 selection:text-white pb-0">
 
@@ -93,51 +132,10 @@ export default function HomePage({ services, plans, homeContent, siteName, logoU
         homeContent={homeContent}
       />
 
-      {/* Services Showcase Catalog - dynamic */}
-      <ServicesGrid
-        services={services}
-        onSelectService={(plat, type) => handleCustomizerSelection(plat, type, 1000)}
-        searchTerm={searchFilter}
-        onNavigate={handleScrollToSection}
-      />
-
-      {/* Benefits Block */}
-      <Benefits />
-
-      {/* Interactive Pricing Customizer Calculator - dynamic */}
-      <InteractiveCalculator
-        services={services}
-        initialPlatform={selectedPlatform}
-        initialType={selectedServiceType}
-        onAddOrderToStats={handleUpdatePlatformStats}
-        onAddSimulatedOrder={handleAddSimulatedOrder}
-        currentUser={currentUser}
-        onAuthSuccess={onAuthSuccess}
-      />
-
-      {/* Pre-packaged Popular Plans Grid - dynamic (hidden when section disabled) */}
-      {plansEnabled && (
-        <PlansGrid
-          plans={plans}
-          onSelectPlanCustomizer={handleCustomizerSelection}
-          onNavigate={handleScrollToSection}
-        />
-      )}
-
-      {/* Simple Stepper: How it Works */}
-      <HowItWorks />
-
-      {/* Testimonials Review Feed */}
-      <Testimonials />
-
-      {/* FAQ Accorion Collapsible Block */}
-      <FAQAccordion onNavigate={handleScrollToSection} company={company} homeContent={homeContent} />
-
-      {/* Customer Contact forms */}
-      <ContactForm company={company} />
-
-      {/* Newsletter Block */}
-      <Newsletter />
+      {/* Seções ordenáveis pelo painel */}
+      {orderedSections(order, blocks).map(s => (
+        <React.Fragment key={s.id}>{s.node}</React.Fragment>
+      ))}
 
       {/* Footer Maps */}
       <Footer

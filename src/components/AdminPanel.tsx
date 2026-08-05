@@ -25,10 +25,12 @@ import {
   TrendingUp, CircleDollarSign, Compass, Layers, Globe, Filter, MessageCircle,
   User, Lock, Users, Ban, UserCheck, CreditCard, KeyRound, Eye, EyeOff, Plug, Flame, ArrowLeftCircle, Bot,
   Image as ImageIcon, Upload, Clock, Palette, Type, SlidersHorizontal,
-  Mail, Phone, MapPin, Share2, PanelBottom, Cookie, Newspaper, Code2, Quote, Inbox, Search
+  Mail, Phone, MapPin, Share2, PanelBottom, Cookie, Newspaper, Code2, Quote, Inbox, Search,
+  ArrowUp, ArrowDown
 } from 'lucide-react';
 import { SOCIAL_PLATFORMS } from '../data';
 import { listThemes } from '../themes';
+import { DEFAULT_HOME_ORDER, HOME_SECTIONS, normalizeHomeOrder } from '../site/homeSections';
 
 interface AdminPanelProps {
   services: ServiceItem[];
@@ -237,7 +239,8 @@ export default function AdminPanel({
     seoTitle: '',
     seoDescription: '',
     timezone: 'America/Recife',
-    theme: 'default'
+    theme: 'default',
+    homeSections: DEFAULT_HOME_ORDER
   });
   const [generalLoading, setGeneralLoading] = useState(false);
   const [isSavingGeneral, setIsSavingGeneral] = useState(false);
@@ -249,7 +252,9 @@ export default function AdminPanel({
       try {
         setGeneralLoading(true);
         const data = await fetchGeneralSettings();
-        setGeneralForm(data);
+        // Saneia a ordem antes de editar: um registro antigo não pode esconder
+        // uma seção que passou a existir depois da última gravação.
+        setGeneralForm({ ...data, homeSections: normalizeHomeOrder(data?.homeSections) });
       } catch (e) {
         console.error('Error loading general settings:', e);
       } finally {
@@ -921,6 +926,9 @@ export default function AdminPanel({
   // Plans-section visibility (general settings: plansEnabled).
   const handleTogglePlansSection = async (enabled: boolean) => {
     setPlansSectionEnabled(enabled);
+    // O formulário de configurações gerais salva o objeto inteiro; sem espelhar
+    // aqui, salvar as gerais depois desfaria a troca feita nesta aba.
+    setGeneralForm(prev => ({ ...prev, plansEnabled: enabled }));
     try {
       const current = await fetchGeneralSettings();
       await saveGeneralSettingsToServer({ ...current, plansEnabled: enabled });
@@ -2681,6 +2689,78 @@ export default function AdminPanel({
                           {listThemes().find(t => t.id === generalForm.theme)?.description
                             || 'Define o visual do site público. Recarregue o site para ver a troca.'}
                         </span>
+                      </div>
+                    </div>
+
+                    {/* ORDEM DAS SEÇÕES DA HOME */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+                      <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+                        <div className="bg-emerald-50 text-emerald-600 p-2 rounded-lg"><SlidersHorizontal className="h-5 w-5" /></div>
+                        <div className="flex-1">
+                          <h4 className="font-bold text-slate-800 text-sm">Ordem das Seções da Home</h4>
+                          <p className="text-[10px] text-slate-400 font-medium">
+                            Vale para todos os temas. Cada tema mostra as seções que possui, nesta ordem.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setGeneralForm(prev => ({ ...prev, homeSections: [...DEFAULT_HOME_ORDER] }))}
+                          className="text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-primary flex items-center gap-1 cursor-pointer"
+                        >
+                          <RotateCcw className="h-3 w-3" /> Restaurar
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-3 bg-slate-50 border border-dashed border-slate-200 rounded-lg p-3">
+                        <span className="bg-slate-200 text-slate-500 text-[10px] font-black w-6 h-6 rounded grid place-items-center shrink-0">1</span>
+                        <div>
+                          <span className="text-xs font-bold text-slate-500 block">Seção principal (herói)</span>
+                          <span className="text-[10px] text-slate-400 font-medium">Fixa: abre a home em todos os temas.</span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        {normalizeHomeOrder(generalForm.homeSections).map((id, index, list) => {
+                          const info = HOME_SECTIONS.find(s => s.id === id);
+                          const move = (dir: -1 | 1) => {
+                            const next = [...list];
+                            const target = index + dir;
+                            if (target < 0 || target >= next.length) return;
+                            [next[index], next[target]] = [next[target], next[index]];
+                            setGeneralForm(prev => ({ ...prev, homeSections: next }));
+                          };
+                          return (
+                            <div key={id} className="flex items-center gap-3 bg-white border border-slate-200 rounded-lg p-3">
+                              <span className="bg-purple-50 text-primary text-[10px] font-black w-6 h-6 rounded grid place-items-center shrink-0">
+                                {index + 2}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <span className="text-xs font-bold text-slate-800 block">{info?.label || id}</span>
+                                <span className="text-[10px] text-slate-400 font-medium block truncate">{info?.hint}</span>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => move(-1)}
+                                  disabled={index === 0}
+                                  aria-label={`Mover ${info?.label || id} para cima`}
+                                  className="h-8 w-8 rounded-lg border border-slate-200 grid place-items-center text-slate-500 hover:text-primary hover:border-primary disabled:opacity-30 disabled:hover:text-slate-500 disabled:hover:border-slate-200 disabled:cursor-not-allowed cursor-pointer"
+                                >
+                                  <ArrowUp className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => move(1)}
+                                  disabled={index === list.length - 1}
+                                  aria-label={`Mover ${info?.label || id} para baixo`}
+                                  className="h-8 w-8 rounded-lg border border-slate-200 grid place-items-center text-slate-500 hover:text-primary hover:border-primary disabled:opacity-30 disabled:hover:text-slate-500 disabled:hover:border-slate-200 disabled:cursor-not-allowed cursor-pointer"
+                                >
+                                  <ArrowDown className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
 
