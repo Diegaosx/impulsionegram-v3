@@ -74,6 +74,26 @@ export async function fetchSmmBalance(): Promise<{ balance?: string; currency?: 
   }
 }
 
+export interface SmmSyncReport {
+  checked: number;
+  delivered: number;
+  canceled: number;
+  expired: number;
+  failed: number;
+}
+
+// Dispara a varredura dos pedidos em aberto sem esperar o ciclo automático.
+export async function runSmmSync(): Promise<{ report?: SmmSyncReport; error?: string }> {
+  try {
+    const res = await fetch('/api/smm/sync', { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data.error || 'Falha ao sincronizar os pedidos.' };
+    return { report: data as SmmSyncReport };
+  } catch {
+    return { error: 'Erro de conexão.' };
+  }
+}
+
 export async function fetchSmmServices(): Promise<{ services: any[]; error?: string }> {
   try {
     const res = await fetch('/api/smm/services');
@@ -954,6 +974,9 @@ export interface IntegrationSettings {
   wooviAppId: string;
   smmApiUrl: string;
   smmApiKey: string;
+  // Cadência da varredura de pedidos e janela de expiração dos não pagos.
+  smmSyncHours: string;
+  orderExpireHours: string;
   emailProvider: 'smtp' | 'resend';
   resendApiKey: string;
   smtpHost: string;
@@ -1024,6 +1047,8 @@ export async function fetchIntegrations(): Promise<IntegrationSettings> {
       wooviAppId: '',
       smmApiUrl: '',
       smmApiKey: '',
+      smmSyncHours: '6',
+      orderExpireHours: '6',
       emailProvider: 'smtp',
       resendApiKey: '',
       smtpHost: '',

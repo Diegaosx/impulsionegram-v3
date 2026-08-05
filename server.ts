@@ -61,6 +61,7 @@ import {
   deleteAccount,
   countAdmins,
   listOrdersForAccount,
+  listOpenOrders,
   getOrderById,
   patchOrderData,
   addContactMessage,
@@ -70,7 +71,7 @@ import {
 } from './db';
 import { isMercadoPagoConfigured, getPaymentStatus } from './mercadopago';
 import { isPixConfigured, createPix, getPixStatus, getActiveProvider } from './payments';
-import { isSmmConfigured, smmAddOrder, smmOrderStatus, smmBalance, smmServices, isSmmCompleted, buildTargetLink } from './smm';
+import { isSmmConfigured, smmAddOrder, smmOrderStatus, smmBalance, smmServices, isSmmCompleted, smmStatusToOrderStatus, buildTargetLink } from './smm';
 import { isRapidApiConfigured, fetchInstagramProfile, isProxyableImageUrl } from './rapidapi';
 import { uploadToR2, isR2Configured } from './r2';
 import { verifyRecaptcha } from './recaptcha';
@@ -438,20 +439,134 @@ async function dispatchOrderToSmm(order: any): Promise<void> {
 }
 
 // Refresh delivery status from the SMM panel; marks delivered when complete.
-async function refreshSmmStatus(order: any): Promise<string> {
-  if (!order || !order.smmOrderId || order.status === 'entregue') return order?.status;
-  const integ = await getIntegrations();
-  if (!isSmmConfigured(integ.smmApiUrl, integ.smmApiKey)) return order.status;
+//
+// `integ` pode vir pronto para a varredura não reler as configurações a cada
+// pedido.
+async function refreshSmmStatus(order: any, integ?: any): Promise<{ status: string; ok: boolean }> {
+  const unchanged = { status: order?.status, ok: true };
+  if (!order || !order.smmOrderId) return unchanged;
+  if (order.status === 'entregue' || order.status === 'cancelado') return unchanged;
+  const cfg = integ || (await getIntegrations());
+  if (!isSmmConfigured(cfg.smmApiUrl, cfg.smmApiKey)) return unchanged;
   try {
-    const st = await smmOrderStatus(integ.smmApiUrl, integ.smmApiKey, order.smmOrderId);
-    const patch: any = { smmStatus: st.status, smmStartCount: st.startCount, smmRemains: st.remains };
-    if (isSmmCompleted(st.status)) patch.status = 'entregue';
+    const st = await smmOrderStatus(cfg.smmApiUrl, cfg.smmApiKey, order.smmOrderId);
+    const patch: any = { smmStatus: st.status, smmStartCount: st.startCount, smmRemains: st.remains, smmError: '' };
+    const mapped = smmStatusToOrderStatus(st.status);
+    if (mapped) patch.status = mapped;
     await patchOrderData(order.id, patch);
-    return patch.status || order.status;
+    return { status: patch.status || order.status, ok: true };
   } catch (e: any) {
     console.error('SMM status refresh failed:', e?.message || e);
-    return order.status;
+    await patchOrderData(order.id, { smmError: String(e?.message || e) });
+    return { status: order.status, ok: false };
   }
+}
+
+// --- Varredura periódica dos pedidos em aberto ---
+
+// Um pedido conta como "ainda não pago" quando nada indica pagamento aprovado:
+// nem o status interno, nem o status do provedor de pagamento, nem a existência
+// de um pedido criado no painel SMM (que só acontece depois do pagamento).
+function isUnpaidOrder(order: any): boolean {
+  if (order?.smmOrderId) return false;
+  const status = String(order?.status || '').toLowerCase();
+  if (['pago', 'aprovado', 'pagamento_aprovado', 'entregue', 'processando'].includes(status)) return false;
+  const pay = String(order?.paymentStatus || '').toLowerCase();
+  if (['approved', 'paid', 'completed', 'aprovado'].includes(pay)) return false;
+  return true;
+}
+
+function orderAgeHours(order: any): number {
+  const raw = order?.createdAt || order?.date || order?.created_at;
+  const t = raw ? Date.parse(String(raw)) : NaN;
+  if (!Number.isFinite(t)) return 0; // sem data confiável, nunca expira
+  return (Date.now() - t) / 3_600_000;
+}
+
+function positiveHours(value: any, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+export interface SyncReport {
+  checked: number;   // pedidos consultados no painel SMM
+  delivered: number; // passaram a "entregue"
+  canceled: number;  // cancelados pelo painel SMM
+  expired: number;   // não pagos, cancelados por tempo
+  failed: number;    // consultas que deram erro
+}
+
+/**
+ * Passa por todo pedido que não está entregue nem cancelado:
+ *
+ *  - com id no painel SMM, consulta a rota `status` e aplica o resultado;
+ *  - sem pagamento e parado além da janela configurada, cancela.
+ *
+ * Pedido pago NUNCA é cancelado por tempo: a entrega natural do painel leva
+ * dias, e cancelar aí seria sumir com uma venda real.
+ */
+async function syncOpenOrders(): Promise<SyncReport> {
+  const report: SyncReport = { checked: 0, delivered: 0, canceled: 0, expired: 0, failed: 0 };
+  const integ = await getIntegrations();
+  const expireHours = positiveHours(integ.orderExpireHours, 6);
+  const smmOn = isSmmConfigured(integ.smmApiUrl, integ.smmApiKey);
+
+  const open = await listOpenOrders();
+  for (const order of open) {
+    if (order.smmOrderId && smmOn) {
+      report.checked++;
+      const before = order.status;
+      const { status: after, ok } = await refreshSmmStatus(order, integ);
+      if (!ok) report.failed++;
+      else if (after === 'entregue' && before !== 'entregue') report.delivered++;
+      else if (after === 'cancelado' && before !== 'cancelado') report.canceled++;
+      continue;
+    }
+
+    if (isUnpaidOrder(order) && orderAgeHours(order) >= expireHours) {
+      await patchOrderData(order.id, {
+        status: 'cancelado',
+        cancelReason: `Pagamento não confirmado em ${expireHours}h.`,
+        canceledAt: new Date().toISOString()
+      });
+      report.expired++;
+    }
+  }
+
+  return report;
+}
+
+// Agenda a varredura. O intervalo vem das configurações e é relido a cada
+// rodada, então mudar a cadência no painel vale já na próxima passada, sem
+// reiniciar o servidor.
+function scheduleOrderSync(): void {
+  let running = false;
+  let timer: NodeJS.Timeout | null = null;
+  const tick = async () => {
+    if (running) return; // uma rodada lenta não pode empilhar com a seguinte
+    running = true;
+    try {
+      const r = await syncOpenOrders();
+      if (r.checked || r.expired) {
+        console.log(
+          `[sync] pedidos: ${r.checked} consultados, ${r.delivered} entregues, ` +
+          `${r.canceled} cancelados no painel, ${r.expired} expirados sem pagamento.`
+        );
+      }
+    } catch (e: any) {
+      console.error('[sync] falha na varredura de pedidos:', e?.message || e);
+    } finally {
+      running = false;
+    }
+    const integ = await getIntegrations().catch(() => null);
+    const hours = positiveHours(integ?.smmSyncHours, 6);
+    timer = setTimeout(tick, hours * 3_600_000);
+    timer.unref?.();
+  };
+
+  // Primeira passada dois minutos após subir, para não competir com o boot.
+  timer = setTimeout(tick, 2 * 60_000);
+  timer.unref?.();
 }
 
 // Confirm payment: flip to "pago" (once) and dispatch to the SMM panel.
@@ -576,6 +691,17 @@ app.get('/api/smm/balance', async (req, res) => {
     res.json(await smmBalance(integ.smmApiUrl, integ.smmApiKey));
   } catch (e: any) {
     res.status(502).json({ error: e.message });
+  }
+});
+
+// Roda a varredura na hora, sem esperar o próximo ciclo. É o que dá para
+// conferir a configuração do painel SMM logo depois de salvá-la.
+app.post('/api/smm/sync', async (req, res) => {
+  try {
+    const report = await syncOpenOrders();
+    res.json(report);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -1648,6 +1774,9 @@ async function mountFrontend() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server run securely on port ${PORT}`);
+    // Varredura dos pedidos em aberto (status no painel SMM + expiração dos
+    // não pagos). Só depois de estar servindo, para não atrasar o boot.
+    scheduleOrderSync();
   });
 }
 

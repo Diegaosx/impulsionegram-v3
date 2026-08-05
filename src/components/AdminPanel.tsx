@@ -6,7 +6,7 @@ import {
   CompanySettings, fetchCompanySettings, saveCompanySettingsToServer,
   CookieConsentRecord, fetchCookieConsents,
   AnalyticsSettings, EMPTY_ANALYTICS_SETTINGS, fetchAnalyticsSettings, saveAnalyticsSettingsToServer,
-  fetchSmmBalance, fetchSmmServices,
+  fetchSmmBalance, fetchSmmServices, runSmmSync, fetchOrders,
   AdminAccount, fetchAdminAccounts, createAdminAccount, updateAdminAccount,
   resetAdminAccountPassword, deleteAdminAccount,
   OfferSettings, fetchOfferAdmin, saveOffer,
@@ -140,6 +140,8 @@ export default function AdminPanel({
     wooviAppId: '',
     smmApiUrl: '',
     smmApiKey: '',
+    smmSyncHours: '6',
+    orderExpireHours: '6',
     smtpHost: '',
     smtpPort: '587',
     smtpUser: '',
@@ -175,6 +177,29 @@ export default function AdminPanel({
     if (r.error) triggerError(r.error);
     setSmmServicesList(r.services.slice(0, 200));
     setSmmLoading(false);
+  };
+
+  // Varredura manual dos pedidos em aberto (a automática roda sozinha).
+  const [smmSyncing, setSmmSyncing] = useState(false);
+  const [smmSyncResult, setSmmSyncResult] = useState<string>('');
+
+  const handleSmmSync = async () => {
+    setSmmSyncing(true);
+    setSmmSyncResult('');
+    const r = await runSmmSync();
+    if (r.error) {
+      triggerError(r.error);
+    } else if (r.report) {
+      const { checked, delivered, canceled, expired } = r.report;
+      setSmmSyncResult(
+        `${checked} pedido(s) consultado(s) no painel · ${delivered} entregue(s) · ` +
+        `${canceled} cancelado(s) pelo painel · ${expired} expirado(s) sem pagamento.`
+      );
+      // A varredura mexeu nos pedidos no servidor; recarrega a lista da aba
+      // "Pedidos Recentes" para não deixar status velho na tela.
+      if (checked || canceled || expired) onUpdateOrders(await fetchOrders());
+    }
+    setSmmSyncing(false);
   };
 
   // Load integration settings when the dashboard mounts
@@ -3120,6 +3145,50 @@ export default function AdminPanel({
                           placeholder="sua chave de API do painel"
                           className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
                         />
+                      </div>
+
+                      {/* Sincronização automática dos pedidos em aberto */}
+                      <div className="pt-2 border-t border-slate-100 space-y-3">
+                        <p className="text-xs font-bold text-slate-600">Sincronização automática</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Verificar status a cada (horas)</label>
+                            <input
+                              type="number"
+                              min={1}
+                              value={integrationsForm.smmSyncHours}
+                              onChange={(e) => setIntegrationsForm(prev => ({ ...prev, smmSyncHours: e.target.value }))}
+                              className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                            />
+                            <span className="text-[10px] text-slate-400 block font-medium">
+                              Todo pedido que não está Entregue nem Cancelado é consultado no painel.
+                            </span>
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Cancelar não pagos após (horas)</label>
+                            <input
+                              type="number"
+                              min={1}
+                              value={integrationsForm.orderExpireHours}
+                              onChange={(e) => setIntegrationsForm(prev => ({ ...prev, orderExpireHours: e.target.value }))}
+                              className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                            />
+                            <span className="text-[10px] text-slate-400 block font-medium">
+                              Só vale para pedidos sem pagamento. Pedido pago nunca é cancelado por tempo.
+                            </span>
+                          </div>
+                        </div>
+
+                        <button type="button" onClick={handleSmmSync} disabled={smmSyncing}
+                          className="text-xs font-bold text-slate-600 hover:text-primary border border-slate-200 bg-white rounded-lg px-3 py-2 transition-colors disabled:opacity-60 flex items-center gap-1.5">
+                          <RotateCcw className={`h-3.5 w-3.5 ${smmSyncing ? 'animate-spin' : ''}`} />
+                          {smmSyncing ? 'Sincronizando...' : 'Sincronizar pedidos agora'}
+                        </button>
+                        {smmSyncResult && (
+                          <p className="text-[11px] font-semibold text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                            {smmSyncResult}
+                          </p>
+                        )}
                       </div>
 
                       {/* SMM tools: balance + services lookup (salve as chaves antes) */}
