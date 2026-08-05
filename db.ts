@@ -1190,11 +1190,19 @@ export interface GeneralSettings {
   timezone: string;
   theme: string;
   plansEnabled: boolean;
+  homeSections: string[];
 }
 
 // Theme ids bundled in the frontend. Keep in sync with src/themes/index.ts —
 // the server cannot import the client registry, so this is a plain mirror.
 const KNOWN_THEME_IDS = ['default', 'jap', 'glass', 'turbo'];
+
+// Seções da home que o painel sabe ordenar. Espelho de src/site/homeSections.ts
+// (o servidor não importa módulos do cliente). O herói é fixo e fica de fora.
+const KNOWN_HOME_SECTIONS = [
+  'servicos', 'beneficios', 'calculadora', 'planos', 'como-funciona',
+  'depoimentos', 'redes', 'faq', 'contato', 'blog', 'newsletter'
+];
 
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   siteName: 'ImpulsioneGram',
@@ -1205,7 +1213,8 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
     'Plataforma premium para impulsionar suas redes sociais com seguidores, curtidas e visualizações reais e brasileiros.',
   timezone: 'America/Recife',
   theme: 'default',
-  plansEnabled: true
+  plansEnabled: true,
+  homeSections: [...KNOWN_HOME_SECTIONS]
 };
 
 export async function getGeneralSettings(): Promise<GeneralSettings> {
@@ -1215,6 +1224,17 @@ export async function getGeneralSettings(): Promise<GeneralSettings> {
   // Belt-and-braces: a theme removed from the build must not be served. The
   // client registry is the real authority and coerces unknown ids too.
   merged.theme = KNOWN_THEME_IDS.includes(merged.theme) ? merged.theme : 'default';
+  // Mesma ideia para a ordem da home: descarta o que não existe mais, remove
+  // repetições e acrescenta no fim as seções que a lista salva não conhece —
+  // uma seção nova nunca fica invisível por causa de um registro antigo.
+  const saved: string[] = Array.isArray(merged.homeSections) ? merged.homeSections : [];
+  const seen = new Set<string>();
+  const order: string[] = [];
+  for (const id of saved) {
+    if (typeof id === 'string' && KNOWN_HOME_SECTIONS.includes(id) && !seen.has(id)) { seen.add(id); order.push(id); }
+  }
+  for (const id of KNOWN_HOME_SECTIONS) if (!seen.has(id)) order.push(id);
+  merged.homeSections = order;
   return merged;
 }
 

@@ -4,8 +4,9 @@
 // funciona, compromisso, FAQ e CTA final —, mas com o grid de serviços e a
 // calculadora que ela não tem em lugar nenhum público.
 
-import { useState } from 'react';
+import { Fragment, ReactNode, useState } from 'react';
 import { ThemeHomeProps } from '../../types';
+import { orderedSections, useHomeLayout } from '../../../site/homeSections';
 import { ServiceItem } from '../../../types';
 import GlassHeader from '../chrome/Header';
 import GlassFooter from '../chrome/Footer';
@@ -31,6 +32,8 @@ export default function GlassHomeView({
   services, plans, homeContent, company, siteName, logoUrl, currentUser, onAuthSuccess, onAddSimulatedOrder
 }: ThemeHomeProps) {
   const [quickBuy, setQuickBuy] = useState<{ serviceId: string; packageId?: string } | null>(null);
+  // Ordem das seções e visibilidade dos planos vêm do painel.
+  const { order, plansEnabled } = useHomeLayout();
 
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -44,6 +47,95 @@ export default function GlassHomeView({
   const words = heroTitle.trim().split(/\s+/);
   const heroHead = words.slice(0, -1).join(' ');
   const heroTail = words[words.length - 1];
+
+  // Blocos ordenáveis. Ids que este tema não implementa (depoimentos, redes,
+  // contato, newsletter, blog) não entram no mapa e são pulados.
+  const blocks: Record<string, ReactNode> = {
+    servicos: <GlassServicesGrid services={list} onBuy={handleBuy} />,
+
+    calculadora: (
+      <GlassCalculator
+        services={list}
+        currentUser={currentUser}
+        onAuthSuccess={onAuthSuccess}
+        onOrderCreated={() => onAddSimulatedOrder?.({})}
+      />
+    ),
+
+    'como-funciona': (
+      <section id="como-funciona" className="gl-wrap py-8 md:py-16">
+        <div className="text-center max-w-2xl mx-auto mb-9">
+          <h2 className="font-bold" style={{ color: 'var(--gl-ink)', fontSize: 'clamp(30px, 4vw, 48px)', lineHeight: 1.1 }}>
+            Como <span className="gl-accent">funciona</span>
+          </h2>
+          <p className="mt-3 text-lg" style={{ color: 'var(--gl-body)', lineHeight: 1.55 }}>
+            Três passos, sem burocracia e sem pedir a sua senha.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {STEPS.map((s, i) => (
+            <div key={s.title} className="gl-card p-[26px]">
+              <span className="gl-tile">{i + 1}</span>
+              <h3 className="text-[22px] font-bold mt-4" style={{ color: 'var(--gl-ink)' }}>{s.title}</h3>
+              <p className="mt-2" style={{ color: 'var(--gl-body)', lineHeight: 1.55 }}>{s.text}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+    ),
+
+    beneficios: (
+      <section className="gl-wrap py-8 md:py-16">
+        <div className="text-center max-w-2xl mx-auto mb-9">
+          <h2 className="font-bold" style={{ color: 'var(--gl-ink)', fontSize: 'clamp(30px, 4vw, 48px)', lineHeight: 1.1 }}>
+            Nosso <span className="gl-accent">compromisso</span>
+          </h2>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {PROMISES.map((p, i) => (
+            <div key={p.label} className="gl-card p-[26px]">
+              <div className="flex items-center gap-3 mb-3.5">
+                <span className="w-[46px] h-[46px] rounded-full grid place-items-center font-black text-white"
+                  style={{ background: 'var(--gl-grad-brand)' }}>{i + 1}</span>
+                <strong className="font-black" style={{ color: 'var(--gl-ink)' }}>{p.label}</strong>
+              </div>
+              <p style={{ color: 'var(--gl-body)', lineHeight: 1.55 }}>{p.text}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+    ),
+
+    planos: plansEnabled && plans && plans.length > 0 ? (
+      <section id="planos" className="gl-wrap py-8 md:py-16">
+        <div className="text-center max-w-2xl mx-auto mb-9">
+          <h2 className="font-bold" style={{ color: 'var(--gl-ink)', fontSize: 'clamp(30px, 4vw, 48px)', lineHeight: 1.1 }}>
+            Planos <span className="gl-accent">populares</span>
+          </h2>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {plans.map((p: any) => (
+            <div key={p.id} className="gl-card p-[26px]">
+              <h3 className="text-[22px] font-bold" style={{ color: 'var(--gl-ink)' }}>{p.name}</h3>
+              <p className="text-3xl font-black mt-3" style={{ color: 'var(--gl-purple)' }}>
+                {Number(p.price || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </p>
+              {Array.isArray(p.features) && (
+                <ul className="mt-4 space-y-2">
+                  {p.features.map((f: string, i: number) => (
+                    <li key={i} style={{ color: 'var(--gl-body)' }}>• {f}</li>
+                  ))}
+                </ul>
+              )}
+              <button onClick={() => scrollTo('calculadora')} className="gl-btn w-full mt-6">Assinar</button>
+            </div>
+          ))}
+        </div>
+      </section>
+    ) : null,
+
+    faq: <GlassFaq faqs={homeContent?.faqs || []} />
+  };
 
   return (
     <div className="gl-page min-h-screen flex flex-col">
@@ -83,8 +175,6 @@ export default function GlassHomeView({
           </div>
         </section>
 
-        <GlassServicesGrid services={list} onBuy={handleBuy} />
-
         {/* Checkout da compra rápida: só o modal, remontado a cada clique. */}
         {quickBuy && (
           <div key={`${quickBuy.serviceId}:${quickBuy.packageId || ''}`}>
@@ -102,85 +192,10 @@ export default function GlassHomeView({
           </div>
         )}
 
-        <GlassCalculator
-          services={list}
-          currentUser={currentUser}
-          onAuthSuccess={onAuthSuccess}
-          onOrderCreated={() => onAddSimulatedOrder?.({})}
-        />
-
-        {/* Como funciona */}
-        <section id="como-funciona" className="gl-wrap py-8 md:py-16">
-          <div className="text-center max-w-2xl mx-auto mb-9">
-            <h2 className="font-bold" style={{ color: 'var(--gl-ink)', fontSize: 'clamp(30px, 4vw, 48px)', lineHeight: 1.1 }}>
-              Como <span className="gl-accent">funciona</span>
-            </h2>
-            <p className="mt-3 text-lg" style={{ color: 'var(--gl-body)', lineHeight: 1.55 }}>
-              Três passos, sem burocracia e sem pedir a sua senha.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {STEPS.map((s, i) => (
-              <div key={s.title} className="gl-card p-[26px]">
-                <span className="gl-tile">{i + 1}</span>
-                <h3 className="text-[22px] font-bold mt-4" style={{ color: 'var(--gl-ink)' }}>{s.title}</h3>
-                <p className="mt-2" style={{ color: 'var(--gl-body)', lineHeight: 1.55 }}>{s.text}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Compromisso de atendimento */}
-        <section className="gl-wrap py-8 md:py-16">
-          <div className="text-center max-w-2xl mx-auto mb-9">
-            <h2 className="font-bold" style={{ color: 'var(--gl-ink)', fontSize: 'clamp(30px, 4vw, 48px)', lineHeight: 1.1 }}>
-              Nosso <span className="gl-accent">compromisso</span>
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {PROMISES.map((p, i) => (
-              <div key={p.label} className="gl-card p-[26px]">
-                <div className="flex items-center gap-3 mb-3.5">
-                  <span className="w-[46px] h-[46px] rounded-full grid place-items-center font-black text-white"
-                    style={{ background: 'var(--gl-grad-brand)' }}>{i + 1}</span>
-                  <strong className="font-black" style={{ color: 'var(--gl-ink)' }}>{p.label}</strong>
-                </div>
-                <p style={{ color: 'var(--gl-body)', lineHeight: 1.55 }}>{p.text}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Planos, quando houver */}
-        {plans && plans.length > 0 && (
-          <section id="planos" className="gl-wrap py-8 md:py-16">
-            <div className="text-center max-w-2xl mx-auto mb-9">
-              <h2 className="font-bold" style={{ color: 'var(--gl-ink)', fontSize: 'clamp(30px, 4vw, 48px)', lineHeight: 1.1 }}>
-                Planos <span className="gl-accent">populares</span>
-              </h2>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {plans.map((p: any) => (
-                <div key={p.id} className="gl-card p-[26px]">
-                  <h3 className="text-[22px] font-bold" style={{ color: 'var(--gl-ink)' }}>{p.name}</h3>
-                  <p className="text-3xl font-black mt-3" style={{ color: 'var(--gl-purple)' }}>
-                    {Number(p.price || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  </p>
-                  {Array.isArray(p.features) && (
-                    <ul className="mt-4 space-y-2">
-                      {p.features.map((f: string, i: number) => (
-                        <li key={i} style={{ color: 'var(--gl-body)' }}>• {f}</li>
-                      ))}
-                    </ul>
-                  )}
-                  <button onClick={() => scrollTo('calculadora')} className="gl-btn w-full mt-6">Assinar</button>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        <GlassFaq faqs={homeContent?.faqs || []} />
+        {/* Seções ordenáveis pelo painel */}
+        {orderedSections(order, blocks).map(s => (
+          <Fragment key={s.id}>{s.node}</Fragment>
+        ))}
 
         {/* CTA final */}
         <section className="gl-wrap text-center pb-[84px] pt-4">
