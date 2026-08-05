@@ -1,0 +1,501 @@
+/* Tokens do tema "Turbo" — SaaS promocional roxo.
+ *
+ * Identidade monocromática: um único roxo em cinco graus, âmbar só como
+ * acento, fundo #F4F4FA e superfícies brancas. Roboto 900 domina os títulos,
+ * o arredondamento é agressivo (pílulas 25px, cards 20–30px) e há uma única
+ * sombra difusa em todo o tema.
+ *
+ * Cada rede social troca o gradiente do topo e as setas dos carrosséis —
+ * é por isso que os gradientes por rede são tokens, não valores inline.
+ *
+ * Desvios deliberados da referência (todos por acessibilidade):
+ *  - o parágrafo cinza-claro usa #5A5A6E (6.3:1) em vez de um cinza de 3:1;
+ *  - tudo que é interativo ganha anel de foco visível;
+ *  - o acordeão ganha indicador de aberto/fechado (a referência mantém o
+ *    chevron parado, sem nenhum outro sinal);
+ *  - a barra social lateral e o mega-menu são operáveis por teclado;
+ *  - o menu mobile é um diálogo de verdade, com ESC e aria-expanded.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap');
+
+[data-theme='turbo'] {
+  /* tokens globais do projeto */
+  --color-primary: #480bbc;
+  --color-secondary: #5c03ff;
+  --color-accent: #ffae00;
+
+  /* roxo em cinco graus */
+  --tb-brand: #480bbc;
+  --tb-deep: #4906a5;
+  --tb-hover: #6821ca;
+  --tb-light: #6f22d6;
+  --tb-vivid: #5c03ff;
+  --tb-ink: #330177;
+
+  /* âmbar (só acento) */
+  --tb-amber: #ffae00;
+  --tb-amber-2: #ffcf00;
+
+  /* base */
+  --tb-bg: #f4f4fa;
+  --tb-surface: #ffffff;
+  --tb-body: #5a5a6e;   /* parágrafo, contraste 6.3:1 sobre #F4F4FA */
+  --tb-muted: #6f6f83;  /* legendas e rótulos */
+  --tb-line: #e8e8f2;
+  --tb-active: #e1d9f5; /* estado ativo dos cards de etapa */
+  --tb-success: #16a34a;
+  --tb-danger: #d61f5b;
+
+  /* gradiente de marca — 132°, cinco paradas */
+  --tb-grad-brand: linear-gradient(132deg, #6a2bdc 0%, #4b16b0 25%, #511ab9 50%, #3f0e9f 75%, #400ea0 100%);
+  --tb-grad-amber: linear-gradient(132deg, var(--tb-amber-2), var(--tb-amber));
+
+  /* gradiente do topo da página — trocado por rede na página de serviço */
+  --tb-grad-page: var(--tb-grad-brand);
+
+  /* gradientes por rede social */
+  --tb-grad-instagram: linear-gradient(132deg, #833ab4 0%, #c13584 35%, #e1306c 65%, #f77737 100%);
+  --tb-grad-youtube: linear-gradient(132deg, #ff2b2b 0%, #c4302b 100%);
+  --tb-grad-facebook: linear-gradient(132deg, #1877f2 0%, #0b4fae 100%);
+  --tb-grad-twitter: linear-gradient(132deg, #3a3a44 0%, #0f0f14 100%);
+  --tb-grad-twitch: linear-gradient(132deg, #9146ff 0%, #6441a5 100%);
+  --tb-grad-tiktok: linear-gradient(132deg, #25f4ee 0%, #101018 55%, #fe2c55 100%);
+  --tb-grad-linkedin: linear-gradient(132deg, #0a66c2 0%, #004182 100%);
+  --tb-grad-telegram: linear-gradient(132deg, #2aabee 0%, #229ed9 100%);
+  --tb-grad-kwai: linear-gradient(132deg, #ff8a00 0%, #ff5000 100%);
+  --tb-theme-spotify: #1db954;
+
+  /* sombra única em todo o tema */
+  --tb-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+  --tb-shadow-lift: 0 8px 26px rgba(72, 11, 188, 0.22);
+
+  /* raios */
+  --tb-r-pill: 25px;
+  --tb-r-card: 30px;
+  --tb-r-sm: 20px;
+  --tb-r-field: 14px;
+
+  --font-sans: Roboto, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: Roboto, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* O fundo mora no wrapper do tema, nunca no body: assim o painel admin e a
+   área do cliente não herdam nada daqui. */
+[data-theme='turbo'] .tb-page {
+  background: var(--tb-bg);
+  color: var(--tb-body);
+  font-family: var(--font-sans);
+}
+
+/* Faixa de gradiente no topo, atrás do header transparente. */
+[data-theme='turbo'] .tb-hero-grad {
+  background: var(--tb-grad-page);
+  color: #fff;
+}
+
+/* --- primitivos --- */
+
+[data-theme='turbo'] .tb-wrap {
+  width: min(1200px, 100% - 40px);
+  margin-inline: auto;
+}
+@media (max-width: 768px) {
+  [data-theme='turbo'] .tb-wrap { width: min(1200px, 100% - 32px); }
+}
+
+[data-theme='turbo'] .tb-card {
+  background: var(--tb-surface);
+  border-radius: var(--tb-r-card);
+  box-shadow: var(--tb-shadow);
+}
+
+[data-theme='turbo'] .tb-card-sm {
+  background: var(--tb-surface);
+  border-radius: var(--tb-r-sm);
+  box-shadow: var(--tb-shadow);
+}
+
+/* Botão-pílula. O primário é roxo chapado; o gradiente fica para as faixas. */
+[data-theme='turbo'] .tb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 50px;
+  padding: 0 28px;
+  border: 0;
+  border-radius: var(--tb-r-pill);
+  font-family: var(--font-sans);
+  font-weight: 900;
+  font-size: 16px;
+  line-height: 1;
+  color: #fff;
+  background: var(--tb-brand);
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+[data-theme='turbo'] .tb-btn:hover { background: var(--tb-hover); transform: translateY(-2px); }
+[data-theme='turbo'] .tb-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; background: var(--tb-brand); }
+
+/* Ação principal sobre fundo escuro: âmbar, texto roxo-tinta. */
+[data-theme='turbo'] .tb-btn-amber {
+  background: var(--tb-grad-amber);
+  color: var(--tb-ink);
+}
+[data-theme='turbo'] .tb-btn-amber:hover { background: var(--tb-amber); }
+
+/* Ação secundária: contorno roxo sobre branco. */
+[data-theme='turbo'] .tb-btn-ghost {
+  background: #fff;
+  color: var(--tb-brand);
+  box-shadow: inset 0 0 0 2px var(--tb-line);
+}
+[data-theme='turbo'] .tb-btn-ghost:hover { background: #fff; box-shadow: inset 0 0 0 2px var(--tb-brand); }
+
+[data-theme='turbo'] .tb-btn:focus-visible,
+[data-theme='turbo'] .tb-chip:focus-visible,
+[data-theme='turbo'] .tb-field:focus-visible,
+[data-theme='turbo'] .tb-net:focus-visible,
+[data-theme='turbo'] .tb-navlink:focus-visible {
+  outline: 3px solid var(--tb-vivid);
+  outline-offset: 3px;
+}
+
+/* Campo de formulário */
+[data-theme='turbo'] .tb-field {
+  width: 100%;
+  height: 52px;
+  padding: 0 16px;
+  font: inherit;
+  color: var(--tb-ink);
+  background: #fff;
+  border: 1px solid var(--tb-line);
+  border-radius: var(--tb-r-field);
+}
+[data-theme='turbo'] .tb-field:focus { border-color: var(--tb-light); }
+[data-theme='turbo'] textarea.tb-field { height: auto; padding: 14px 16px; }
+
+/* Chip-pílula (filtros, atalhos de quantidade) */
+[data-theme='turbo'] .tb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tb-ink);
+  background: #fff;
+  border: 1px solid var(--tb-line);
+  border-radius: var(--tb-r-pill);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+[data-theme='turbo'] .tb-chip:hover { border-color: var(--tb-light); }
+[data-theme='turbo'] .tb-chip[aria-pressed='true'] {
+  background: var(--tb-brand);
+  border-color: var(--tb-brand);
+  color: #fff;
+}
+
+/* Botão circular de rede social — usado no carrossel seletor e no grid. */
+[data-theme='turbo'] .tb-net {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+[data-theme='turbo'] .tb-net-icon {
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: var(--tb-grad-brand);
+  box-shadow: var(--tb-shadow);
+  transition: transform 0.2s;
+}
+[data-theme='turbo'] .tb-net:hover .tb-net-icon { transform: translateY(-3px); }
+[data-theme='turbo'] .tb-net-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tb-muted);
+}
+[data-theme='turbo'] .tb-net[aria-pressed='true'] .tb-net-icon { box-shadow: 0 0 0 3px var(--tb-brand); }
+[data-theme='turbo'] .tb-net[aria-pressed='true'] .tb-net-label { color: var(--tb-brand); }
+
+/* Rótulo pequeno em caixa alta que abre cada trio da referência. */
+[data-theme='turbo'] .tb-kicker {
+  display: block;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tb-light);
+}
+[data-theme='turbo'] .tb-hero-grad .tb-kicker { color: var(--tb-amber-2); }
+
+/* Título gigante peso 900 — o miolo do trio. */
+[data-theme='turbo'] .tb-title {
+  font-weight: 900;
+  color: var(--tb-ink);
+  font-size: clamp(30px, 4.4vw, 52px);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+}
+[data-theme='turbo'] .tb-hero-grad .tb-title { color: #fff; }
+
+/* Parágrafo cinza centrado — o fecho do trio. */
+[data-theme='turbo'] .tb-lead {
+  color: var(--tb-body);
+  font-size: 17px;
+  line-height: 1.6;
+}
+[data-theme='turbo'] .tb-hero-grad .tb-lead { color: rgba(255, 255, 255, 0.86); }
+
+/* Palavra em âmbar dentro do título. */
+[data-theme='turbo'] .tb-amber-word { color: var(--tb-amber); font-weight: 900; }
+
+/* Carrossel horizontal: rolagem com encaixe, sem barra visível. */
+[data-theme='turbo'] .tb-rail {
+  display: flex;
+  gap: 18px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+}
+[data-theme='turbo'] .tb-rail::-webkit-scrollbar { display: none; }
+[data-theme='turbo'] .tb-rail > * { scroll-snap-align: start; }
+
+/* Seta do carrossel — herda a cor da rede ativa. */
+[data-theme='turbo'] .tb-arrow {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: var(--tb-grad-page);
+  box-shadow: var(--tb-shadow);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+[data-theme='turbo'] .tb-arrow:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* Barra social fixa na borda esquerda. */
+[data-theme='turbo'] .tb-rail-social {
+  position: fixed;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 60px;
+  background: var(--tb-brand);
+  border-radius: 0 20px 20px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 22px 0;
+  z-index: 11;
+}
+[data-theme='turbo'] .tb-rail-social a { color: #fff; opacity: 0.85; transition: opacity 0.2s; }
+[data-theme='turbo'] .tb-rail-social a:hover { opacity: 1; }
+@media (max-width: 767px) {
+  [data-theme='turbo'] .tb-rail-social { display: none; }
+}
+
+/* FAB de atendimento com halo pulsante. */
+[data-theme='turbo'] .tb-fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: var(--tb-brand);
+  box-shadow: var(--tb-shadow-lift);
+  cursor: pointer;
+  z-index: 12;
+}
+[data-theme='turbo'] .tb-fab::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--tb-brand);
+  animation: tb-halo 2.4s ease-out infinite;
+  z-index: -1;
+}
+@keyframes tb-halo {
+  0% { transform: scale(1); opacity: 0.55; }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-theme='turbo'] .tb-fab::before { animation: none; }
+}
+
+/* Janela de atendimento 400x620 aberta pelo FAB. */
+[data-theme='turbo'] .tb-chatbox {
+  position: fixed;
+  right: 24px;
+  bottom: 100px;
+  width: min(400px, calc(100vw - 48px));
+  max-height: min(620px, calc(100vh - 140px));
+  overflow-y: auto;
+  background: #fff;
+  border-radius: var(--tb-r-card);
+  box-shadow: 0 18px 50px rgba(51, 1, 119, 0.25);
+  z-index: 12;
+}
+
+/* --- header --- */
+
+[data-theme='turbo'] .tb-topbar {
+  display: none;
+  height: 30px;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(0, 0, 0, 0.18);
+}
+@media (min-width: 768px) {
+  [data-theme='turbo'] .tb-topbar { display: flex; }
+}
+
+[data-theme='turbo'] .tb-header {
+  position: sticky;
+  top: 0;
+  z-index: 14;
+  background: transparent;
+  transition: background 0.25s, box-shadow 0.25s, height 0.25s;
+}
+[data-theme='turbo'] .tb-header .tb-navlink { color: #fff; }
+[data-theme='turbo'] .tb-header .tb-brandtext { color: #fff; }
+
+/* Estado colado: fundo branco, altura maior, links invertidos. */
+[data-theme='turbo'] .tb-header[data-stuck='true'] {
+  background: #fff;
+  box-shadow: var(--tb-shadow);
+}
+[data-theme='turbo'] .tb-header[data-stuck='true'] .tb-navlink { color: var(--tb-ink); }
+[data-theme='turbo'] .tb-header[data-stuck='true'] .tb-brandtext { color: var(--tb-ink); }
+
+[data-theme='turbo'] .tb-header-inner { height: 76px; display: flex; align-items: center; gap: 24px; }
+@media (min-width: 768px) {
+  [data-theme='turbo'] .tb-header[data-stuck='true'] .tb-header-inner { height: 92px; }
+}
+
+[data-theme='turbo'] .tb-navlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 700;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 8px 0;
+}
+[data-theme='turbo'] .tb-navlink:hover { color: var(--tb-amber-2); }
+[data-theme='turbo'] .tb-header[data-stuck='true'] .tb-navlink:hover { color: var(--tb-brand); }
+
+/* Mega-menu de 930px em duas colunas. */
+[data-theme='turbo'] .tb-mega {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 100%;
+  width: min(930px, calc(100vw - 48px));
+  background: #fff;
+  border-radius: var(--tb-r-card);
+  box-shadow: 0 18px 50px rgba(51, 1, 119, 0.18);
+  padding: 26px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 26px;
+}
+
+[data-theme='turbo'] .tb-mega-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--tb-r-sm);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+[data-theme='turbo'] .tb-mega-item:hover { background: var(--tb-active); }
+
+/* --- conteúdo rico --- */
+
+[data-theme='turbo'] .blog-content { color: var(--tb-body); }
+[data-theme='turbo'] .blog-content h2 { font-size: 28px; font-weight: 900; color: var(--tb-ink); margin: 28px 0 12px; line-height: 1.15; }
+[data-theme='turbo'] .blog-content h3 { font-size: 21px; font-weight: 900; color: var(--tb-ink); margin: 24px 0 10px; }
+[data-theme='turbo'] .blog-content p { margin: 0 0 18px; line-height: 1.65; }
+[data-theme='turbo'] .blog-content ul,
+[data-theme='turbo'] .blog-content ol { margin: 0 0 18px 20px; list-style: revert; }
+[data-theme='turbo'] .blog-content li { margin-bottom: 8px; line-height: 1.65; }
+[data-theme='turbo'] .blog-content a { color: var(--tb-brand); text-decoration: underline; }
+[data-theme='turbo'] .blog-content blockquote {
+  border-left: 4px solid var(--tb-amber);
+  padding-left: 16px;
+  margin: 0 0 18px;
+  color: var(--tb-ink);
+}
+[data-theme='turbo'] .blog-content img { max-width: 100%; border-radius: var(--tb-r-sm); }
+
+/* --- blog: sistema visual próprio ---
+ *
+ * A referência mantém o blog como um segundo sistema, mais moderno que o site:
+ * outra família tipográfica, outro roxo, raio 21 e container largo. Fica
+ * fechado em .tb-blog para não contaminar o resto do tema. */
+
+[data-theme='turbo'] .tb-blog {
+  --tb-blog-purple: #8514cf;
+  --tb-blog-r: 21px;
+  font-family: 'Plus Jakarta Sans', Roboto, ui-sans-serif, system-ui, sans-serif;
+  background: #fff;
+}
+[data-theme='turbo'] .tb-blog .tb-blog-wrap {
+  width: min(1600px, 100% - 48px);
+  margin-inline: auto;
+}
+@media (max-width: 768px) {
+  [data-theme='turbo'] .tb-blog .tb-blog-wrap { width: min(1600px, 100% - 32px); }
+}
+[data-theme='turbo'] .tb-blog .tb-blog-card {
+  background: #fff;
+  border: 1px solid var(--tb-line);
+  border-radius: var(--tb-blog-r);
+  overflow: hidden;
+}
+[data-theme='turbo'] .tb-blog .tb-blog-title {
+  font-weight: 800;
+  color: #16111f;
+  letter-spacing: -0.02em;
+}
+[data-theme='turbo'] .tb-blog .tb-chip[aria-pressed='true'] {
+  background: var(--tb-blog-purple);
+  border-color: var(--tb-blog-purple);
+}
+[data-theme='turbo'] .tb-blog .tb-btn { background: var(--tb-blog-purple); border-radius: var(--tb-blog-r); }
+[data-theme='turbo'] .tb-blog .tb-btn:hover { background: #6f0fae; }
+[data-theme='turbo'] .tb-blog .tb-field { border-radius: var(--tb-blog-r); }
+[data-theme='turbo'] .tb-blog .blog-content a { color: var(--tb-blog-purple); }
