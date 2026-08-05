@@ -45,7 +45,13 @@ export default function TurboHeader({
   const [megaOpen, setMegaOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileNets, setMobileNets] = useState(false);
-  const megaRef = useRef<HTMLDivElement>(null);
+  // Fechar o mega-menu tem um respiro: um trajeto rápido do ponteiro entre o
+  // link e o painel não pode derrubá-lo no meio do caminho.
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelClose = () => { if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; } };
+  const openMega = () => { cancelClose(); setMegaOpen(true); };
+  const scheduleCloseMega = () => { cancelClose(); closeTimer.current = setTimeout(() => setMegaOpen(false), 180); };
+  useEffect(() => cancelClose, []);
 
   // O estado "colado" é o que troca o header transparente pelo branco.
   useEffect(() => {
@@ -103,22 +109,24 @@ export default function TurboHeader({
 
   return (
     <>
-      {/* 1 — topbar */}
-      <div className="tb-topbar">
-        <div className="tb-wrap flex items-center justify-between w-full">
-          <span className="inline-flex items-center gap-1.5">
-            <ShieldCheck className="h-3.5 w-3.5" /> Pagamento seguro · reposição garantida
-          </span>
-          {contactEmail && (
-            <a href={`mailto:${contactEmail}`} className="inline-flex items-center gap-1.5 hover:text-white">
-              <Mail className="h-3.5 w-3.5" /> {contactEmail}
-            </a>
-          )}
-        </div>
-      </div>
-
-      {/* 2/3 — header transparente que vira branco ao colar */}
+      {/* As três camadas moram no mesmo elemento fixo: topbar, barra principal
+          e o estado colado, que esconde a topbar e pinta o fundo de branco. */}
       <header className="tb-header" data-stuck={stuck}>
+        {/* 1 — topbar */}
+        <div className="tb-topbar">
+          <div className="tb-wrap flex items-center justify-between w-full">
+            <span className="inline-flex items-center gap-1.5">
+              <ShieldCheck className="h-3.5 w-3.5" /> Pagamento seguro · reposição garantida
+            </span>
+            {contactEmail && (
+              <a href={`mailto:${contactEmail}`} className="inline-flex items-center gap-1.5 hover:text-white">
+                <Mail className="h-3.5 w-3.5" /> {contactEmail}
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* 2/3 — barra principal, transparente até colar */}
         <div className="tb-wrap tb-header-inner relative">
           <button onClick={() => navigate('/')} className="flex items-center gap-2.5 cursor-pointer" aria-label="Ir para a página inicial">
             {logoUrl && (
@@ -129,17 +137,19 @@ export default function TurboHeader({
             <span className="tb-brandtext text-lg md:text-xl font-black tracking-tight">{brand}</span>
           </button>
 
-          <nav
-            className="hidden lg:flex items-center gap-7 ml-4"
-            onMouseLeave={() => setMegaOpen(false)}
-          >
+          {/* O painel é filho do <nav>: assim o ponteiro continua "dentro" da
+              área do menu ao descer do link para o painel, e o onMouseLeave
+              não dispara no meio do caminho. */}
+          {/* self-stretch: o <nav> ocupa a altura inteira do header, de modo que
+              descer do link até o painel nunca sai da área do menu. */}
+          <nav className="hidden lg:flex items-center gap-7 ml-4 self-stretch" onMouseLeave={scheduleCloseMega}>
             <button
               className="tb-navlink"
               aria-expanded={megaOpen}
               aria-haspopup="true"
-              onMouseEnter={() => setMegaOpen(true)}
-              onFocus={() => setMegaOpen(true)}
-              onClick={() => setMegaOpen(o => !o)}
+              onMouseEnter={openMega}
+              onFocus={openMega}
+              onClick={() => (megaOpen ? setMegaOpen(false) : openMega())}
             >
               Serviços <ChevronDown className="h-4 w-4" />
             </button>
@@ -147,6 +157,27 @@ export default function TurboHeader({
               <button key={l.section} className="tb-navlink" onClick={() => go(l.section)}>{l.label}</button>
             ))}
             <button className="tb-navlink" onClick={() => navigate('/blog')}>Blog</button>
+
+            {megaOpen && (
+              <div className="tb-mega grid" onMouseEnter={cancelClose}>
+                {netList.map(p => (
+                  <button key={p.id} className="tb-mega-item" onClick={() => pickPlatform(p.id)}>
+                    <span
+                      className="w-11 h-11 rounded-full grid place-items-center text-white shrink-0"
+                      style={{ background: platformGradient(p.id) }}
+                    >
+                      <PlatformIcon id={p.id} className="h-5 w-5" />
+                    </span>
+                    <span>
+                      <span className="block font-black" style={{ color: 'var(--tb-ink)' }}>{p.name}</span>
+                      <span className="block text-sm" style={{ color: 'var(--tb-muted)' }}>
+                        Seguidores, curtidas e visualizações
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
@@ -164,34 +195,11 @@ export default function TurboHeader({
             </button>
           </div>
 
-          {/* Mega-menu de 930px, duas colunas */}
-          {megaOpen && (
-            <div
-              ref={megaRef}
-              className="tb-mega hidden lg:grid"
-              onMouseEnter={() => setMegaOpen(true)}
-              onMouseLeave={() => setMegaOpen(false)}
-            >
-              {netList.map(p => (
-                <button key={p.id} className="tb-mega-item" onClick={() => pickPlatform(p.id)}>
-                  <span
-                    className="w-11 h-11 rounded-full grid place-items-center text-white shrink-0"
-                    style={{ background: platformGradient(p.id) }}
-                  >
-                    <PlatformIcon id={p.id} className="h-5 w-5" />
-                  </span>
-                  <span>
-                    <span className="block font-black" style={{ color: 'var(--tb-ink)' }}>{p.name}</span>
-                    <span className="block text-sm" style={{ color: 'var(--tb-muted)' }}>
-                      Seguidores, curtidas e visualizações
-                    </span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       </header>
+
+      {/* Repõe no fluxo a altura que o header fixo deixou de ocupar. */}
+      <div className="tb-header-spacer" aria-hidden="true" />
 
       {/* Menu de tela cheia (mobile) */}
       {menuOpen && (

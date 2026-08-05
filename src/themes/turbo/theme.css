@@ -376,12 +376,23 @@
   [data-theme='turbo'] .tb-topbar { display: flex; }
 }
 
+/* Fixo, não sticky: um elemento sticky só gruda dentro do bloco que o contém,
+   e o header vive dentro da faixa de gradiente do topo — passado o herói, ele
+   sumia junto com a faixa. Fixo, ele acompanha a página inteira. O espaçador
+   abaixo repõe a altura que o header deixa de ocupar no fluxo. */
 [data-theme='turbo'] .tb-header {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 14;
   background: transparent;
-  transition: background 0.25s, box-shadow 0.25s, height 0.25s;
+  transition: background 0.25s, box-shadow 0.25s;
+}
+
+[data-theme='turbo'] .tb-header-spacer { height: 76px; }
+@media (min-width: 768px) {
+  [data-theme='turbo'] .tb-header-spacer { height: 106px; }
 }
 [data-theme='turbo'] .tb-header .tb-navlink { color: #fff; }
 [data-theme='turbo'] .tb-header .tb-brandtext { color: #fff; }
@@ -391,6 +402,8 @@
   background: #fff;
   box-shadow: var(--tb-shadow);
 }
+/* Colado, o header vira a barra branca compacta: a topbar promocional sai. */
+[data-theme='turbo'] .tb-header[data-stuck='true'] .tb-topbar { display: none; }
 [data-theme='turbo'] .tb-header[data-stuck='true'] .tb-navlink { color: var(--tb-ink); }
 [data-theme='turbo'] .tb-header[data-stuck='true'] .tb-brandtext { color: var(--tb-ink); }
 
@@ -413,12 +426,15 @@
 [data-theme='turbo'] .tb-navlink:hover { color: var(--tb-amber-2); }
 [data-theme='turbo'] .tb-header[data-stuck='true'] .tb-navlink:hover { color: var(--tb-brand); }
 
-/* Mega-menu de 930px em duas colunas. */
+/* Mega-menu de 930px em duas colunas.
+ *
+ * Ancorado à esquerda, embaixo do próprio gatilho: centralizado, o painel
+ * nascia longe do link "Serviços" e o ponteiro tinha de atravessar meio header
+ * para alcançá-lo. */
 [data-theme='turbo'] .tb-mega {
   position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  top: 100%;
+  left: 0;
+  top: calc(100% + 12px);
   width: min(930px, calc(100vw - 48px));
   background: #fff;
   border-radius: var(--tb-r-card);
@@ -427,6 +443,17 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px 26px;
+}
+
+/* Ponte invisível sobre o respiro de 12px. Sem ela o ponteiro sai da área do
+   menu no caminho entre o link e o painel, e o menu fecha antes de chegar. */
+[data-theme='turbo'] .tb-mega::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -14px;
+  height: 14px;
 }
 
 [data-theme='turbo'] .tb-mega-item {
