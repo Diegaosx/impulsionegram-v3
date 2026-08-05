@@ -513,6 +513,21 @@ export async function patchOrderData(id: string, patch: Record<string, any>): Pr
   await pool.query(`UPDATE orders SET data = data || $2::jsonb WHERE id = $1`, [id, JSON.stringify(patch)]);
 }
 
+// Pedidos ainda em aberto: tudo que não está entregue nem cancelado.
+//
+// A comparação é feita sobre o texto do status porque o histórico tem apelidos
+// para o mesmo estado ('pendente', 'aguardando', 'aprovado', …) — o mesmo motivo
+// que existe o mapa em src/utils/orderStatus.ts. Aqui só precisamos excluir os
+// dois estados terminais, e qualquer apelido deles cai no mesmo LIKE.
+export async function listOpenOrders(): Promise<any[]> {
+  const r = await pool.query(
+    `SELECT data FROM orders
+     WHERE lower(coalesce(data->>'status','')) NOT IN ('entregue', 'cancelado')
+     ORDER BY seq ASC`
+  );
+  return r.rows.map((x) => x.data);
+}
+
 // Orders that belong to a given account — matched by linked accountId or by the
 // account's e-mail (for orders placed before the account existed / guest flow).
 export async function listOrdersForAccount(accountId: string, email: string): Promise<any[]> {
@@ -1141,6 +1156,12 @@ export interface IntegrationSettings {
   wooviAppId: string;
   smmApiUrl: string;
   smmApiKey: string;
+  // De quantas em quantas horas a varredura consulta o painel SMM.
+  smmSyncHours: string;
+  // Depois de quantas horas um pedido NÃO PAGO é cancelado sozinho. Pedidos
+  // pagos nunca entram nessa regra: quem pagou espera a entrega, que no painel
+  // SMM costuma levar dias.
+  orderExpireHours: string;
   emailProvider: 'smtp' | 'resend';
   resendApiKey: string;
   smtpHost: string;
@@ -1164,6 +1185,8 @@ export const DEFAULT_INTEGRATIONS: IntegrationSettings = {
   wooviAppId: '',
   smmApiUrl: '',
   smmApiKey: '',
+  smmSyncHours: '6',
+  orderExpireHours: '6',
   emailProvider: 'smtp',
   resendApiKey: '',
   smtpHost: '',

@@ -75,6 +75,27 @@ export function isSmmCompleted(status: string): boolean {
   return /complete/i.test(status);
 }
 
+/**
+ * Traduz o status do painel SMM para o nosso vocabulário.
+ *
+ * O padrão PerfectPanel (JAP e compatíveis) devolve: Pending, In progress,
+ * Processing, Completed, Partial, Canceled e Refunded. Os quatro últimos são
+ * terminais — o painel não mexe mais neles, então parar de consultá-los é o que
+ * evita perseguir um pedido para sempre.
+ *
+ * "Partial" é entrega parcial encerrada: o provedor entregou parte e devolveu o
+ * resto. Contamos como entregue, porque do lado dele acabou; quanto faltou fica
+ * registrado em smmRemains, visível no painel.
+ *
+ * Devolve null quando o pedido ainda está em andamento.
+ */
+export function smmStatusToOrderStatus(status: string): 'entregue' | 'cancelado' | null {
+  const s = String(status || '').toLowerCase();
+  if (/complet|partial/.test(s)) return 'entregue';
+  if (/cancel|refund/.test(s)) return 'cancelado';
+  return null;
+}
+
 // Build a best-effort target URL for the SMM panel from the platform + handle.
 export function buildTargetLink(platform: string, handleOrUrl: string): string {
   const v = String(handleOrUrl || '').trim();
