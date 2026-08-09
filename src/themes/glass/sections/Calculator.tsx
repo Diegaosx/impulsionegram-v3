@@ -17,6 +17,7 @@ import { useServiceSelection } from '../../../site/hooks/useServiceSelection';
 import { useCheckout } from '../../../site/hooks/useCheckout';
 import { useProfilePreview } from '../../../site/hooks/useProfilePreview';
 import OrderConfirmation from '../../../components/OrderConfirmation';
+import TargetHint from '../../../components/TargetHint';
 import { Minus, Plus, X, Loader2, AlertCircle } from 'lucide-react';
 
 interface CalculatorProps {
@@ -255,9 +256,10 @@ export default function GlassCalculator({
 
               {checkout.step === 'info' && (
                 <form onSubmit={checkout.submitInfo} className="space-y-4 mt-5">
-                  <Field label="Perfil de destino (@)" error={fieldErrors.username}>
-                    <input className="gl-field" value={fields.username} placeholder="@seuperfil"
+                  <Field label="Perfil de destino" error={fieldErrors.username}>
+                    <input className="gl-field" value={fields.username} placeholder="seuperfil"
                       onChange={e => checkout.setField('username', e.target.value)} />
+                    <TargetHint result={checkout.normalizedProfile} raw={fields.username} />
                   </Field>
 
                   {preview.status === 'found' && preview.profile && (
@@ -286,6 +288,7 @@ export default function GlassCalculator({
                   {needsPostUrl && (
                     <Field label="Link da publicação" error={fieldErrors.postUrl}>
                       <input className="gl-field" value={fields.postUrl} onChange={e => checkout.setField('postUrl', e.target.value)} />
+                      <TargetHint result={checkout.normalizedPost} raw={fields.postUrl} />
                     </Field>
                   )}
                   <Field label="Cupom (opcional)">

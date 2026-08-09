@@ -22,6 +22,12 @@ export interface ServiceItem {
   deliverySpeed: string;
   benefits: string[];
   smmServiceId?: string; // ID do serviço no painel SMM (entrega automática)
+  // Formato do campo "link" exigido por ESTE serviço no painel SMM. No catálogo
+  // do JAP convivem os dois: a maioria dos serviços documenta a URL completa do
+  // perfil, mas há vários de seguidores marcados "USERNAME ONLY" (um deles diz
+  // literalmente "put username only without '@'"). Mandar no formato errado faz
+  // o pedido entrar, ser cobrado e nunca entregar.
+  smmLinkFormat?: 'url' | 'username';
   packages?: ServicePackage[]; // fixed-price packages (preferred over the slider)
   slug?: string; // URL slug for the dedicated service page (/servico/:slug)
   pageTitle?: string; // H1 of the service page (can be longer than the card name); slug is derived from it

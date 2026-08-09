@@ -71,9 +71,10 @@ import {
   deleteContactMessage
 } from './db';
 import { isMailerConfigured, mailerMissingConfig, sendMail, renderEmailLayout, renderOrderIssueEmail } from './mailer';
+import { normalizeOrderTarget, orderTargetLink } from './src/utils/socialTarget';
 import { isMercadoPagoConfigured, getPaymentStatus } from './mercadopago';
 import { isPixConfigured, createPix, getPixStatus, getActiveProvider } from './payments';
-import { isSmmConfigured, smmAddOrder, smmOrderStatus, smmBalance, smmServices, isSmmCompleted, smmStatusToOrderStatus, buildTargetLink } from './smm';
+import { isSmmConfigured, smmAddOrder, smmOrderStatus, smmBalance, smmServices, isSmmCompleted, smmStatusToOrderStatus } from './smm';
 import { isRapidApiConfigured, fetchInstagramProfile, isProxyableImageUrl } from './rapidapi';
 import { uploadToR2, isR2Configured } from './r2';
 import { verifyRecaptcha } from './recaptcha';
@@ -424,9 +425,19 @@ async function dispatchOrderToSmm(order: any): Promise<void> {
     console.warn(`SMM: sem smmServiceId para ${order.platform}/${order.serviceType} (pedido ${order.id}).`);
     return;
   }
-  const link = order.postUrl && String(order.postUrl).trim()
-    ? String(order.postUrl).trim()
-    : buildTargetLink(order.platform, order.username);
+  // Um único caminho para montar o link, que também recupera os pedidos antigos
+  // gravados com "@" ou já corrompidos pelo stripLinks. O formato (URL completa
+  // ou nome de usuário puro) é o que o serviço declarou no painel.
+  const link = orderTargetLink(order, svc?.smmLinkFormat === 'username' ? 'username' : 'url');
+  if (!link) {
+    // Melhor não despachar do que despachar um palpite: o painel cobraria o
+    // pedido e não entregaria.
+    console.warn(`SMM: alvo do pedido ${order.id} não pôde ser interpretado; despacho abortado.`);
+    await patchOrderData(order.id, {
+      smmError: 'Não foi possível interpretar o perfil/link deste pedido. Corrija o pedido e reenvie.'
+    });
+    return;
+  }
   try {
     const r = await smmAddOrder(integ.smmApiUrl, integ.smmApiKey, {
       service: String(serviceId),
@@ -843,6 +854,22 @@ app.post('/api/my/orders', async (req, res) => {
       return res.status(400).json({ error: 'Serviço, quantidade e preço são obrigatórios.' });
     }
 
+    // O alvo é conferido aqui também, não só no navegador: um pedido criado com
+    // link quebrado só se descobre quando a entrega falha, e aí o cliente já foi
+    // embora. Mesmo módulo dos dois lados, para não divergirem.
+    const normalizedTarget = normalizeOrderTarget({
+      platform: String(b.platform || ''),
+      serviceType: String(b.serviceType || ''),
+      profile: String(b.targetProfile || ''),
+      postUrl: String(b.postUrl || '')
+    });
+    if (!normalizedTarget.profile.ok) {
+      return res.status(400).json({ error: normalizedTarget.profile.error || 'Perfil de destino inválido.' });
+    }
+    if (normalizedTarget.kind === 'post' && normalizedTarget.post && !normalizedTarget.post.ok) {
+      return res.status(400).json({ error: normalizedTarget.post.error || 'Link da publicação inválido.' });
+    }
+
     // Apply a valid flash-offer coupon server-side (authoritative price).
     let couponCode = '';
     let couponDiscountPercent = 0;
@@ -859,7 +886,13 @@ app.post('/api/my/orders', async (req, res) => {
     const newOrder = {
       id: `TRX-${Math.floor(100000 + Math.random() * 900000)}`,
       accountId: account.id,
-      username: stripLinks(String(b.targetProfile || account.name || '')).slice(0, 120),
+      // Normaliza em vez de passar por stripLinks(): aquela função é anti-spam
+      // de comentário e troca pontos e barras por espaços, o que transformava um
+      // perfil colado do "compartilhar" em texto quebrado
+      // ("@instagram com fulano?igsh=...") e destruía a entrega automática.
+      username: normalizedTarget.profile.ok
+        ? normalizedTarget.profile.value
+        : String(b.targetProfile || account.name || '').replace(/[<>"]/g, '').trim().slice(0, 120),
       platform: String(b.platform || ''),
       serviceType: String(b.serviceType || ''),
       serviceLabel: String(b.serviceLabel || ''),
@@ -868,7 +901,9 @@ app.post('/api/my/orders', async (req, res) => {
       couponCode,
       couponDiscountPercent,
       paymentMethod: b.paymentMethod === 'Card' ? 'Card' : 'PIX',
-      postUrl: String(b.postUrl || '').replace(/[<>"]/g, '').trim().slice(0, 300),
+      postUrl: normalizedTarget.post?.ok
+        ? normalizedTarget.post.value
+        : String(b.postUrl || '').replace(/[<>"]/g, '').trim().slice(0, 300),
       email: account.email,
       phone: account.phone,
       status: 'aguardando_pagamento',
