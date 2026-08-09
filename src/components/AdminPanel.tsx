@@ -21,6 +21,7 @@ import { setAppTimezone, formatDateTime } from '../utils/datetime';
 import { orderStatusInfo } from '../utils/orderStatus';
 import BlogAdmin from './BlogAdmin';
 import TestimonialsAdmin from './TestimonialsAdmin';
+import ServiceReviewsAdmin from './ServiceReviewsAdmin';
 import TicketsAdmin from './TicketsAdmin';
 import {
   X, Plus, Pencil, Trash2, RotateCcw, LayoutDashboard, ShoppingBag, Star, Package,
@@ -1103,6 +1104,8 @@ export default function AdminPanel({
 
   // Modal de gerenciamento do catálogo (redes ou tipos).
   const [catalogModal, setCatalogModal] = useState<'platforms' | 'types' | null>(null);
+  // Qual lista a aba de depoimentos está mostrando.
+  const [reviewsView, setReviewsView] = useState<'testimonials' | 'services'>('testimonials');
   const [catalogDraft, setCatalogDraft] = useState<Catalog>(DEFAULT_CATALOG);
   const [catalogSaving, setCatalogSaving] = useState(false);
 
@@ -3024,9 +3027,45 @@ export default function AdminPanel({
               <BlogAdmin triggerSuccess={triggerSuccess} triggerError={triggerError} />
             )}
 
-            {/* =================== TAB: DEPOIMENTOS =================== */}
+            {/* =================== TAB: DEPOIMENTOS E AVALIAÇÕES =================== */}
             {activeTab === 'testimonials' && (
-              <TestimonialsAdmin triggerSuccess={triggerSuccess} triggerError={triggerError} />
+              <div className="space-y-6">
+                {/* Duas listas na mesma aba: é a mesma tarefa de moderação. O
+                    que muda é a origem — o depoimento vem do site, a avaliação
+                    vem de um pedido entregue e volta para a página do serviço. */}
+                <div className="flex flex-wrap gap-1.5 bg-slate-100 p-1 rounded-xl w-fit">
+                  <button
+                    onClick={() => setReviewsView('testimonials')}
+                    className={`text-xs font-bold px-4 py-2 rounded-lg transition-colors cursor-pointer ${
+                      reviewsView === 'testimonials' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Depoimentos da home
+                  </button>
+                  <button
+                    onClick={() => setReviewsView('services')}
+                    className={`text-xs font-bold px-4 py-2 rounded-lg transition-colors cursor-pointer ${
+                      reviewsView === 'services' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Avaliações de serviços
+                  </button>
+                </div>
+
+                {reviewsView === 'testimonials' ? (
+                  <TestimonialsAdmin triggerSuccess={triggerSuccess} triggerError={triggerError} />
+                ) : (
+                  <>
+                    <div>
+                      <h3 className="font-display font-black text-xl text-slate-900">Avaliações de Serviços</h3>
+                      <p className="text-slate-500 text-xs font-semibold">
+                        Escritas por quem comprou, uma por pedido entregue. Depois de publicadas, aparecem na página do serviço.
+                      </p>
+                    </div>
+                    <ServiceReviewsAdmin services={services} triggerSuccess={triggerSuccess} triggerError={triggerError} />
+                  </>
+                )}
+              </div>
             )}
 
             {/* =================== TAB: MENSAGENS =================== */}

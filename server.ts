@@ -73,6 +73,8 @@ import {
   listContactMessages,
   createTicket, listTicketsByAccount, listAllTickets, getTicket, addTicketReply,
   updateTicket, markTicketRead, deleteTicket, countRecentTicketsByAccount,
+  addServiceReview, listApprovedReviews, reviewSummary, listReviewsByAccount,
+  listAllReviews, updateServiceReview, deleteServiceReview,
   updateContactMessageStatus,
   deleteContactMessage
 } from './db';
@@ -80,6 +82,8 @@ import { isMailerConfigured, mailerMissingConfig, sendMail, renderEmailLayout, r
 import { normalizeOrderTarget, orderTargetLink } from './src/utils/socialTarget';
 import { normalizeKeywords } from './src/utils/keywords';
 import { TICKET_LIMITS, isTicketClosed } from './src/utils/tickets';
+// Mesmo normalizador do cliente: pedidos antigos gravaram "Entregue" e afins.
+import { orderStatusInfo } from './src/utils/orderStatus';
 import { isMercadoPagoConfigured, getPaymentStatus } from './mercadopago';
 import { isPixConfigured, createPix, getPixStatus, getActiveProvider } from './payments';
 import { isSmmConfigured, smmAddOrder, smmOrderStatus, smmBalance, smmServices, isSmmCompleted, smmStatusToOrderStatus } from './smm';
@@ -124,6 +128,7 @@ const PUBLIC_API: { method: string; re: RegExp }[] = [
   { method: 'POST', re: /^\/auth\/register\/?$/ },
   { method: 'POST', re: /^\/auth\/check\/?$/ },
   { method: 'GET', re: /^\/services\/?$/ },
+  { method: 'GET', re: /^\/services\/[^/]+\/reviews\/?$/ },
   { method: 'GET', re: /^\/plans\/?$/ },
   { method: 'GET', re: /^\/home\/?$/ },
   { method: 'GET', re: /^\/settings\/?$/ },
@@ -955,6 +960,10 @@ app.post('/api/my/orders', async (req, res) => {
         : String(b.targetProfile || account.name || '').replace(/[<>"]/g, '').trim().slice(0, 120),
       platform: String(b.platform || ''),
       serviceType: String(b.serviceType || ''),
+      // Guardado para a avaliação saber a que página do serviço ela pertence.
+      // Pedidos antigos não têm o campo; nesse caso o servidor reencontra o
+      // serviço pelo trio rede + tipo + nome na hora de avaliar.
+      serviceId: String(b.serviceId || ''),
       serviceLabel: String(b.serviceLabel || ''),
       quantity,
       price: Number(price.toFixed(2)),
@@ -1776,6 +1785,118 @@ app.put('/api/tickets/:id', async (req, res) => {
 app.delete('/api/tickets/:id', async (req, res) => {
   try {
     await deleteTicket(String(req.params.id));
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
+// --- Avaliações de serviço ---
+//
+// Só quem comprou e recebeu avalia, uma vez por pedido. É o que faz a nota da
+// página do serviço significar alguma coisa: cada estrela veio de uma entrega.
+
+// Reencontra o serviço de um pedido antigo, que foi gravado sem serviceId.
+function servicoDoPedido(order: any, services: any[]): string {
+  if (order.serviceId) return String(order.serviceId);
+  const igual = services.find((s: any) =>
+    s.platform === order.platform &&
+    s.type === order.serviceType &&
+    String(s.label || '').trim() === String(order.serviceLabel || '').trim()
+  );
+  return igual?.id || '';
+}
+
+// Público: as avaliações publicadas de um serviço (usado na página dele).
+app.get('/api/services/:id/reviews', async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const [reviews, summary] = await Promise.all([listApprovedReviews(id), reviewSummary(id)]);
+    res.json({ reviews, ...summary });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// As minhas avaliações (para o botão saber se o pedido já foi avaliado).
+app.get('/api/my/reviews', async (req, res) => {
+  try {
+    const payload = getPayload(req)!;
+    res.json(await listReviewsByAccount(payload.sub));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Avaliar um pedido entregue.
+app.post('/api/my/reviews', async (req, res) => {
+  try {
+    const payload = getPayload(req)!;
+    const account = await getAccountById(payload.sub);
+    if (!account || account.blocked) return res.status(403).json({ error: 'Conta indisponível.' });
+
+    const orderId = String(req.body?.orderId || '');
+    const comment = String(req.body?.comment || '').trim();
+    if (!orderId || !comment) return res.status(400).json({ error: 'Informe o pedido e o seu comentário.' });
+
+    const order = await getOrderById(orderId);
+    // Mesma resposta para pedido inexistente e pedido de outra pessoa.
+    const meu = order && (order.accountId === account.id ||
+      String(order.email || '').toLowerCase() === account.email.toLowerCase());
+    if (!order || !meu) return res.status(404).json({ error: 'Pedido não encontrado.' });
+
+    if (orderStatusInfo(String(order.status || '')).key !== 'entregue') {
+      return res.status(400).json({ error: 'Só é possível avaliar um pedido já entregue.' });
+    }
+
+    const db = await readDB();
+    const serviceId = servicoDoPedido(order, db.services || []);
+    if (!serviceId) {
+      return res.status(400).json({ error: 'Não foi possível identificar o serviço deste pedido.' });
+    }
+
+    const created = await addServiceReview({
+      serviceId,
+      orderId: order.id,
+      accountId: account.id,
+      authorName: account.name || account.email,
+      rating: req.body?.rating,
+      comment
+    });
+    if (created.ok === false) return res.status(409).json({ error: created.error });
+    res.json({ success: true, review: created.review });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- Avaliações: moderação (admin) ---
+
+app.get('/api/reviews', async (req, res) => {
+  try {
+    res.json(await listAllReviews());
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/reviews/:id', async (req, res) => {
+  try {
+    const review = await updateServiceReview(String(req.params.id), {
+      status: req.body?.status,
+      reply: req.body?.reply
+    });
+    if (!review) return res.status(404).json({ error: 'Avaliação não encontrada.' });
+    res.json({ success: true, review });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/reviews/:id', async (req, res) => {
+  try {
+    await deleteServiceReview(String(req.params.id));
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });

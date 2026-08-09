@@ -16,6 +16,7 @@ import { ThemeServiceProps } from '../../types';
 import { platformName as catalogPlatformName, platformsWithServices, serviceTypeLabel, useCatalog } from '../../../utils/catalog';
 import { serviceSlug } from '../../../utils/storage';
 import { applyBasicSEO, setJsonLd } from '../../../utils/seo';
+import ServiceReviews from '../../../components/ServiceReviews';
 import { sellablePackages } from '../../../site/pricing';
 import TurboHeader from '../chrome/Header';
 import TurboFooter from '../chrome/Footer';
@@ -202,6 +203,11 @@ export default function TurboServiceView({
           title={(service.faqTitle || '').trim() || undefined}
           subtitle={(service.faqSubtitle || '').trim() || undefined}
         />
+
+        {/* Avaliações de quem comprou este serviço. */}
+        <section className="tb-wrap pb-12 md:pb-16">
+          <ServiceReviews serviceId={service.id} cardClassName="tb-card" />
+        </section>
       </main>
 
       <TurboFooter siteName={siteName} logoUrl={logoUrl} company={company} onNavigate={goHome} />
