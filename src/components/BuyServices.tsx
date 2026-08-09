@@ -4,6 +4,8 @@ import { SOCIAL_PLATFORMS } from '../data';
 import { AdminOrder, createMyOrder } from '../utils/storage';
 import { useOffer } from '../utils/useOffer';
 import { computePrice, sellablePackages } from '../site/pricing';
+import { normalizeProfile, normalizePostUrl, targetKindFor } from '../utils/socialTarget';
+import TargetHint from './TargetHint';
 import { ShoppingCart, AlertCircle, Minus, Plus, Sparkles } from 'lucide-react';
 
 interface BuyServicesProps {
@@ -81,7 +83,11 @@ export default function BuyServices({ services, defaultProfile, onCreated }: Buy
   }, [quantity, activeService, selectedPackage, activePackages]);
 
   const money = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  const needsPostUrl = activeService && activeService.type !== 'followers';
+  // "Precisa de publicação?" passa a vir do vocabulário compartilhado, e não de
+  // "type !== followers": stories, por exemplo, é entregue no perfil.
+  const needsPostUrl = !!activeService && targetKindFor(activeService.type) === 'post';
+  const normalizedProfile = normalizeProfile(platform, targetProfile);
+  const normalizedPost = needsPostUrl ? normalizePostUrl(platform, postUrl) : null;
 
   const setQty = (v: number) => {
     if (!activeService) return setQuantity(v);
@@ -90,8 +96,11 @@ export default function BuyServices({ services, defaultProfile, onCreated }: Buy
 
   const submit = async () => {
     setError('');
-    if (!targetProfile.trim()) { setError('Informe o perfil/@ de destino.'); return; }
-    if (needsPostUrl && !postUrl.trim()) { setError('Informe o link da publicação para curtidas/visualizações.'); return; }
+    // Mesma normalização do checkout público e do servidor: o painel SMM só
+    // aceita o alvo limpo, e um link colado do "compartilhar" quebraria a
+    // entrega automática.
+    if (!normalizedProfile.ok) { setError(normalizedProfile.error || 'Informe o perfil de destino.'); return; }
+    if (needsPostUrl && normalizedPost && !normalizedPost.ok) { setError(normalizedPost.error || 'Informe o link da publicação.'); return; }
     if (!activeService || pricing.final <= 0) { setError('Selecione um serviço válido.'); return; }
     setSubmitting(true);
     const res = await createMyOrder({
@@ -101,8 +110,8 @@ export default function BuyServices({ services, defaultProfile, onCreated }: Buy
       quantity,
       price: pricing.final,
       paymentMethod,
-      targetProfile: targetProfile.trim(),
-      postUrl: postUrl.trim(),
+      targetProfile: normalizedProfile.value,
+      postUrl: normalizedPost?.ok ? normalizedPost.value : postUrl.trim(),
       couponCode: couponValid ? coupon.trim() : ''
     });
     setSubmitting(false);
@@ -216,14 +225,16 @@ export default function BuyServices({ services, defaultProfile, onCreated }: Buy
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Perfil/@ de destino</label>
-          <input type="text" value={targetProfile} onChange={(e) => setTargetProfile(e.target.value)} placeholder="@seu_perfil"
+          <input type="text" value={targetProfile} onChange={(e) => setTargetProfile(e.target.value)} placeholder="seu_perfil"
             className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white text-slate-800" />
+          <TargetHint result={normalizedProfile} raw={targetProfile} />
         </div>
         {needsPostUrl && (
           <div className="space-y-1.5">
             <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Link da publicação</label>
-            <input type="url" value={postUrl} onChange={(e) => setPostUrl(e.target.value)} placeholder="https://instagram.com/p/..."
+            <input type="text" value={postUrl} onChange={(e) => setPostUrl(e.target.value)} placeholder="https://instagram.com/p/..."
               className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white text-slate-800" />
+            <TargetHint result={normalizedPost} raw={postUrl} />
           </div>
         )}
       </div>

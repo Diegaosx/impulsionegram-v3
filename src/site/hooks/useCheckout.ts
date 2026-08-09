@@ -19,6 +19,7 @@ import {
   checkAccountExists, createMyOrder, registerAccount
 } from '../../utils/storage';
 import { useOffer } from '../../utils/useOffer';
+import { normalizeProfile, normalizePostUrl, targetKindFor } from '../../utils/socialTarget';
 
 export type CheckoutStep = 'info' | 'account' | 'login_prompt' | 'processing' | 'done';
 
@@ -122,10 +123,17 @@ export function useCheckout({
     };
   }, [isOpen]);
 
-  const targetProfile = useCallback(() => {
-    const handle = fields.username.trim();
-    return handle.startsWith('@') || !handle ? handle : '@' + handle;
-  }, [fields.username]);
+  // O alvo é normalizado aqui, não montado com um "@" na frente. O cliente cola
+  // o que o botão "compartilhar" do aplicativo gera, e é isto que transforma
+  // isso no nome de usuário puro que o painel SMM consegue usar.
+  const normalizedProfile = normalizeProfile(platform, fields.username);
+  const needsPost = targetKindFor(serviceType) === 'post';
+  const normalizedPost = needsPost ? normalizePostUrl(platform, fields.postUrl) : null;
+
+  const targetProfile = useCallback(
+    () => normalizeProfile(platform, fields.username).value || fields.username.trim(),
+    [platform, fields.username]
+  );
 
   const createOrder = useCallback(async () => {
     setStep('processing');
@@ -138,7 +146,7 @@ export function useCheckout({
       price,
       paymentMethod,
       targetProfile: targetProfile(),
-      postUrl: fields.postUrl.trim(),
+      postUrl: normalizedPost?.ok ? normalizedPost.value : fields.postUrl.trim(),
       couponCode: couponValid ? fields.coupon.trim() : ''
     });
     if (res.ok && res.order) {
@@ -150,15 +158,19 @@ export function useCheckout({
       setStep(currentUser ? 'info' : 'account');
     }
   }, [platform, serviceType, service, quantity, price, targetProfile,
-      fields.postUrl, fields.coupon, couponValid, currentUser, onOrderCreated]);
+      fields.postUrl, fields.coupon, couponValid, currentUser, onOrderCreated,
+      normalizedPost?.ok, normalizedPost?.value]);
 
   // Step 1 → validate profile/contact, then branch on account existence.
   const submitInfo = useCallback(async (e?: { preventDefault?: () => void }) => {
     e?.preventDefault?.();
     const errors: Record<string, string> = {};
 
-    if (!fields.username.trim()) {
-      errors.username = 'Informe o perfil/@ de destino';
+    // O perfil precisa ser reconhecível ANTES de virar pedido: um link colado
+    // do "compartilhar" que passasse daqui quebraria a entrega automática lá na
+    // frente, quando já não há mais o cliente para corrigir.
+    if (!normalizedProfile.ok) {
+      errors.username = normalizedProfile.error || 'Informe o perfil de destino';
     } else if (isTargetProfilePrivate?.()) {
       errors.username = 'O perfil informado está privado. Deixe-o público para receber a entrega.';
     }
@@ -171,8 +183,8 @@ export function useCheckout({
     if (!fields.phone.replace(/\D/g, '').trim() || fields.phone.replace(/\D/g, '').length < 10) {
       errors.phone = 'Insira um telefone com DDD';
     }
-    if (service && service.type !== 'followers' && !fields.postUrl.trim()) {
-      errors.postUrl = 'O link da publicação é obrigatório para curtidas/visualizações';
+    if (needsPost && normalizedPost && !normalizedPost.ok) {
+      errors.postUrl = normalizedPost.error || 'Informe o link da publicação';
     }
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -190,7 +202,9 @@ export function useCheckout({
     setStep('processing');
     const check = await checkAccountExists(fields.email.trim(), fields.phone.trim());
     setStep(check.exists ? 'login_prompt' : 'account');
-  }, [fields, service, currentUser, isTargetProfilePrivate, createOrder]);
+  }, [fields, service, currentUser, isTargetProfilePrivate, createOrder,
+      needsPost, normalizedProfile.ok, normalizedProfile.error,
+      normalizedPost?.ok, normalizedPost?.error]);
 
   // Guest creates the account (password) then the order.
   const submitAccount = useCallback(async (e?: { preventDefault?: () => void }) => {
@@ -225,6 +239,8 @@ export function useCheckout({
     offer, offerActive, offerRemaining, couponValid, couponPercent,
     // actions
     submitInfo, submitAccount,
-    targetProfile
+    targetProfile,
+    // Alvo normalizado, para o tema mostrar ao cliente o que será usado de fato.
+    normalizedProfile, normalizedPost, needsPost
   };
 }

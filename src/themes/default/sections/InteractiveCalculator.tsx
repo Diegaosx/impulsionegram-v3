@@ -6,6 +6,7 @@ import { AuthUser } from '../../../utils/storage';
 import { ServiceItem } from '../../../types';
 import { useServiceSelection } from '../../../site/hooks/useServiceSelection';
 import { useCheckout } from '../../../site/hooks/useCheckout';
+import TargetHint from '../../../components/TargetHint';
 import { useProfilePreview } from '../../../site/hooks/useProfilePreview';
 import OrderConfirmation from '../../../components/OrderConfirmation';
 import { TikTokIcon, KwaiIcon } from '../../../components/icons/BrandIcons';
@@ -582,20 +583,23 @@ export default function InteractiveCalculator({
                   )}
 
                   <div>
-                    <label className="text-xs font-black uppercase text-slate-500 block mb-1">Perfil/@ de destino</label>
+                    <label className="text-xs font-black uppercase text-slate-500 block mb-1">Perfil de destino</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><User className="h-4 w-4" /></div>
-                      <input type="text" placeholder="@seu_perfil" value={username} onChange={(e) => setUsername(e.target.value)}
+                      <input type="text" placeholder="seu_perfil" value={username} onChange={(e) => setUsername(e.target.value)}
                         className={`w-full bg-slate-50 border ${formErrors.username ? 'border-red-500' : 'border-slate-200'} text-sm rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-600 font-semibold text-slate-800`} id="checkout-username-input" />
                     </div>
                     {formErrors.username ? (
                       <p className="text-red-500 text-[11px] font-bold mt-1">{formErrors.username}</p>
                     ) : (
-                      <p className="text-[10px] font-semibold text-slate-400 mt-1">Sua conta deve estar pública. Nunca pedimos sua senha da rede social!</p>
+                      <>
+                        <TargetHint result={checkout.normalizedProfile} raw={username} />
+                        <p className="text-[10px] font-semibold text-slate-400 mt-1">Sua conta deve estar pública. Nunca pedimos sua senha da rede social!</p>
+                      </>
                     )}
                   </div>
 
-                  {activeService && activeService.type !== 'followers' && (
+                  {checkout.needsPost && (
                     <div>
                       <label className="text-xs font-black uppercase text-slate-500 block mb-1">Link da publicação</label>
                       <div className="relative">
@@ -603,7 +607,9 @@ export default function InteractiveCalculator({
                         <input type="url" placeholder="https://www.instagram.com/p/..." value={postUrl} onChange={(e) => setPostUrl(e.target.value)}
                           className={`w-full bg-slate-50 border ${formErrors.postUrl ? 'border-red-500' : 'border-slate-200'} text-sm rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-600 font-semibold text-slate-800`} id="checkout-post-url-input" />
                       </div>
-                      {formErrors.postUrl && <p className="text-red-500 text-[11px] font-bold mt-1">{formErrors.postUrl}</p>}
+                      {formErrors.postUrl
+                        ? <p className="text-red-500 text-[11px] font-bold mt-1">{formErrors.postUrl}</p>
+                        : <TargetHint result={checkout.normalizedPost} raw={postUrl} />}
                     </div>
                   )}
 

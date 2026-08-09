@@ -96,19 +96,11 @@ export function smmStatusToOrderStatus(status: string): 'entregue' | 'cancelado'
   return null;
 }
 
-// Build a best-effort target URL for the SMM panel from the platform + handle.
-export function buildTargetLink(platform: string, handleOrUrl: string): string {
-  const v = String(handleOrUrl || '').trim();
-  if (/^https?:\/\//i.test(v)) return v;
-  const handle = v.replace(/^@/, '');
-  if (!handle) return v;
-  switch (String(platform || '').toLowerCase()) {
-    case 'instagram': return `https://instagram.com/${handle}`;
-    case 'tiktok': return `https://tiktok.com/@${handle}`;
-    case 'youtube': return `https://youtube.com/@${handle}`;
-    case 'facebook': return `https://facebook.com/${handle}`;
-    case 'twitter': return `https://twitter.com/${handle}`;
-    case 'kwai': return `https://kwai.com/@${handle}`;
-    default: return v;
-  }
-}
+// O link do painel é montado por orderTargetLink(), em src/utils/socialTarget.ts.
+//
+// A função que existia aqui concatenava o valor cru numa URL, então um perfil
+// colado do "compartilhar" virava
+// "https://instagram.com/https://www.instagram.com/fulano?igsh=..." e a entrega
+// nunca acontecia. O módulo novo interpreta o que o cliente digitou (com @, como
+// URL, com parâmetros de rastreamento) e é o mesmo usado pelo navegador, para as
+// duas pontas não divergirem.

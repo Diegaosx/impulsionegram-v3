@@ -630,6 +630,7 @@ export default function AdminPanel({
     deliverySpeed: 'Início imediato, entrega natural',
     benefits: ['Perfis reais', 'Recarga garantida', 'Sem precisar de senha'],
     smmServiceId: '',
+    smmLinkFormat: 'url' as 'url' | 'username',
     packages: [],
     slug: '',
     pageTitle: '',
@@ -692,6 +693,7 @@ export default function AdminPanel({
       deliverySpeed: service.deliverySpeed,
       benefits: [...service.benefits],
       smmServiceId: service.smmServiceId || '',
+      smmLinkFormat: service.smmLinkFormat || 'url',
       packages: Array.isArray(service.packages) ? service.packages.map(p => ({ ...p })) : [],
       slug: service.slug || '',
       // Existing services without a page title default to the card name.
@@ -714,6 +716,7 @@ export default function AdminPanel({
       deliverySpeed: 'Entrega rápida (5-15 min)',
       benefits: ['Perfis de alta qualidade', 'Prevenção contra quedas', 'Totalmente seguro'],
       smmServiceId: '',
+      smmLinkFormat: 'url',
       packages: [],
       slug: '',
       pageTitle: '',
@@ -754,6 +757,7 @@ export default function AdminPanel({
       deliverySpeed: serviceForm.deliverySpeed,
       benefits: serviceForm.benefits,
       smmServiceId: serviceForm.smmServiceId,
+      smmLinkFormat: serviceForm.smmLinkFormat || 'url',
       packages: cleanPackages
     };
 
@@ -1594,7 +1598,7 @@ export default function AdminPanel({
                       </div>
 
                       {/* SMM service id (auto delivery) */}
-                      <div className="space-y-1 md:col-span-2">
+                      <div className="space-y-1">
                         <label className="text-xs font-black text-slate-500 uppercase block">ID do Serviço no Painel SMM</label>
                         <input
                           type="text"
@@ -1604,6 +1608,22 @@ export default function AdminPanel({
                           className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800"
                         />
                         <span className="text-[10px] text-slate-400 block font-medium">Usado para enviar o pedido ao painel SMM e entregar automaticamente após o pagamento.</span>
+                      </div>
+
+                      {/* Formato do link exigido por este serviço no painel */}
+                      <div className="space-y-1">
+                        <label className="text-xs font-black text-slate-500 uppercase block">Formato do link no painel</label>
+                        <select
+                          value={serviceForm.smmLinkFormat || 'url'}
+                          onChange={(e) => setServiceForm(prev => ({ ...prev, smmLinkFormat: e.target.value as 'url' | 'username' }))}
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800"
+                        >
+                          <option value="url">URL completa do perfil (padrão)</option>
+                          <option value="username">Somente o nome de usuário</option>
+                        </select>
+                        <span className="text-[10px] text-slate-400 block font-medium">
+                          Confira a descrição do serviço no painel: alguns exigem "username only", sem @ e sem link.
+                        </span>
                       </div>
                     </div>
 
