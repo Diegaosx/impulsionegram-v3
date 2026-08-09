@@ -6,7 +6,7 @@ import {
   CompanySettings, fetchCompanySettings, saveCompanySettingsToServer,
   CookieConsentRecord, fetchCookieConsents,
   AnalyticsSettings, EMPTY_ANALYTICS_SETTINGS, fetchAnalyticsSettings, saveAnalyticsSettingsToServer,
-  fetchSmmBalance, fetchSmmServices, runSmmSync, fetchOrders,
+  fetchSmmBalance, fetchSmmServices, runSmmSync, fetchOrders, reportOrderIssue, sendTestEmail,
   AdminAccount, fetchAdminAccounts, createAdminAccount, updateAdminAccount,
   resetAdminAccountPassword, deleteAdminAccount,
   OfferSettings, fetchOfferAdmin, saveOffer,
@@ -177,6 +177,21 @@ export default function AdminPanel({
     if (r.error) triggerError(r.error);
     setSmmServicesList(r.services.slice(0, 200));
     setSmmLoading(false);
+  };
+
+  // Teste da configuração de e-mail.
+  const [testEmailTo, setTestEmailTo] = useState('');
+  const [testEmailSending, setTestEmailSending] = useState(false);
+  const [testEmailResult, setTestEmailResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const handleTestEmail = async () => {
+    setTestEmailSending(true);
+    setTestEmailResult(null);
+    const r = await sendTestEmail(testEmailTo.trim() || undefined);
+    setTestEmailResult(r.ok
+      ? { ok: true, message: `E-mail de teste enviado para ${r.to}. Confira a caixa de entrada (e o spam).` }
+      : { ok: false, message: r.error || 'Falha ao enviar.' });
+    setTestEmailSending(false);
   };
 
   // Varredura manual dos pedidos em aberto (a automática roda sozinha).
@@ -970,10 +985,85 @@ export default function AdminPanel({
     { value: 'processando', label: 'Processando' },
     { value: 'pago', label: 'Pagamento aprovado' },
     { value: 'entregue', label: 'Entregue' },
-    { value: 'cancelado', label: 'Cancelado' }
+    { value: 'cancelado', label: 'Cancelado' },
+    { value: 'outro', label: 'Outro' }
   ];
 
+  // Motivos prontos para o status "Outro". Clicar preenche o título; o campo
+  // continua livre para escrever qualquer outra coisa.
+  const ISSUE_PRESETS: { title: string; details: string }[] = [
+    {
+      title: 'Perfil privado',
+      details: 'Seu perfil está como privado e o serviço não consegue ser entregue nele. Deixe o perfil público e nos avise para retomarmos a entrega.'
+    },
+    {
+      title: 'Link errado',
+      details: 'O link informado no pedido não abre a publicação correta. Confira e nos envie o link certo para concluirmos a entrega.'
+    },
+    {
+      title: 'Perfil não encontrado',
+      details: 'Não localizamos o @ informado. Verifique se o nome de usuário está correto (sem espaços) e nos avise.'
+    },
+    {
+      title: 'Publicação removida',
+      details: 'A publicação informada não está mais disponível. Envie o link de outra publicação para seguirmos com o pedido.'
+    },
+    {
+      title: 'Quantidade indisponível',
+      details: 'A quantidade pedida está temporariamente indisponível para este serviço. Entre em contato para ajustarmos o pedido.'
+    }
+  ];
+
+  // Modal do status "Outro".
+  const [issueOrder, setIssueOrder] = useState<AdminOrder | null>(null);
+  const [issueTitle, setIssueTitle] = useState('');
+  const [issueDetails, setIssueDetails] = useState('');
+  const [issueNotify, setIssueNotify] = useState(true);
+  const [issueSaving, setIssueSaving] = useState(false);
+
+  const openIssueModal = (order: AdminOrder) => {
+    setIssueOrder(order);
+    setIssueTitle(order.issueTitle || '');
+    setIssueDetails(order.issueDetails || '');
+    setIssueNotify(true);
+    setIssueSaving(false);
+  };
+
+  const applyIssuePreset = (preset: { title: string; details: string }) => {
+    setIssueTitle(preset.title);
+    // Só sugere a descrição quando o campo ainda está vazio: um texto que o
+    // admin escreveu não pode ser sobrescrito por um clique.
+    setIssueDetails(prev => (prev.trim() ? prev : preset.details));
+  };
+
+  const handleSaveIssue = async () => {
+    if (!issueOrder) return;
+    const title = issueTitle.trim();
+    if (!title) { triggerError('Informe o motivo do problema.'); return; }
+
+    setIssueSaving(true);
+    const r = await reportOrderIssue(issueOrder.id, { title, details: issueDetails.trim(), notify: issueNotify });
+    setIssueSaving(false);
+
+    if (!r.ok) { triggerError(r.error || 'Falha ao registrar o motivo.'); return; }
+
+    // O motivo foi gravado mesmo se o e-mail falhar — o aviso precisa dizer as
+    // duas coisas para o admin não achar que perdeu o registro.
+    onUpdateOrders(await fetchOrders());
+    setIssueOrder(null);
+    if (!issueNotify) triggerSuccess(`Pedido #${issueOrder.id}: motivo registrado (sem aviso ao cliente).`);
+    else if (r.emailSent) triggerSuccess(`Pedido #${issueOrder.id}: motivo registrado e e-mail enviado ao cliente.`);
+    else triggerError(`Motivo registrado, mas o e-mail não saiu: ${r.emailError || 'falha desconhecida'}`);
+  };
+
   const handleChangeOrderStatus = (id: string, nextStatus: string) => {
+    // "Outro" exige um motivo: abre o modal e só grava ao salvar, para o select
+    // não ficar num estado que o servidor não conhece.
+    if (nextStatus === 'outro') {
+      const order = orders.find(o => o.id === id);
+      if (order) openIssueModal(order);
+      return;
+    }
     const updated = orders.map(o => o.id === id ? { ...o, status: nextStatus } : o);
     onUpdateOrders(updated);
     triggerSuccess(`Pedido #${id} alterado para: ${ORDER_STATUSES.find(s => s.value === nextStatus)?.label || nextStatus}`);
@@ -2268,6 +2358,29 @@ export default function AdminPanel({
                                     <option key={s.value} value={s.value}>{s.label}</option>
                                   ))}
                                 </select>
+
+                                {/* Motivo do "Outro". Escolher "Outro" de novo
+                                    não dispara o onChange do select, então o
+                                    caminho para reabrir/editar é este resumo. */}
+                                {order.status === 'outro' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openIssueModal(order)}
+                                    title="Editar o motivo e reenviar o aviso"
+                                    className="mt-1.5 block text-left max-w-[190px] cursor-pointer group"
+                                  >
+                                    <span className="text-[10px] font-black text-orange-700 group-hover:underline block truncate">
+                                      {order.issueTitle || 'Sem motivo registrado'}
+                                    </span>
+                                    <span className="text-[9px] font-bold text-slate-400 block">
+                                      {order.issueNotifiedAt
+                                        ? `Cliente avisado em ${formatDateTime(order.issueNotifiedAt)}`
+                                        : order.issueNotifyError
+                                          ? 'E-mail não enviado'
+                                          : 'Cliente não avisado'}
+                                    </span>
+                                  </button>
+                                )}
                               </td>
                               <td className="p-4">
                                 <div className="flex items-center justify-end gap-1">
@@ -3348,6 +3461,36 @@ export default function AdminPanel({
                             className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white" />
                         </div>
                       </div>
+
+                      {/* Teste de envio */}
+                      <div className="pt-2 border-t border-slate-100 space-y-2.5">
+                        <p className="text-[10px] text-slate-400 font-semibold">
+                          Salve as configurações acima antes de testar. O e-mail de teste sai pelo provedor selecionado.
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            type="email"
+                            value={testEmailTo}
+                            onChange={(e) => setTestEmailTo(e.target.value)}
+                            placeholder="destinatário do teste (opcional)"
+                            className="flex-1 min-w-[200px] bg-slate-50 border border-slate-200 text-xs font-mono rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                          />
+                          <button type="button" onClick={handleTestEmail} disabled={testEmailSending}
+                            className="text-xs font-bold text-slate-600 hover:text-primary border border-slate-200 bg-white rounded-lg px-3 py-2.5 transition-colors disabled:opacity-60 flex items-center gap-1.5 shrink-0">
+                            <Mail className="h-3.5 w-3.5" />
+                            {testEmailSending ? 'Enviando...' : 'Enviar e-mail de teste'}
+                          </button>
+                        </div>
+                        {testEmailResult && (
+                          <p className={`text-[11px] font-semibold rounded-lg p-2.5 border ${
+                            testEmailResult.ok
+                              ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                              : 'text-red-700 bg-red-50 border-red-200'
+                          }`}>
+                            {testEmailResult.message}
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     {/* reCAPTCHA v3 CARD */}
@@ -3990,6 +4133,118 @@ export default function AdminPanel({
               <button onClick={() => setPwdResetAccount(null)} className="text-xs font-bold text-slate-500 hover:text-slate-700 px-4 py-2.5 rounded-lg">Cancelar</button>
               <button onClick={handleResetPassword} className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg px-4 py-2.5 flex items-center gap-1.5">
                 <KeyRound className="h-4 w-4" /> Redefinir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL DO STATUS "OUTRO" (motivo do problema) ===== */}
+      {issueOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !issueSaving && setIssueOrder(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+              <div>
+                <h3 className="font-display font-black text-slate-900">
+                  Qual foi o problema? <span className="font-mono text-sm text-slate-400">#{issueOrder.id}</span>
+                </h3>
+                <p className="text-[11px] text-slate-400 font-semibold">
+                  O cliente recebe este aviso por e-mail e vê o motivo no painel dele.
+                </p>
+              </div>
+              <button onClick={() => setIssueOrder(null)} disabled={issueSaving} className="text-slate-400 hover:text-slate-700 disabled:opacity-40">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 overflow-y-auto">
+              <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-[11px] font-semibold text-slate-500">
+                <span className="text-slate-800">{issueOrder.serviceLabel || 'Pedido'}</span>
+                {issueOrder.username ? ` • ${issueOrder.username}` : ''}
+                {issueOrder.email ? ` • ${issueOrder.email}` : ' • sem e-mail cadastrado'}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Motivos frequentes</label>
+                <div className="flex flex-wrap gap-2">
+                  {ISSUE_PRESETS.map(p => (
+                    <button
+                      key={p.title}
+                      type="button"
+                      onClick={() => applyIssuePreset(p)}
+                      aria-pressed={issueTitle === p.title}
+                      className={`text-[11px] font-bold rounded-full px-3 py-1.5 border transition-colors cursor-pointer ${
+                        issueTitle === p.title
+                          ? 'bg-primary text-white border-primary'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-primary hover:text-primary'
+                      }`}
+                    >
+                      {p.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Motivo (título)</label>
+                <input
+                  value={issueTitle}
+                  onChange={(e) => setIssueTitle(e.target.value)}
+                  maxLength={140}
+                  placeholder="Ex: Perfil privado"
+                  autoFocus
+                  className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800"
+                />
+                <span className="text-[10px] text-slate-400 block font-medium">
+                  Vira o assunto do e-mail. Clique num motivo acima ou escreva o seu.
+                </span>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Descrição (opcional)</label>
+                <textarea
+                  value={issueDetails}
+                  onChange={(e) => setIssueDetails(e.target.value)}
+                  rows={4}
+                  maxLength={2000}
+                  placeholder="Explique o que o cliente precisa fazer para resolver."
+                  className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-lg py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800 resize-y"
+                />
+              </div>
+
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={issueNotify}
+                  onChange={(e) => setIssueNotify(e.target.checked)}
+                  className="h-4 w-4 mt-0.5 rounded text-primary focus:ring-primary border-slate-300"
+                />
+                <span className="text-xs font-bold text-slate-700">
+                  Avisar o cliente por e-mail
+                  <span className="block text-[10px] font-semibold text-slate-400">
+                    {issueOrder.email
+                      ? `Enviado para ${issueOrder.email}.`
+                      : 'Este pedido não tem e-mail cadastrado — o motivo será apenas registrado.'}
+                  </span>
+                </span>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100 shrink-0">
+              <button
+                onClick={() => setIssueOrder(null)}
+                disabled={issueSaving}
+                className="text-xs font-bold text-slate-500 hover:text-slate-800 px-4 py-2.5 rounded-lg transition-colors disabled:opacity-40 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveIssue}
+                disabled={issueSaving || !issueTitle.trim()}
+                className="bg-primary hover:bg-purple-700 disabled:bg-purple-300 text-white font-bold text-xs py-2.5 px-5 rounded-lg flex items-center gap-2 transition-all cursor-pointer disabled:cursor-not-allowed"
+              >
+                <Save className="h-4 w-4" />
+                {issueSaving ? 'Salvando...' : 'Salvar e avisar'}
               </button>
             </div>
           </div>

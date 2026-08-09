@@ -29,8 +29,15 @@ export default function OrderConfirmation({ order, onGoToOrders, onBuyMore }: Or
   const autoTried = useRef(false);
 
   const hasPix = !!pix.qrCodeBase64 || !!pix.qrCode;
-  const paid = status === 'pago' || status === 'entregue';
   const st = orderStatusInfo(status);
+  // Normalizado, não comparado ao texto cru: o histórico tem 'Aprovado',
+  // 'Entregue' e outros apelidos que a comparação literal não reconhecia.
+  const paid = st.key === 'pago' || st.key === 'entregue';
+  // Pedido encerrado sem pagamento pendente: não faz sentido gerar PIX nem
+  // ficar consultando o pagamento. Sem isso, um pedido cancelado (ou marcado
+  // como "Outro") que já tinha QR ficava em polling de 5 em 5 segundos para
+  // sempre, e ainda oferecia "Gerar novo código".
+  const blocked = st.key === 'outro' || st.key === 'cancelado';
 
   const generate = useCallback(async (regenerate: boolean) => {
     setGenerating(true);
@@ -47,15 +54,15 @@ export default function OrderConfirmation({ order, onGoToOrders, onBuyMore }: Or
   // Auto-generate the PIX QR once when the order is a pending PIX order without one.
   useEffect(() => {
     if (autoTried.current) return;
-    if (isPix && !paid && !hasPix) {
+    if (isPix && !paid && !blocked && !hasPix) {
       autoTried.current = true;
       generate(false);
     }
-  }, [isPix, paid, hasPix, generate]);
+  }, [isPix, paid, blocked, hasPix, generate]);
 
   // Poll the payment status while a PIX charge is pending.
   useEffect(() => {
-    if (!hasPix || paid) return;
+    if (!hasPix || paid || blocked) return;
     let active = true;
     const check = async () => {
       const res = await fetchOrderPayment(order.id);
@@ -82,25 +89,48 @@ export default function OrderConfirmation({ order, onGoToOrders, onBuyMore }: Or
         {paid ? <CheckCircle2 className="h-8 w-8" /> : <ShoppingBag className="h-7 w-7" />}
       </div>
       <div>
-        <h1 className="font-display font-black text-2xl text-slate-900">{paid ? 'Pagamento confirmado!' : 'Pedido criado!'}</h1>
+        <h1 className="font-display font-black text-2xl text-slate-900">
+          {paid ? 'Pagamento confirmado!' : blocked ? st.label : 'Pedido criado!'}
+        </h1>
         <p className="text-slate-500 text-sm font-semibold mt-1">
           {paid
             ? 'Recebemos seu pagamento. Seu pedido entrou na fila de entrega.'
-            : (hasPix
-                ? 'Pague o PIX abaixo para concluir. A confirmação é automática.'
-                : 'Seu pedido foi registrado. Assim que o pagamento for confirmado, ele entra na fila de entrega.')}
+            : blocked
+              ? 'Este pedido está parado. Veja o motivo abaixo.'
+              : (hasPix
+                  ? 'Pague o PIX abaixo para concluir. A confirmação é automática.'
+                  : 'Seu pedido foi registrado. Assim que o pagamento for confirmado, ele entra na fila de entrega.')}
         </p>
       </div>
 
+      {/* Motivo do problema, quando o pedido foi marcado como "Outro" */}
+      {st.key === 'outro' && order.issueTitle && (
+        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 text-left">
+          <p className="text-sm font-black text-orange-800 flex items-center gap-1.5">
+            <AlertTriangle className="h-4 w-4 shrink-0" /> {order.issueTitle}
+          </p>
+          {order.issueDetails && (
+            <p className="text-xs font-semibold text-orange-700 mt-1.5 whitespace-pre-line leading-relaxed">
+              {order.issueDetails}
+            </p>
+          )}
+        </div>
+      )}
+      {st.key === 'cancelado' && order.cancelReason && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-left">
+          <p className="text-xs font-bold text-red-700">{order.cancelReason}</p>
+        </div>
+      )}
+
       {/* Generating spinner while the QR is being created */}
-      {isPix && !paid && !hasPix && generating && (
+      {isPix && !paid && !blocked && !hasPix && generating && (
         <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 flex items-center justify-center gap-2 text-slate-600 text-sm font-bold">
           <Loader2 className="h-5 w-5 animate-spin text-primary" /> Gerando código PIX...
         </div>
       )}
 
       {/* PIX payment block (only while pending) */}
-      {hasPix && !paid && (
+      {hasPix && !paid && !blocked && (
         <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
           <div className="flex items-center justify-center gap-2 text-slate-700 text-xs font-black uppercase tracking-wider">
             <QrCode className="h-4 w-4 text-primary" /> Pague com PIX
@@ -138,7 +168,7 @@ export default function OrderConfirmation({ order, onGoToOrders, onBuyMore }: Or
       )}
 
       {/* PIX could not be generated automatically: show the error + retry */}
-      {isPix && !paid && !hasPix && !generating && (
+      {isPix && !paid && !blocked && !hasPix && !generating && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 space-y-3 text-left">
           <div className="flex items-start gap-2 text-amber-800 text-xs font-semibold">
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
@@ -192,7 +222,7 @@ export default function OrderConfirmation({ order, onGoToOrders, onBuyMore }: Or
         </div>
       </div>
 
-      {!isPix && !paid && (
+      {!isPix && !paid && !blocked && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 text-xs font-semibold flex items-start gap-2 text-left">
           <Clock className="h-4 w-4 shrink-0 mt-0.5" />
           <span>Pagamento via {order.paymentMethod || 'PIX'}: a confirmação é feita pela nossa equipe. Você verá o status atualizado em "Meus Pedidos".</span>

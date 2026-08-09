@@ -62,6 +62,7 @@ import {
   countAdmins,
   listOrdersForAccount,
   listOpenOrders,
+  TERMINAL_ORDER_STATUSES,
   getOrderById,
   patchOrderData,
   addContactMessage,
@@ -69,6 +70,7 @@ import {
   updateContactMessageStatus,
   deleteContactMessage
 } from './db';
+import { isMailerConfigured, mailerMissingConfig, sendMail, renderEmailLayout, renderOrderIssueEmail } from './mailer';
 import { isMercadoPagoConfigured, getPaymentStatus } from './mercadopago';
 import { isPixConfigured, createPix, getPixStatus, getActiveProvider } from './payments';
 import { isSmmConfigured, smmAddOrder, smmOrderStatus, smmBalance, smmServices, isSmmCompleted, smmStatusToOrderStatus, buildTargetLink } from './smm';
@@ -445,7 +447,7 @@ async function dispatchOrderToSmm(order: any): Promise<void> {
 async function refreshSmmStatus(order: any, integ?: any): Promise<{ status: string; ok: boolean }> {
   const unchanged = { status: order?.status, ok: true };
   if (!order || !order.smmOrderId) return unchanged;
-  if (order.status === 'entregue' || order.status === 'cancelado') return unchanged;
+  if (TERMINAL_ORDER_STATUSES.includes(String(order.status || '').toLowerCase())) return unchanged;
   const cfg = integ || (await getIntegrations());
   if (!isSmmConfigured(cfg.smmApiUrl, cfg.smmApiKey)) return unchanged;
   try {
@@ -470,7 +472,8 @@ async function refreshSmmStatus(order: any, integ?: any): Promise<{ status: stri
 function isUnpaidOrder(order: any): boolean {
   if (order?.smmOrderId) return false;
   const status = String(order?.status || '').toLowerCase();
-  if (['pago', 'aprovado', 'pagamento_aprovado', 'entregue', 'processando'].includes(status)) return false;
+  if (TERMINAL_ORDER_STATUSES.includes(status)) return false;
+  if (['pago', 'aprovado', 'pagamento_aprovado', 'processando'].includes(status)) return false;
   const pay = String(order?.paymentStatus || '').toLowerCase();
   if (['approved', 'paid', 'completed', 'aprovado'].includes(pay)) return false;
   return true;
@@ -573,7 +576,12 @@ function scheduleOrderSync(): void {
 async function handleOrderPaid(orderId: string): Promise<void> {
   const order = await getOrderById(orderId);
   if (!order) return;
-  if (order.status !== 'pago' && order.status !== 'entregue') {
+  // "Outro" e "entregue" são decisões já tomadas (pelo admin ou pelo painel);
+  // um webhook atrasado não pode desfazê-las. "Cancelado" continua podendo
+  // virar "pago": ali o pagamento realmente chegou depois.
+  const status = String(order.status || '').toLowerCase();
+  if (status === 'outro') return;
+  if (status !== 'pago' && status !== 'entregue') {
     await patchOrderData(orderId, { status: 'pago', paymentStatus: 'approved' });
   }
   await dispatchOrderToSmm({ ...order, status: 'pago' });
@@ -689,6 +697,108 @@ app.get('/api/smm/balance', async (req, res) => {
       return res.status(400).json({ error: 'Configure a URL e a API Key do painel SMM em Integrações.' });
     }
     res.json(await smmBalance(integ.smmApiUrl, integ.smmApiKey));
+  } catch (e: any) {
+    res.status(502).json({ error: e.message });
+  }
+});
+
+// --- Status "Outro": problema no pedido, com aviso ao cliente ---
+
+// Marca o pedido com o motivo do problema e avisa o cliente por e-mail.
+//
+// O envio é best-effort de propósito: o motivo tem de ficar registrado mesmo
+// que o e-mail falhe (chave errada, servidor fora do ar), senão o admin marca
+// o pedido, vê um erro e fica sem saber se o status foi salvo. A resposta diz
+// exatamente o que aconteceu com o e-mail.
+app.post('/api/orders/:id/issue', async (req, res) => {
+  try {
+    const id = String(req.params.id || '');
+    const title = String(req.body?.title || '').trim().slice(0, 140);
+    const details = String(req.body?.details || '').trim().slice(0, 2000);
+    const notify = req.body?.notify !== false;
+
+    if (!title) return res.status(400).json({ error: 'Informe o motivo.' });
+
+    const order = await getOrderById(id);
+    if (!order) return res.status(404).json({ error: 'Pedido não encontrado.' });
+
+    const now = new Date().toISOString();
+    const patch: any = {
+      status: 'outro',
+      issueTitle: title,
+      issueDetails: details,
+      issueAt: now,
+      issueNotifiedAt: '',
+      issueNotifyError: ''
+    };
+
+    let emailSent = false;
+    let emailError = '';
+
+    if (notify) {
+      const integ = await getIntegrations();
+      const to = String(order.email || '').trim();
+      if (!to) {
+        emailError = 'O pedido não tem e-mail cadastrado.';
+      } else if (!isMailerConfigured(integ)) {
+        emailError = mailerMissingConfig(integ);
+      } else {
+        try {
+          const [general, company] = await Promise.all([getGeneralSettings(), getCompanySettings()]);
+          const brand = general.siteName || 'ImpulsioneGram';
+          const { subject, html } = renderOrderIssueEmail({
+            brand,
+            orderId: id,
+            serviceLabel: order.serviceLabel,
+            targetProfile: order.username,
+            reasonTitle: title,
+            reasonDetails: details,
+            supportEmail: company.contactEmail,
+            supportWhatsapp: company.whatsappDisplay
+          });
+          await sendMail(integ, { to, subject, html });
+          emailSent = true;
+          patch.issueNotifiedAt = now;
+        } catch (e: any) {
+          emailError = String(e?.message || e);
+          console.error('Aviso de problema no pedido: falha ao enviar e-mail:', emailError);
+        }
+      }
+      patch.issueNotifyError = emailError;
+    }
+
+    await patchOrderData(id, patch);
+    res.json({ success: true, order: await getOrderById(id), emailSent, emailError });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Envia um e-mail de teste para conferir a configuração sem depender de um
+// pedido real.
+app.post('/api/email/test', async (req, res) => {
+  try {
+    const integ = await getIntegrations();
+    if (!isMailerConfigured(integ)) {
+      return res.status(400).json({ error: mailerMissingConfig(integ) });
+    }
+    const to = String(req.body?.to || '').trim() || String(integ.smtpFromEmail || '').trim();
+    const general = await getGeneralSettings();
+    const brand = general.siteName || 'ImpulsioneGram';
+    await sendMail(integ, {
+      to,
+      subject: `Teste de envio — ${brand}`,
+      html: renderEmailLayout({
+        brand,
+        title: 'Configuração de e-mail funcionando',
+        bodyHtml: `<p style="margin:0;font-size:15px;line-height:1.6;color:#33324a;">
+          Se você está lendo isto, o envio de e-mail do painel está configurado corretamente
+          (provedor: <strong>${integ.emailProvider === 'resend' ? 'Resend' : 'SMTP'}</strong>).
+        </p>`,
+        footerNote: 'Mensagem de teste enviada pelo painel administrativo.'
+      })
+    });
+    res.json({ success: true, to });
   } catch (e: any) {
     res.status(502).json({ error: e.message });
   }
@@ -822,14 +932,20 @@ app.get('/api/my/orders/:id/payment', async (req, res) => {
     if (!owns) return res.status(403).json({ error: 'Acesso negado.' });
 
     let status = order.status;
-    if (order.mpPaymentId && order.status !== 'pago' && order.status !== 'entregue') {
+    // Não consulta o provedor para pedido já encerrado (entregue, cancelado ou
+    // marcado como "outro"): nada do que voltar de lá mudaria o status.
+    const settled = TERMINAL_ORDER_STATUSES.includes(String(order.status || '').toLowerCase());
+    if (order.mpPaymentId && !settled && order.status !== 'pago') {
       const integ = await getIntegrations();
       if (isPixConfigured(integ)) {
         try {
           const pay = await getPixStatus(integ, order.mpPaymentId);
           if (pay.status === 'approved') {
             await handleOrderPaid(order.id);
-            status = 'pago';
+            // Relê em vez de assumir "pago": handleOrderPaid recusa mexer num
+            // pedido marcado como "outro", e responder paid:true ali seria
+            // mentir para a tela do cliente.
+            status = (await getOrderById(order.id))?.status || order.status;
           } else if (pay.status === 'cancelled' || pay.status === 'rejected') {
             await patchOrderData(order.id, { paymentStatus: pay.status });
           } else {
@@ -870,6 +986,16 @@ app.post('/api/my/orders/:id/pix', async (req, res) => {
 
     if (order.status === 'pago' || order.status === 'entregue') {
       return res.status(400).json({ error: 'Este pedido já foi pago.' });
+    }
+    // Um pedido marcado como "Outro" está travado num problema que o cliente
+    // precisa resolver antes: gerar um PIX novo aqui só criaria cobrança para
+    // um pedido que não vai ser entregue como está.
+    if (order.status === 'outro') {
+      return res.status(400).json({
+        error: order.issueTitle
+          ? `Este pedido está aguardando um ajuste: ${order.issueTitle}. Fale com o suporte para retomá-lo.`
+          : 'Este pedido está aguardando um ajuste. Fale com o suporte para retomá-lo.'
+      });
     }
 
     // Reuse an existing valid QR unless the client explicitly asks for a new one.
