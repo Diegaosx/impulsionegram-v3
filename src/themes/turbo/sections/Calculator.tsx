@@ -11,7 +11,7 @@
 import { ReactNode, useEffect, useRef } from 'react';
 import { AuthUser } from '../../../utils/storage';
 import { ServiceItem, SocialPlatform } from '../../../types';
-import { SOCIAL_PLATFORMS } from '../../../data';
+import { platformsWithServices, useCatalog } from '../../../utils/catalog';
 import { useServiceSelection } from '../../../site/hooks/useServiceSelection';
 import { useCheckout } from '../../../site/hooks/useCheckout';
 import { useProfilePreview } from '../../../site/hooks/useProfilePreview';
@@ -76,8 +76,11 @@ export default function TurboCalculator({
   }, [checkout.isOpen, onClose]);
 
   const { fields, fieldErrors } = checkout;
-  const availablePlatforms = SOCIAL_PLATFORMS.filter(p => (services || []).some(s => s.platform === p.id));
-  const needsPostUrl = activeService && activeService.type !== 'followers';
+  // Redes vêm do catálogo do painel: uma rede nova aparece sem tocar em código.
+  const catalog = useCatalog();
+  const availablePlatforms = platformsWithServices(catalog, services || []);
+  // Vem do catálogo, via useCheckout: um tipo novo já aparece certo.
+  const needsPostUrl = checkout.needsPost;
 
   const stepLabel = (n: number) => (restrictServiceId ? `${n - 2}` : `${n}`);
 

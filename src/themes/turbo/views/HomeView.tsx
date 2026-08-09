@@ -11,7 +11,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ThemeHomeProps } from '../../types';
 import { orderedSections, useHomeLayout } from '../../../site/homeSections';
 import { ServiceItem, SocialPlatform } from '../../../types';
-import { SOCIAL_PLATFORMS } from '../../../data';
+import { platformsWithServices, useCatalog } from '../../../utils/catalog';
 import { TestimonialItem, fetchTestimonials } from '../../../utils/storage';
 import TurboHeader from '../chrome/Header';
 import TurboFooter from '../chrome/Footer';
@@ -74,9 +74,10 @@ export default function TurboHomeView({
     return () => { active = false; };
   }, []);
 
+  const catalog = useCatalog();
   const availablePlatforms = useMemo(
-    () => SOCIAL_PLATFORMS.filter(p => list.some(s => s.platform === p.id)),
-    [list]
+    () => platformsWithServices(catalog, list),
+    [catalog, list]
   );
 
   const scrollTo = (id: string) => {
@@ -263,7 +264,7 @@ export default function TurboHomeView({
               className="tb-card-sm p-5 flex flex-col items-center gap-3 cursor-pointer transition-transform hover:-translate-y-1"
             >
               <span className="w-14 h-14 rounded-full grid place-items-center text-white" style={{ background: platformGradient(p.id) }}>
-                <PlatformIcon id={p.id} />
+                <PlatformIcon item={p} />
               </span>
               <span className="font-black text-sm" style={{ color: 'var(--tb-ink)' }}>{p.name}</span>
             </button>

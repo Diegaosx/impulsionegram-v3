@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SOCIAL_PLATFORMS } from '../../../data';
+import { useCatalog } from '../../../utils/catalog';
 import { SocialPlatform } from '../../../types';
 import { AuthUser } from '../../../utils/storage';
 import { ServiceItem } from '../../../types';
@@ -42,6 +42,8 @@ export default function InteractiveCalculator({
   restrictServiceId,
   embedded
 }: InteractiveCalculatorProps) {
+  // Redes e tipos cadastrados no painel.
+  const catalog = useCatalog();
   const navigate = useNavigate();
 
   // ---- Logic lives in shared hooks so a second theme can rewrite all of this
@@ -179,7 +181,7 @@ export default function InteractiveCalculator({
               {!restrictServiceId && (<>
               <label className="text-xs uppercase tracking-widest font-mono font-black text-slate-400 block mb-3">1. Selecione a Rede Social</label>
               <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-8">
-                {SOCIAL_PLATFORMS.map((plat) => (
+                {catalog.platforms.map((plat) => (
                   <button
                     key={plat.id}
                     onClick={() => setPlatform(plat.id)}

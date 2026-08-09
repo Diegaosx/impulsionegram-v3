@@ -6,7 +6,7 @@
 import { useEffect, useMemo } from 'react';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ThemeServiceProps } from '../../types';
-import { SOCIAL_PLATFORMS } from '../../../data';
+import { platformName as catalogPlatformName, useCatalog } from '../../../utils/catalog';
 import { serviceSlug } from '../../../utils/storage';
 import { applyBasicSEO, setJsonLd } from '../../../utils/seo';
 import { sellablePackages } from '../../../site/pricing';
@@ -26,6 +26,7 @@ export default function GlassServiceView({
   services, company, siteName, logoUrl, currentUser, servicesLoaded, onAuthSuccess, onAddSimulatedOrder
 }: ThemeServiceProps) {
   const navigate = useNavigate();
+  const catalog = useCatalog();
   const { slug } = useParams<{ slug: string }>();
   const [searchParams] = useSearchParams();
   const initialPackageId = searchParams.get('pacote') || undefined;
@@ -36,7 +37,7 @@ export default function GlassServiceView({
   );
 
   const brand = siteName || 'ImpulsioneGram';
-  const platformName = service ? (SOCIAL_PLATFORMS.find(p => p.id === service.platform)?.name || service.platform) : '';
+  const platformName = service ? catalogPlatformName(catalog, service.platform) : '';
   const pageTitle = (service?.pageTitle || '').trim() || service?.label || '';
   const subtitle = service
     ? ((service.pageSubtitle || '').trim()

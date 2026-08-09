@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronDown, LayoutDashboard, LogIn, Mail, Menu, ShieldCheck, X } from 'lucide-react';
 import { AuthUser } from '../../../utils/storage';
-import { SOCIAL_PLATFORMS } from '../../../data';
+import { useCatalog } from '../../../utils/catalog';
 import { SocialPlatform } from '../../../types';
 import PlatformIcon, { platformGradient } from './PlatformIcon';
 
@@ -41,6 +41,7 @@ export default function TurboHeader({
   siteName, logoUrl, currentUser, onNavigate, platforms, contactEmail, onSelectPlatform
 }: HeaderProps) {
   const navigate = useNavigate();
+  const catalog = useCatalog();
   const [stuck, setStuck] = useState(false);
   const [megaOpen, setMegaOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -80,9 +81,11 @@ export default function TurboHeader({
     return () => { document.body.style.overflow = previous; };
   }, [menuOpen]);
 
+  // O mega-menu lista as redes cadastradas no painel, filtradas pelas que
+  // realmente têm serviço.
   const netList = (platforms && platforms.length
-    ? SOCIAL_PLATFORMS.filter(p => platforms.includes(p.id))
-    : SOCIAL_PLATFORMS);
+    ? catalog.platforms.filter(p => platforms.includes(p.id))
+    : catalog.platforms);
 
   const go = (section: string) => { setMenuOpen(false); setMegaOpen(false); onNavigate(section); };
 
@@ -166,7 +169,7 @@ export default function TurboHeader({
                       className="w-11 h-11 rounded-full grid place-items-center text-white shrink-0"
                       style={{ background: platformGradient(p.id) }}
                     >
-                      <PlatformIcon id={p.id} className="h-5 w-5" />
+                      <PlatformIcon item={p} className="h-5 w-5" />
                     </span>
                     <span>
                       <span className="block font-black" style={{ color: 'var(--tb-ink)' }}>{p.name}</span>
@@ -241,7 +244,7 @@ export default function TurboHeader({
                         className="w-9 h-9 rounded-full grid place-items-center text-white shrink-0"
                         style={{ background: platformGradient(p.id) }}
                       >
-                        <PlatformIcon id={p.id} className="h-4 w-4" />
+                        <PlatformIcon item={p} className="h-4 w-4" />
                       </span>
                       <span className="font-bold" style={{ color: 'var(--tb-ink)' }}>{p.name}</span>
                     </button>

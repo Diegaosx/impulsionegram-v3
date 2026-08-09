@@ -25,6 +25,10 @@ import {
   getChatbot,
   saveChatbot,
   getCompanySettings,
+  getSocialPlatforms,
+  getServiceTypes,
+  catalogIdsInUse,
+  saveCatalog,
   saveCompanySettings,
   saveCookieConsent,
   listCookieConsents,
@@ -120,6 +124,9 @@ const PUBLIC_API: { method: string; re: RegExp }[] = [
   { method: 'GET', re: /^\/home\/?$/ },
   { method: 'GET', re: /^\/settings\/?$/ },
   { method: 'GET', re: /^\/company\/?$/ },
+  // O catálogo de redes e tipos é lido pelo site público (grid, calculadora,
+  // página de serviço). O PUT e o /in-use continuam sendo só do admin.
+  { method: 'GET', re: /^\/catalog\/?$/ },
   { method: 'GET', re: /^\/public-config\/?$/ },
   { method: 'GET', re: /^\/rapidapi\/profile\/?$/ },
   { method: 'GET', re: /^\/rapidapi\/image\/?$/ },
@@ -428,7 +435,11 @@ async function dispatchOrderToSmm(order: any): Promise<void> {
   // Um único caminho para montar o link, que também recupera os pedidos antigos
   // gravados com "@" ou já corrompidos pelo stripLinks. O formato (URL completa
   // ou nome de usuário puro) é o que o serviço declarou no painel.
-  const link = orderTargetLink(order, svc?.smmLinkFormat === 'username' ? 'username' : 'url');
+  const link = orderTargetLink(
+    order,
+    svc?.smmLinkFormat === 'username' ? 'username' : 'url',
+    await getServiceTypes()
+  );
   if (!link) {
     // Melhor não despachar do que despachar um palpite: o painel cobraria o
     // pedido e não entregaria.
@@ -713,6 +724,41 @@ app.get('/api/smm/balance', async (req, res) => {
   }
 });
 
+// --- Catálogo: redes sociais e tipos de entrega ---
+
+// Público: o site inteiro (grid, calculadora, página de serviço) depende dele.
+app.get('/api/catalog', async (req, res) => {
+  try {
+    const [platforms, serviceTypes] = await Promise.all([getSocialPlatforms(), getServiceTypes()]);
+    res.json({ platforms, serviceTypes });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Quais ids não podem ser removidos, para o painel travar o botão antes do
+// clique em vez de só recusar depois.
+app.get('/api/catalog/in-use', async (req, res) => {
+  try {
+    res.json(await catalogIdsInUse());
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/catalog', async (req, res) => {
+  try {
+    const result = await saveCatalog({
+      platforms: req.body?.platforms,
+      serviceTypes: req.body?.serviceTypes
+    });
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    res.json({ success: true, platforms: result.platforms, serviceTypes: result.serviceTypes });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // --- Status "Outro": problema no pedido, com aviso ao cliente ---
 
 // Marca o pedido com o motivo do problema e avisa o cliente por e-mail.
@@ -861,7 +907,10 @@ app.post('/api/my/orders', async (req, res) => {
       platform: String(b.platform || ''),
       serviceType: String(b.serviceType || ''),
       profile: String(b.targetProfile || ''),
-      postUrl: String(b.postUrl || '')
+      postUrl: String(b.postUrl || ''),
+      // O tipo cadastrado é quem diz se o pedido precisa de perfil ou de link
+      // de publicação — um tipo novo funciona sem alterar código.
+      serviceTypes: await getServiceTypes()
     });
     if (!normalizedTarget.profile.ok) {
       return res.status(400).json({ error: normalizedTarget.profile.error || 'Perfil de destino inválido.' });

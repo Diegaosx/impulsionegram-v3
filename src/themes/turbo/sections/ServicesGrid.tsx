@@ -10,7 +10,7 @@
 
 import { useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SOCIAL_PLATFORMS } from '../../../data';
+import { platformName, platformsWithServices, useCatalog } from '../../../utils/catalog';
 import { ServiceItem, SocialPlatform } from '../../../types';
 import { serviceSlug } from '../../../utils/storage';
 import { sellablePackages } from '../../../site/pricing';
@@ -29,11 +29,13 @@ const money = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curr
 
 export default function TurboServicesGrid({ services, platform, onPlatformChange, onBuy }: ServicesGridProps) {
   const navigate = useNavigate();
+  // Redes cadastradas no painel.
+  const catalog = useCatalog();
   const railRef = useRef<HTMLDivElement>(null);
 
   const availablePlatforms = useMemo(
-    () => SOCIAL_PLATFORMS.filter(p => services.some(s => s.platform === p.id)),
-    [services]
+    () => platformsWithServices(catalog, services),
+    [catalog, services]
   );
 
   const visible = useMemo(
@@ -88,7 +90,7 @@ export default function TurboServicesGrid({ services, platform, onPlatformChange
             {availablePlatforms.map(p => (
               <button key={p.id} className="tb-net" aria-pressed={platform === p.id} onClick={() => onPlatformChange(p.id)}>
                 <span className="tb-net-icon" style={{ background: platformGradient(p.id) }}>
-                  <PlatformIcon id={p.id} />
+                  <PlatformIcon item={p} />
                 </span>
                 <span className="tb-net-label">{p.name.split('/')[0]}</span>
               </button>
@@ -106,7 +108,7 @@ export default function TurboServicesGrid({ services, platform, onPlatformChange
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-10">
           {visible.map(s => {
-            const platformName = SOCIAL_PLATFORMS.find(p => p.id === s.platform)?.name || s.platform;
+            const platName = platformName(catalog, s.platform);
             return (
               <article key={s.id} className="tb-card p-7 flex flex-col">
                 <div className="flex items-center gap-3">
@@ -114,10 +116,10 @@ export default function TurboServicesGrid({ services, platform, onPlatformChange
                     className="w-12 h-12 rounded-full grid place-items-center text-white shrink-0"
                     style={{ background: platformGradient(s.platform) }}
                   >
-                    <PlatformIcon id={s.platform} className="h-5 w-5" />
+                    <PlatformIcon item={catalog.platforms.find(x => x.id === s.platform)} id={s.platform} className="h-5 w-5" />
                   </span>
                   <span className="text-sm font-black uppercase tracking-wider" style={{ color: 'var(--tb-muted)' }}>
-                    {platformName.split('/')[0]}
+                    {platName.split('/')[0]}
                   </span>
                 </div>
 

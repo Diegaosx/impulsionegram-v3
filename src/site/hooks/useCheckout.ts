@@ -20,6 +20,7 @@ import {
 } from '../../utils/storage';
 import { useOffer } from '../../utils/useOffer';
 import { normalizeProfile, normalizePostUrl, targetKindFor } from '../../utils/socialTarget';
+import { useCatalog } from '../../utils/catalog';
 
 export type CheckoutStep = 'info' | 'account' | 'login_prompt' | 'processing' | 'done';
 
@@ -127,7 +128,11 @@ export function useCheckout({
   // o que o botão "compartilhar" do aplicativo gera, e é isto que transforma
   // isso no nome de usuário puro que o painel SMM consegue usar.
   const normalizedProfile = normalizeProfile(platform, fields.username);
-  const needsPost = targetKindFor(serviceType) === 'post';
+  // O tipo cadastrado é quem diz se o pedido age no perfil ou numa publicação.
+  // Sem consultar o catálogo, um tipo criado no painel cairia na heurística dos
+  // tipos embutidos e o campo do link nem apareceria.
+  const { serviceTypes } = useCatalog();
+  const needsPost = targetKindFor(serviceType, serviceTypes) === 'post';
   const normalizedPost = needsPost ? normalizePostUrl(platform, fields.postUrl) : null;
 
   const targetProfile = useCallback(

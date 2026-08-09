@@ -5,7 +5,7 @@ import Footer from '../chrome/Footer';
 import FloatingWidgets from '../chrome/FloatingWidgets';
 import CookieConsent from '../chrome/CookieConsent';
 import InteractiveCalculator from '../sections/InteractiveCalculator';
-import { SOCIAL_PLATFORMS } from '../../../data';
+import { platformName as catalogPlatformName, useCatalog } from '../../../utils/catalog';
 import { ServiceItem } from '../../../types';
 import { AuthUser, HomeContent, CompanySettings, serviceSlug } from '../../../utils/storage';
 import { applyBasicSEO, setJsonLd } from '../../../utils/seo';
@@ -32,6 +32,7 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 export default function ServicePage({ services, homeContent, company, siteName, logoUrl, currentUser, servicesLoaded, onAuthSuccess, onAddSimulatedOrder }: ServicePageProps) {
+  const catalog = useCatalog();
   const navigate = useNavigate();
   const { slug } = useParams<{ slug: string }>();
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -44,7 +45,7 @@ export default function ServicePage({ services, homeContent, company, siteName, 
   );
 
   const brand = siteName || 'ImpulsioneGram';
-  const platformName = service ? (SOCIAL_PLATFORMS.find((p) => p.id === service.platform)?.name || service.platform) : '';
+  const platformName = service ? catalogPlatformName(catalog, service.platform) : '';
   const pageTitle = (service?.pageTitle || '').trim() || service?.label || '';
   const subtitle = service
     ? ((service.pageSubtitle || '').trim()
