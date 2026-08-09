@@ -7,7 +7,7 @@
 
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SOCIAL_PLATFORMS } from '../../../data';
+import { platformName, platformsWithServices, useCatalog } from '../../../utils/catalog';
 import { ServiceItem, SocialPlatform } from '../../../types';
 import { serviceSlug } from '../../../utils/storage';
 import { sellablePackages } from '../../../site/pricing';
@@ -24,11 +24,13 @@ const money = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curr
 export default function JapServicesGrid({ services, onBuy }: ServicesGridProps) {
   const navigate = useNavigate();
   const [platform, setPlatform] = useState<SocialPlatform | 'todos'>('todos');
+  // Redes cadastradas no painel.
+  const catalog = useCatalog();
 
   // Só mostramos chips de plataformas que realmente têm serviço cadastrado.
   const availablePlatforms = useMemo(
-    () => SOCIAL_PLATFORMS.filter(p => services.some(s => s.platform === p.id)),
-    [services]
+    () => platformsWithServices(catalog, services),
+    [catalog, services]
   );
 
   const visible = useMemo(
@@ -89,10 +91,10 @@ export default function JapServicesGrid({ services, onBuy }: ServicesGridProps) 
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-10">
             {visible.map(s => {
-              const platformName = SOCIAL_PLATFORMS.find(p => p.id === s.platform)?.name || s.platform;
+              const platName = platformName(catalog, s.platform);
               return (
                 <article key={s.id} className="jap-card p-5 md:p-10 flex flex-col">
-                  <span className="jap-chip self-start" aria-hidden="true">{platformName.split('/')[0]}</span>
+                  <span className="jap-chip self-start" aria-hidden="true">{platName.split('/')[0]}</span>
 
                   <h3 className="font-bold mt-4 text-xl" style={{ color: 'var(--jap-ink)' }}>{s.label}</h3>
 

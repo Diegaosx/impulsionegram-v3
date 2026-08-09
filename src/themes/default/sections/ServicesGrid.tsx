@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SERVICES, SOCIAL_PLATFORMS } from '../../../data';
+import { SERVICES } from '../../../data';
+import { serviceTypeLabel, useCatalog } from '../../../utils/catalog';
 import { SocialPlatform, ServiceItem } from '../../../types';
 import { serviceSlug } from '../../../utils/storage';
 import { Instagram, Youtube, Twitter, Facebook, Check, HelpCircle } from 'lucide-react';
@@ -14,6 +15,8 @@ interface ServicesGridProps {
 }
 
 export default function ServicesGrid({ onSelectService, searchTerm = '', onNavigate, services }: ServicesGridProps) {
+  // Redes e tipos cadastrados no painel.
+  const catalog = useCatalog();
   const navigate = useNavigate();
   const [activePlatform, setActivePlatform] = useState<SocialPlatform | 'todos'>('todos');
   // Suppress unused-prop warnings: these remain part of the public API but the
@@ -83,7 +86,7 @@ export default function ServicesGrid({ onSelectService, searchTerm = '', onNavig
             🌟 Ver Todos
           </button>
           
-          {SOCIAL_PLATFORMS.map((plat) => (
+          {catalog.platforms.map((plat) => (
             <button
               key={plat.id}
               onClick={() => setActivePlatform(plat.id)}
@@ -122,14 +125,12 @@ export default function ServicesGrid({ onSelectService, searchTerm = '', onNavig
         {/* Services Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filteredServices.map((service) => {
-            const platformConfig = SOCIAL_PLATFORMS.find(p => p.id === service.platform);
+            const platformConfig = catalog.platforms.find(p => p.id === service.platform);
             const isInstagram = service.platform === 'instagram';
             const unitPriceStr = (service.pricePerItem * 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            let typeLabel = "Serviço";
-            if (service.type === 'followers') typeLabel = "Seguidores";
-            if (service.type === 'likes') typeLabel = "Curtidas";
-            if (service.type === 'views') typeLabel = "Visualizações";
-            if (service.type === 'stories') typeLabel = "Views Stories";
+            // Rótulo do tipo vem do catálogo: um tipo novo aparece com o nome
+            // que o painel deu, em vez de cair no genérico "Serviço".
+            const typeLabel = serviceTypeLabel(catalog, service.type);
 
             return (
               <div 

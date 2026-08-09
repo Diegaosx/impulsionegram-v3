@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ServiceItem, SocialPlatform } from '../types';
-import { SOCIAL_PLATFORMS } from '../data';
+import { useCatalog } from '../utils/catalog';
 import { AdminOrder, createMyOrder } from '../utils/storage';
 import { useOffer } from '../utils/useOffer';
 import { computePrice, sellablePackages } from '../site/pricing';
@@ -15,6 +15,8 @@ interface BuyServicesProps {
 }
 
 export default function BuyServices({ services, defaultProfile, onCreated }: BuyServicesProps) {
+  // Redes e tipos cadastrados no painel.
+  const catalog = useCatalog();
   const [platform, setPlatform] = useState<SocialPlatform>('instagram');
   const [serviceType, setServiceType] = useState<string>('followers');
   const [quantity, setQuantity] = useState<number>(1000);
@@ -136,7 +138,7 @@ export default function BuyServices({ services, defaultProfile, onCreated }: Buy
       <div>
         <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block mb-2">1. Rede social</label>
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-          {SOCIAL_PLATFORMS.map((p) => (
+          {catalog.platforms.map((p) => (
             <button key={p.id} onClick={() => setPlatform(p.id)}
               className={`p-2.5 rounded-lg border text-xs font-bold transition-all ${platform === p.id ? 'bg-primary border-primary text-white' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
               {p.name.split('/')[0]}

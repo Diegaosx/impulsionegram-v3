@@ -28,7 +28,11 @@ import {
   Mail, Phone, MapPin, Share2, PanelBottom, Cookie, Newspaper, Code2, Quote, Inbox, Search,
   ArrowUp, ArrowDown
 } from 'lucide-react';
-import { SOCIAL_PLATFORMS } from '../data';
+import {
+  Catalog, SocialPlatformItem, ServiceTypeItem, DEFAULT_CATALOG,
+  fetchCatalog, fetchCatalogInUse, saveCatalog as saveCatalogToServer, primeCatalog
+} from '../utils/catalog';
+import PlatformGlyph, { PLATFORM_ICON_NAMES } from './PlatformGlyph';
 import { listThemes } from '../themes';
 import { DEFAULT_HOME_ORDER, HOME_SECTIONS, normalizeHomeOrder } from '../site/homeSections';
 
@@ -993,6 +997,94 @@ export default function AdminPanel({
     { value: 'outro', label: 'Outro' }
   ];
 
+  // Catálogo de redes e tipos de entrega, cadastrado nos modais abaixo.
+  const [catalog, setCatalog] = useState<Catalog>(DEFAULT_CATALOG);
+  const [catalogInUse, setCatalogInUse] = useState<{ platforms: string[]; types: string[] }>({ platforms: [], types: [] });
+
+  // Modal de gerenciamento do catálogo (redes ou tipos).
+  const [catalogModal, setCatalogModal] = useState<'platforms' | 'types' | null>(null);
+  const [catalogDraft, setCatalogDraft] = useState<Catalog>(DEFAULT_CATALOG);
+  const [catalogSaving, setCatalogSaving] = useState(false);
+
+  const openCatalogModal = async (which: 'platforms' | 'types') => {
+    await reloadCatalog();
+    setCatalogDraft(await fetchCatalog());
+    setCatalogModal(which);
+  };
+
+  // O id é o que os serviços gravam; mudar depois órfãozaria todos eles. Por
+  // isso ele nasce do nome e fica travado a partir daí.
+  const makeId = (name: string) =>
+    name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+
+  const addPlatform = () => setCatalogDraft(prev => ({
+    ...prev,
+    platforms: [...prev.platforms, { id: '', name: '', color: 'from-slate-700 to-slate-900', icon: 'Layers' }]
+  }));
+  const addServiceType = () => setCatalogDraft(prev => ({
+    ...prev,
+    serviceTypes: [...prev.serviceTypes, { id: '', label: '', target: 'profile' }]
+  }));
+
+  const patchPlatform = (index: number, patch: Partial<SocialPlatformItem>) =>
+    setCatalogDraft(prev => ({
+      ...prev,
+      platforms: prev.platforms.map((p, i) => (i === index ? { ...p, ...patch } : p))
+    }));
+  const patchServiceType = (index: number, patch: Partial<ServiceTypeItem>) =>
+    setCatalogDraft(prev => ({
+      ...prev,
+      serviceTypes: prev.serviceTypes.map((t, i) => (i === index ? { ...t, ...patch } : t))
+    }));
+
+  const removeCatalogItem = (index: number) => setCatalogDraft(prev => (
+    catalogModal === 'platforms'
+      ? { ...prev, platforms: prev.platforms.filter((_, i) => i !== index) }
+      : { ...prev, serviceTypes: prev.serviceTypes.filter((_, i) => i !== index) }
+  ));
+
+  const moveCatalogItem = (index: number, dir: -1 | 1) => setCatalogDraft(prev => {
+    const key = catalogModal === 'platforms' ? 'platforms' : 'serviceTypes';
+    const list = [...(prev as any)[key]];
+    const target = index + dir;
+    if (target < 0 || target >= list.length) return prev;
+    [list[index], list[target]] = [list[target], list[index]];
+    return { ...prev, [key]: list } as Catalog;
+  });
+
+  const handleSaveCatalog = async () => {
+    // Preenche o id de quem acabou de ser criado, a partir do nome.
+    const platforms = catalogDraft.platforms.map(p => ({ ...p, id: p.id || makeId(p.name) }));
+    const serviceTypes = catalogDraft.serviceTypes.map(t => ({ ...t, id: t.id || makeId(t.label) }));
+
+    const vazio = catalogModal === 'platforms'
+      ? platforms.find(p => !p.name.trim())
+      : serviceTypes.find(t => !t.label.trim());
+    if (vazio) { triggerError('Preencha o nome de todos os itens antes de salvar.'); return; }
+
+    const ids = (catalogModal === 'platforms' ? platforms.map(p => p.id) : serviceTypes.map(t => t.id));
+    if (new Set(ids).size !== ids.length) { triggerError('Há dois itens com o mesmo identificador.'); return; }
+
+    setCatalogSaving(true);
+    const r = await saveCatalogToServer(
+      catalogModal === 'platforms' ? { platforms } : { serviceTypes }
+    );
+    setCatalogSaving(false);
+    if (!r.ok) { triggerError(r.error || 'Falha ao salvar.'); return; }
+    await reloadCatalog();
+    setCatalogModal(null);
+    triggerSuccess(catalogModal === 'platforms' ? 'Redes sociais atualizadas!' : 'Tipos de entrega atualizados!');
+  };
+
+  const reloadCatalog = async () => {
+    const [c, used] = await Promise.all([fetchCatalog(), fetchCatalogInUse()]);
+    setCatalog(c);
+    primeCatalog(c); // o site público lê do mesmo cache
+    setCatalogInUse(used);
+  };
+  useEffect(() => { reloadCatalog(); }, []);
+
   // Motivos prontos para o status "Outro". Clicar preenche o título; o campo
   // continua livre para escrever qualquer outra coisa.
   const ISSUE_PRESETS: { title: string; details: string }[] = [
@@ -1411,7 +1503,7 @@ export default function AdminPanel({
                       Faturamento por Rede Social
                     </h4>
                     <div className="space-y-3">
-                      {SOCIAL_PLATFORMS.map(p => {
+                      {catalog.platforms.map(p => {
                         const rev = stats.platformRevenue[p.id] || 0;
                         const percent = stats.totalRevenue > 0 ? (rev / stats.totalRevenue) * 100 : 0;
                         return (
@@ -1460,9 +1552,25 @@ export default function AdminPanel({
                     <p className="text-slate-500 text-xs font-semibold">Consulte, altere preços unitários ou crie novos itens de provimento</p>
                   </div>
                   
-                  <button 
+                  <button
+                    onClick={() => openCatalogModal('platforms')}
+                    className="bg-white hover:border-primary hover:text-primary text-slate-600 border border-slate-200 font-bold text-xs px-3.5 py-2.5 rounded-lg flex items-center gap-2 cursor-pointer transition-all shrink-0 ml-auto"
+                    title="Criar, editar e remover redes sociais"
+                  >
+                    <Globe className="h-4 w-4" />
+                    Redes Sociais
+                  </button>
+                  <button
+                    onClick={() => openCatalogModal('types')}
+                    className="bg-white hover:border-primary hover:text-primary text-slate-600 border border-slate-200 font-bold text-xs px-3.5 py-2.5 rounded-lg flex items-center gap-2 cursor-pointer transition-all shrink-0"
+                    title="Criar, editar e remover tipos de entrega"
+                  >
+                    <Layers className="h-4 w-4" />
+                    Tipos de Entrega
+                  </button>
+                  <button
                     onClick={handleAddServiceInit}
-                    className="bg-primary hover:bg-purple-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg flex items-center gap-2 cursor-pointer transition-all shrink-0 hover:scale-[1.02] shadow-sm ml-auto"
+                    className="bg-primary hover:bg-purple-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg flex items-center gap-2 cursor-pointer transition-all shrink-0 hover:scale-[1.02] shadow-sm"
                     id="add-new-service-btn"
                   >
                     <Plus className="h-4 w-4" />
@@ -1519,7 +1627,7 @@ export default function AdminPanel({
                           onChange={(e) => setServiceForm(prev => ({ ...prev, platform: e.target.value as SocialPlatform }))}
                           className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2"
                         >
-                          {SOCIAL_PLATFORMS.map(p => (
+                          {catalog.platforms.map(p => (
                             <option key={p.id} value={p.id}>{p.name}</option>
                           ))}
                         </select>
@@ -1533,11 +1641,9 @@ export default function AdminPanel({
                           onChange={(e) => setServiceForm(prev => ({ ...prev, type: e.target.value as any }))}
                           className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2"
                         >
-                          <option value="followers">Seguidores</option>
-                          <option value="likes">Curtidas</option>
-                          <option value="views">Visualizações</option>
-                          <option value="comments">Comentários</option>
-                          <option value="stories">Views Stories</option>
+                          {catalog.serviceTypes.map(t => (
+                            <option key={t.id} value={t.id}>{t.label}</option>
+                          ))}
                         </select>
                       </div>
 
@@ -2005,7 +2111,7 @@ export default function AdminPanel({
                   >
                     🌟 Todos ({services.length})
                   </button>
-                  {SOCIAL_PLATFORMS.map(p => {
+                  {catalog.platforms.map(p => {
                     const count = services.filter(s => s.platform === p.id).length;
                     return (
                       <button 
@@ -2037,7 +2143,7 @@ export default function AdminPanel({
                       {services
                         .filter(s => servicesPlatformFilter === 'todos' || s.platform === servicesPlatformFilter)
                         .map(service => {
-                          const pf = SOCIAL_PLATFORMS.find(p => p.id === service.platform);
+                          const pf = catalog.platforms.find(p => p.id === service.platform);
                           const formattedPrice = (service.pricePerItem * 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                           const pkgs = Array.isArray(service.packages) ? service.packages : [];
                           const hasPackages = pkgs.length > 0;
@@ -2160,7 +2266,7 @@ export default function AdminPanel({
                           onChange={(e) => setEditingPlan(prev => prev ? ({ ...prev, platform: e.target.value as SocialPlatform }) : null)}
                           className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800"
                         >
-                          {SOCIAL_PLATFORMS.map((p) => (
+                          {catalog.platforms.map((p) => (
                             <option key={p.id} value={p.id}>{p.name}</option>
                           ))}
                         </select>
@@ -2249,7 +2355,7 @@ export default function AdminPanel({
                 {/* PLANS GRID DISPLAY LIST */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {plans.map(plan => {
-                    const plat = SOCIAL_PLATFORMS.find(p => p.id === plan.platform);
+                    const plat = catalog.platforms.find(p => p.id === plan.platform);
                     return (
                       <div 
                         key={plan.id}
@@ -4154,6 +4260,141 @@ export default function AdminPanel({
               <button onClick={handleResetPassword} className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg px-4 py-2.5 flex items-center gap-1.5">
                 <KeyRound className="h-4 w-4" /> Redefinir
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL DO CATÁLOGO (redes sociais / tipos de entrega) ===== */}
+      {catalogModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !catalogSaving && setCatalogModal(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+              <div>
+                <h3 className="font-display font-black text-slate-900 flex items-center gap-2">
+                  {catalogModal === 'platforms' ? <Globe className="h-4 w-4 text-primary" /> : <Layers className="h-4 w-4 text-primary" />}
+                  {catalogModal === 'platforms' ? 'Redes Sociais' : 'Tipos de Entrega'}
+                </h3>
+                <p className="text-[11px] text-slate-400 font-semibold">
+                  Aparecem no formulário de serviço, no site e nas abas do catálogo.
+                </p>
+              </div>
+              <button onClick={() => setCatalogModal(null)} disabled={catalogSaving} className="text-slate-400 hover:text-slate-700 disabled:opacity-40">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-2.5 overflow-y-auto">
+              {(catalogModal === 'platforms' ? catalogDraft.platforms : catalogDraft.serviceTypes).map((item: any, index: number) => {
+                const isPlatform = catalogModal === 'platforms';
+                // Item já usado por serviço ou pedido: não pode sair, senão o
+                // que aponta para ele fica órfão.
+                const emUso = !!item.id && (isPlatform
+                  ? catalogInUse.platforms.includes(item.id)
+                  : catalogInUse.types.includes(item.id));
+                const novo = !item.id;
+
+                return (
+                  <div key={index} className="border border-slate-200 rounded-xl p-3 space-y-2.5 bg-slate-50/60">
+                    <div className="flex items-center gap-2">
+                      {isPlatform && (
+                        <span className="w-9 h-9 rounded-lg grid place-items-center text-white shrink-0 bg-slate-800">
+                          <PlatformGlyph platform={item} className="h-4 w-4" />
+                        </span>
+                      )}
+                      <input
+                        value={isPlatform ? item.name : item.label}
+                        onChange={(e) => isPlatform
+                          ? patchPlatform(index, { name: e.target.value })
+                          : patchServiceType(index, { label: e.target.value })}
+                        placeholder={isPlatform ? 'Ex: Threads' : 'Ex: Compartilhamentos'}
+                        className="flex-1 bg-white border border-slate-200 text-xs font-bold rounded-lg py-2 px-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button type="button" onClick={() => moveCatalogItem(index, -1)} disabled={index === 0}
+                          aria-label="Mover para cima"
+                          className="h-8 w-8 rounded-lg border border-slate-200 bg-white grid place-items-center text-slate-500 hover:text-primary disabled:opacity-30 cursor-pointer">
+                          <ArrowUp className="h-3.5 w-3.5" />
+                        </button>
+                        <button type="button" onClick={() => moveCatalogItem(index, 1)}
+                          disabled={index === (isPlatform ? catalogDraft.platforms.length : catalogDraft.serviceTypes.length) - 1}
+                          aria-label="Mover para baixo"
+                          className="h-8 w-8 rounded-lg border border-slate-200 bg-white grid place-items-center text-slate-500 hover:text-primary disabled:opacity-30 cursor-pointer">
+                          <ArrowDown className="h-3.5 w-3.5" />
+                        </button>
+                        <button type="button" onClick={() => removeCatalogItem(index)} disabled={emUso}
+                          aria-label={emUso ? 'Em uso — não pode ser removido' : 'Remover'}
+                          title={emUso ? 'Há serviços ou pedidos usando este item.' : 'Remover'}
+                          className="h-8 w-8 rounded-lg border border-slate-200 bg-white grid place-items-center text-slate-400 hover:text-red-600 hover:border-red-200 disabled:opacity-30 disabled:hover:text-slate-400 disabled:hover:border-slate-200 disabled:cursor-not-allowed cursor-pointer">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                        {novo ? 'Identificador: gerado ao salvar' : `Identificador: ${item.id}`}
+                      </span>
+                      {emUso && (
+                        <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                          Em uso
+                        </span>
+                      )}
+                    </div>
+
+                    {isPlatform ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <label className="block">
+                          <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block mb-1">Ícone</span>
+                          <select value={item.icon} onChange={(e) => patchPlatform(index, { icon: e.target.value })}
+                            className="w-full bg-white border border-slate-200 text-xs font-semibold rounded-lg py-2 px-2.5 text-slate-800">
+                            {PLATFORM_ICON_NAMES.map(n => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </label>
+                        <label className="block">
+                          <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block mb-1">Imagem própria (opcional)</span>
+                          <input value={item.imageUrl || ''} onChange={(e) => patchPlatform(index, { imageUrl: e.target.value })}
+                            placeholder="https://..."
+                            className="w-full bg-white border border-slate-200 text-xs font-mono rounded-lg py-2 px-2.5 text-slate-800" />
+                        </label>
+                      </div>
+                    ) : (
+                      <label className="block">
+                        <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block mb-1">O pedido pede</span>
+                        <select value={item.target} onChange={(e) => patchServiceType(index, { target: e.target.value as 'profile' | 'post' })}
+                          className="w-full bg-white border border-slate-200 text-xs font-semibold rounded-lg py-2 px-2.5 text-slate-800">
+                          <option value="profile">O perfil (ex: seguidores)</option>
+                          <option value="post">O link da publicação (ex: curtidas)</option>
+                        </select>
+                        <span className="text-[10px] text-slate-400 block font-medium mt-1">
+                          Define qual campo o cliente preenche no checkout e o que é enviado ao painel SMM.
+                        </span>
+                      </label>
+                    )}
+                  </div>
+                );
+              })}
+
+              <button type="button" onClick={catalogModal === 'platforms' ? addPlatform : addServiceType}
+                className="w-full border border-dashed border-slate-300 rounded-xl py-2.5 text-xs font-bold text-slate-500 hover:text-primary hover:border-primary flex items-center justify-center gap-1.5 cursor-pointer">
+                <Plus className="h-3.5 w-3.5" /> {catalogModal === 'platforms' ? 'Adicionar rede' : 'Adicionar tipo'}
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 px-5 py-4 border-t border-slate-100 shrink-0">
+              <span className="text-[10px] font-semibold text-slate-400">
+                Itens em uso por algum serviço ou pedido não podem ser removidos.
+              </span>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setCatalogModal(null)} disabled={catalogSaving}
+                  className="text-xs font-bold text-slate-500 hover:text-slate-800 px-4 py-2.5 rounded-lg disabled:opacity-40 cursor-pointer">
+                  Cancelar
+                </button>
+                <button onClick={handleSaveCatalog} disabled={catalogSaving}
+                  className="bg-primary hover:bg-purple-700 disabled:bg-purple-300 text-white font-bold text-xs py-2.5 px-5 rounded-lg flex items-center gap-2 cursor-pointer">
+                  <Save className="h-4 w-4" /> {catalogSaving ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

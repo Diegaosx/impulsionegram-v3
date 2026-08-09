@@ -1,4 +1,8 @@
-export type SocialPlatform = 'instagram' | 'tiktok' | 'youtube' | 'twitter' | 'facebook' | 'kwai';
+// Id da rede social. Deixou de ser uma união fechada quando as redes viraram
+// cadastro no painel: uma rede nova não pode exigir alteração de código.
+// Os ids embutidos continuam sendo instagram, tiktok, youtube, twitter,
+// facebook e kwai — ver DEFAULT_SOCIAL_PLATFORMS em db.ts.
+export type SocialPlatform = string;
 
 // A fixed-price package for a service (e.g. "1.000 seguidores por R$ 7,90").
 // When a service defines packages, the calculator shows selectable package
@@ -14,7 +18,8 @@ export interface ServicePackage {
 export interface ServiceItem {
   id: string;
   platform: SocialPlatform;
-  type: 'followers' | 'likes' | 'views' | 'comments' | 'stories';
+  // Id do tipo de entrega, também cadastrável (ver DEFAULT_SERVICE_TYPES).
+  type: string;
   label: string;
   pricePerItem: number; // Price per unit (used as slider fallback when no packages)
   minQuantity: number;

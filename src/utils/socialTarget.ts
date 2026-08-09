@@ -33,11 +33,26 @@ export interface NormalizedTarget {
 
 const fail = (error: string): NormalizedTarget => ({ ok: false, value: '', link: '', error });
 
-// Tipos de serviço que agem sobre uma PUBLICAÇÃO, não sobre o perfil.
+// Palpite para tipos que não estão no catálogo (pedido antigo, catálogo ainda
+// carregando). O cadastro é a autoridade; isto é só o que sobra sem ele.
 const POST_TYPES = ['likes', 'views', 'comments', 'shares', 'saves'];
 
-export function targetKindFor(serviceType: string): TargetKind {
+export interface ServiceTypeLike {
+  id: string;
+  target: 'profile' | 'post';
+}
+
+/**
+ * Onde a entrega acontece: no perfil ou numa publicação.
+ *
+ * `types` é o catálogo cadastrado no painel. Quando ele é informado, manda —
+ * é o que permite criar um tipo de entrega novo sem tocar em código. Sem ele,
+ * cai na heurística dos tipos embutidos.
+ */
+export function targetKindFor(serviceType: string, types?: ServiceTypeLike[]): TargetKind {
   const t = String(serviceType || '').toLowerCase();
+  const registered = types?.find(x => String(x.id).toLowerCase() === t);
+  if (registered) return registered.target === 'post' ? 'post' : 'profile';
   // "stories" é entregue no perfil: o cliente não tem link estável de story.
   if (t === 'stories') return 'profile';
   return POST_TYPES.includes(t) ? 'post' : 'profile';
@@ -342,6 +357,8 @@ export interface NormalizeTargetInput {
   serviceType: string;
   profile: string;
   postUrl?: string;
+  /** Catálogo de tipos cadastrado no painel; decide perfil vs publicação. */
+  serviceTypes?: ServiceTypeLike[];
 }
 
 export interface NormalizedOrderTarget {
@@ -360,7 +377,7 @@ export interface NormalizedOrderTarget {
  * suporte); a publicação só quando o serviço age sobre uma.
  */
 export function normalizeOrderTarget(input: NormalizeTargetInput): NormalizedOrderTarget {
-  const kind = targetKindFor(input.serviceType);
+  const kind = targetKindFor(input.serviceType, input.serviceTypes);
   const profile = normalizeProfile(input.platform, input.profile);
   if (kind === 'profile') {
     return { kind, profile, link: profile.link, ok: profile.ok };
@@ -386,9 +403,10 @@ export function normalizeOrderTarget(input: NormalizeTargetInput): NormalizedOrd
  */
 export function orderTargetLink(
   order: { platform?: string; serviceType?: string; username?: string; postUrl?: string },
-  linkFormat: 'url' | 'username' = 'url'
+  linkFormat: 'url' | 'username' = 'url',
+  serviceTypes?: ServiceTypeLike[]
 ): string {
-  const kind = targetKindFor(order.serviceType || '');
+  const kind = targetKindFor(order.serviceType || '', serviceTypes);
   if (kind === 'post') {
     // Serviço de publicação sem link de publicação não tem alvo válido: entregar
     // no perfil não é o que o cliente comprou.

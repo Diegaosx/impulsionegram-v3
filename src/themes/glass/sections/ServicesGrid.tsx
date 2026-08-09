@@ -7,12 +7,12 @@
 
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SOCIAL_PLATFORMS } from '../../../data';
+import { platformName, platformsWithServices, useCatalog } from '../../../utils/catalog';
 import { ServiceItem, SocialPlatform } from '../../../types';
 import { serviceSlug } from '../../../utils/storage';
 import { sellablePackages } from '../../../site/pricing';
-import { TikTokIcon, KwaiIcon } from '../../../components/icons/BrandIcons';
-import { Check, Facebook, Instagram, Twitter, Youtube, Layers } from 'lucide-react';
+import PlatformGlyph from '../../../components/PlatformGlyph';
+import { Check, Layers } from 'lucide-react';
 
 interface ServicesGridProps {
   services: ServiceItem[];
@@ -32,26 +32,16 @@ const BRAND_BG: Record<string, string> = {
   kwai: '#ff8a00'
 };
 
-function PlatformIcon({ id }: { id: SocialPlatform }) {
-  const cls = 'h-6 w-6';
-  switch (id) {
-    case 'instagram': return <Instagram className={cls} />;
-    case 'youtube': return <Youtube className={cls} />;
-    case 'twitter': return <Twitter className={cls} />;
-    case 'facebook': return <Facebook className={cls} />;
-    case 'tiktok': return <TikTokIcon className={cls} />;
-    case 'kwai': return <KwaiIcon className={cls} />;
-    default: return <Layers className={cls} />;
-  }
-}
 
 export default function GlassServicesGrid({ services, onBuy }: ServicesGridProps) {
   const navigate = useNavigate();
   const [platform, setPlatform] = useState<SocialPlatform | 'todos'>('todos');
+  // Redes cadastradas no painel.
+  const catalog = useCatalog();
 
   const availablePlatforms = useMemo(
-    () => SOCIAL_PLATFORMS.filter(p => services.some(s => s.platform === p.id)),
-    [services]
+    () => platformsWithServices(catalog, services),
+    [catalog, services]
   );
 
   const visible = useMemo(
@@ -104,7 +94,7 @@ export default function GlassServicesGrid({ services, onBuy }: ServicesGridProps
               title={p.name}
             >
               <span className="gl-net-icon" style={{ background: BRAND_BG[p.id] || 'var(--gl-grad-brand)' }}>
-                <PlatformIcon id={p.id} />
+                <PlatformGlyph platform={p} />
               </span>
               <span className="sr-only">{p.name}</span>
             </button>
@@ -121,14 +111,14 @@ export default function GlassServicesGrid({ services, onBuy }: ServicesGridProps
         // cards larguíssimos. Aqui há um estágio de 2 colunas.
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-9">
           {visible.map(s => {
-            const platformName = SOCIAL_PLATFORMS.find(p => p.id === s.platform)?.name || s.platform;
+            const platName = platformName(catalog, s.platform);
             return (
               <article key={s.id} className="gl-card p-[26px] flex flex-col">
                 <div className="flex items-center gap-3">
                   <span className="gl-tile" style={{ background: BRAND_BG[s.platform] || 'var(--gl-grad-brand)' }}>
-                    <PlatformIcon id={s.platform} />
+                    <PlatformGlyph platform={catalog.platforms.find(p => p.id === s.platform)} />
                   </span>
-                  <span className="text-sm font-bold" style={{ color: 'var(--gl-muted)' }}>{platformName.split('/')[0]}</span>
+                  <span className="text-sm font-bold" style={{ color: 'var(--gl-muted)' }}>{platName.split('/')[0]}</span>
                 </div>
 
                 <h3 className="text-[22px] font-bold mt-4" style={{ color: 'var(--gl-ink)' }}>{s.label}</h3>

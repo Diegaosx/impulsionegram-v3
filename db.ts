@@ -1324,6 +1324,186 @@ export async function saveOffer(data: Partial<OfferSettings>): Promise<OfferSett
   return merged;
 }
 
+// --- Catálogo: redes sociais e tipos de entrega ---
+//
+// Eram duas listas fixas no código. Viraram cadastro porque o negócio muda:
+// entra uma rede nova, some outra, aparece um tipo de entrega que não existia.
+//
+// O `id` é o que os serviços gravam em `platform`/`type`, então ele é imutável
+// depois de criado — renomear o id órfãozaria todo serviço que aponta para ele.
+// O rótulo é só exibição e pode ser corrigido à vontade.
+
+export interface SocialPlatformItem {
+  id: string;
+  name: string;
+  /** Gradiente Tailwind usado pelo tema padrão. */
+  color: string;
+  /** Nome do ícone; 'Layers' é o genérico para redes novas. */
+  icon: string;
+  /** Imagem própria, quando nenhum ícone do conjunto serve. */
+  imageUrl?: string;
+}
+
+export interface ServiceTypeItem {
+  id: string;
+  label: string;
+  /**
+   * Onde a entrega acontece. Define se o pedido pede o perfil ou o link da
+   * publicação — é o que o normalizador de alvo consulta.
+   */
+  target: 'profile' | 'post';
+}
+
+export const DEFAULT_SOCIAL_PLATFORMS: SocialPlatformItem[] = [
+  { id: 'instagram', name: 'Instagram', color: 'from-pink-500 via-rose-500 to-amber-500', icon: 'Instagram' },
+  { id: 'tiktok', name: 'TikTok', color: 'from-black via-slate-900 to-cyan-500', icon: 'TikTok' },
+  { id: 'youtube', name: 'YouTube', color: 'from-red-600 to-rose-700', icon: 'Youtube' },
+  { id: 'twitter', name: 'Twitter/X', color: 'from-slate-900 to-zinc-700', icon: 'Twitter' },
+  { id: 'facebook', name: 'Facebook', color: 'from-blue-600 to-indigo-700', icon: 'Facebook' },
+  { id: 'kwai', name: 'Kwai', color: 'from-orange-500 to-amber-600', icon: 'Flame' }
+];
+
+export const DEFAULT_SERVICE_TYPES: ServiceTypeItem[] = [
+  { id: 'followers', label: 'Seguidores', target: 'profile' },
+  { id: 'likes', label: 'Curtidas', target: 'post' },
+  { id: 'views', label: 'Visualizações', target: 'post' },
+  { id: 'comments', label: 'Comentários', target: 'post' },
+  { id: 'stories', label: 'Views Stories', target: 'profile' }
+];
+
+const slugId = (v: string) =>
+  String(v || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+
+function normalizePlatforms(raw: any): SocialPlatformItem[] {
+  const list = Array.isArray(raw) ? raw : [];
+  const seen = new Set<string>();
+  const out: SocialPlatformItem[] = [];
+  for (const p of list) {
+    const id = slugId(p?.id);
+    const name = String(p?.name || '').trim().slice(0, 60);
+    if (!id || !name || seen.has(id)) continue;
+    seen.add(id);
+    out.push({
+      id,
+      name,
+      color: String(p?.color || 'from-slate-700 to-slate-900').slice(0, 120),
+      icon: String(p?.icon || 'Layers').slice(0, 40),
+      ...(p?.imageUrl ? { imageUrl: String(p.imageUrl).slice(0, 500) } : {})
+    });
+  }
+  return out;
+}
+
+function normalizeServiceTypes(raw: any): ServiceTypeItem[] {
+  const list = Array.isArray(raw) ? raw : [];
+  const seen = new Set<string>();
+  const out: ServiceTypeItem[] = [];
+  for (const t of list) {
+    const id = slugId(t?.id);
+    const label = String(t?.label || '').trim().slice(0, 60);
+    if (!id || !label || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, label, target: t?.target === 'post' ? 'post' : 'profile' });
+  }
+  return out;
+}
+
+export async function getSocialPlatforms(): Promise<SocialPlatformItem[]> {
+  const r = await pool.query(`SELECT value FROM settings WHERE key = 'social_platforms'`);
+  const list = normalizePlatforms(r.rows[0]?.value);
+  // Uma lista vazia deixaria o site sem nenhuma rede; a semente é o padrão.
+  return list.length ? list : DEFAULT_SOCIAL_PLATFORMS;
+}
+
+export async function getServiceTypes(): Promise<ServiceTypeItem[]> {
+  const r = await pool.query(`SELECT value FROM settings WHERE key = 'service_types'`);
+  const list = normalizeServiceTypes(r.rows[0]?.value);
+  return list.length ? list : DEFAULT_SERVICE_TYPES;
+}
+
+async function saveSetting(key: string, value: unknown): Promise<void> {
+  await pool.query(
+    `INSERT INTO settings (key, value) VALUES ($1, $2::jsonb)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [key, JSON.stringify(value)]
+  );
+}
+
+/**
+ * Ids de plataforma e de tipo em uso.
+ *
+ * Olha os serviços cadastrados E os pedidos já feitos: um pedido antigo de uma
+ * rede removida continuaria no histórico apontando para um id inexistente, e o
+ * painel mostraria o id cru no lugar do nome.
+ */
+export async function catalogIdsInUse(): Promise<{ platforms: string[]; types: string[] }> {
+  const [services, orders] = await Promise.all([
+    pool.query(`SELECT data->>'platform' AS platform, data->>'type' AS type FROM services`),
+    pool.query(`SELECT DISTINCT data->>'platform' AS platform, data->>'serviceType' AS type FROM orders`)
+  ]);
+  const platforms = new Set<string>();
+  const types = new Set<string>();
+  for (const row of [...services.rows, ...orders.rows]) {
+    if (row.platform) platforms.add(String(row.platform));
+    if (row.type) types.add(String(row.type));
+  }
+  return { platforms: [...platforms], types: [...types] };
+}
+
+export interface CatalogSaveResult {
+  ok: boolean;
+  error?: string;
+  platforms: SocialPlatformItem[];
+  serviceTypes: ServiceTypeItem[];
+}
+
+/**
+ * Grava o catálogo, recusando qualquer alteração que deixe um serviço órfão.
+ *
+ * A checagem é no servidor porque é aqui que o estrago seria permanente: um
+ * serviço cujo `platform` não existe mais some do site sem aviso.
+ */
+export async function saveCatalog(input: {
+  platforms?: any; serviceTypes?: any;
+}): Promise<CatalogSaveResult> {
+  const current = {
+    platforms: await getSocialPlatforms(),
+    serviceTypes: await getServiceTypes()
+  };
+  const inUse = await catalogIdsInUse();
+
+  const platforms = input.platforms === undefined ? current.platforms : normalizePlatforms(input.platforms);
+  const serviceTypes = input.serviceTypes === undefined ? current.serviceTypes : normalizeServiceTypes(input.serviceTypes);
+
+  if (!platforms.length) {
+    return { ok: false, error: 'Mantenha ao menos uma rede social.', ...current };
+  }
+  if (!serviceTypes.length) {
+    return { ok: false, error: 'Mantenha ao menos um tipo de entrega.', ...current };
+  }
+
+  const missingPlatform = inUse.platforms.find(id => !platforms.some(p => p.id === id));
+  if (missingPlatform) {
+    const name = current.platforms.find(p => p.id === missingPlatform)?.name || missingPlatform;
+    return { ok: false, error: `A rede "${name}" está em uso por um serviço e não pode ser removida.`, ...current };
+  }
+  const missingType = inUse.types.find(id => !serviceTypes.some(t => t.id === id));
+  if (missingType) {
+    const label = current.serviceTypes.find(t => t.id === missingType)?.label || missingType;
+    return { ok: false, error: `O tipo "${label}" está em uso por um serviço e não pode ser removido.`, ...current };
+  }
+
+  if (input.platforms !== undefined) await saveSetting('social_platforms', platforms);
+  if (input.serviceTypes !== undefined) await saveSetting('service_types', serviceTypes);
+  return { ok: true, platforms, serviceTypes };
+}
+
 // --- Editable site pages (legal/policy content, rich HTML like the blog) ---
 export type PageSlug = 'privacy' | 'terms' | 'warranty';
 export const PAGE_SLUGS: PageSlug[] = ['privacy', 'terms', 'warranty'];
