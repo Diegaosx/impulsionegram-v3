@@ -76,6 +76,7 @@ import {
 } from './db';
 import { isMailerConfigured, mailerMissingConfig, sendMail, renderEmailLayout, renderOrderIssueEmail } from './mailer';
 import { normalizeOrderTarget, orderTargetLink } from './src/utils/socialTarget';
+import { normalizeKeywords } from './src/utils/keywords';
 import { isMercadoPagoConfigured, getPaymentStatus } from './mercadopago';
 import { isPixConfigured, createPix, getPixStatus, getActiveProvider } from './payments';
 import { isSmmConfigured, smmAddOrder, smmOrderStatus, smmBalance, smmServices, isSmmCompleted, smmStatusToOrderStatus } from './smm';
@@ -1333,7 +1334,8 @@ app.post('/api/blog/posts', async (req, res) => {
       author: String(post.author || ''),
       date: String(post.date || ''),
       readTime: String(post.readTime || ''),
-      tags: Array.isArray(post.tags) ? post.tags.map((t: any) => String(t).trim()).filter(Boolean) : []
+      tags: Array.isArray(post.tags) ? post.tags.map((t: any) => String(t).trim()).filter(Boolean) : [],
+      keywords: normalizeKeywords(post.keywords)
     }, post.publishedAt);
     res.json({ success: true, post: saved });
   } catch (e: any) {

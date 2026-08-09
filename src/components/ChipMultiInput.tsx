@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, KeyboardEvent } from 'react';
+import { useMemo, useRef, useState, ClipboardEvent, KeyboardEvent } from 'react';
 import { X, Plus } from 'lucide-react';
 
 interface ChipMultiInputProps {
@@ -47,6 +47,23 @@ export default function ChipMultiInput({
     onChange(value.filter(v => v !== name));
   };
 
+  // Colar "curtidas, seguidores, instagram" vira três fichas em vez de uma só
+  // com vírgulas dentro — é assim que listas de palavras-chave chegam de outras
+  // ferramentas.
+  const handlePaste = (e: ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData.getData('text');
+    if (!/[,;\n]/.test(pasted)) return;
+    e.preventDefault();
+    const parts = pasted.split(/[,;\n\r]+/).map(p => p.trim()).filter(Boolean);
+    const next = [...value];
+    for (const part of parts) {
+      if (next.some(v => v.toLowerCase() === part.toLowerCase())) continue;
+      next.push(suggestions.find(s => s.toLowerCase() === part.toLowerCase()) || part);
+    }
+    setText('');
+    if (next.length !== value.length) onChange(next);
+  };
+
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
@@ -81,6 +98,7 @@ export default function ChipMultiInput({
           value={text}
           onChange={(e) => { setText(e.target.value); setOpen(true); }}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           placeholder={value.length === 0 ? placeholder : ''}

@@ -564,6 +564,8 @@ export interface GeneralSettings {
   faviconUrl: string;
   seoTitle: string;
   seoDescription: string;
+  /** Palavras-chave do site (<meta name="keywords"> padrão de todas as páginas). */
+  seoKeywords?: string[];
   timezone: string;
   theme: string;
   plansEnabled?: boolean;
@@ -579,6 +581,7 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   seoTitle: 'ImpulsioneGram | Impulsione suas Redes Sociais',
   seoDescription:
     'Plataforma premium para impulsionar suas redes sociais com seguidores, curtidas e visualizações reais e brasileiros.',
+  seoKeywords: [],
   timezone: 'America/Recife',
   theme: 'default'
 };
@@ -682,6 +685,8 @@ export interface BlogPost {
   date: string;
   readTime: string;
   tags: string[];
+  /** Palavras-chave do artigo. Sem elas valem as tags. */
+  keywords?: string[];
   publishedAt?: string;
 }
 

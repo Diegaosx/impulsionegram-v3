@@ -14,6 +14,7 @@ import {
 } from '../utils/storage';
 import { formatDateTime } from '../utils/datetime';
 import ChipMultiInput from './ChipMultiInput';
+import KeywordsField from './KeywordsField';
 import RichTextEditor from './RichTextEditor';
 
 interface BlogAdminProps {
@@ -31,12 +32,13 @@ interface PostForm {
   date: string;
   readTime: string;
   tags: string[];
+  keywords: string[];
   content: string;
 }
 
 const EMPTY_FORM: PostForm = {
   slug: '', title: '', description: '', categories: [],
-  image: '', author: '', date: '', readTime: '5 min', tags: [], content: ''
+  image: '', author: '', date: '', readTime: '5 min', tags: [], keywords: [], content: ''
 };
 
 function slugify(text: string): string {
@@ -112,6 +114,7 @@ export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminPro
       date: post.date,
       readTime: post.readTime,
       tags: post.tags || [],
+      keywords: post.keywords || [],
       content: post.content || ''
     });
     setIsNew(false);
@@ -154,7 +157,8 @@ export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminPro
         author: form.author.trim(),
         date: form.date.trim(),
         readTime: form.readTime.trim(),
-        tags: form.tags
+        tags: form.tags,
+        keywords: form.keywords
       };
       await saveBlogPostToServer(post);
       triggerSuccess(isNew ? 'Artigo criado com sucesso!' : 'Artigo atualizado!');
@@ -361,6 +365,15 @@ export default function BlogAdmin({ triggerSuccess, triggerError }: BlogAdminPro
                 onChange={(next) => setForm(prev => ({ ...prev, tags: next }))}
                 suggestions={tagsList}
                 placeholder="Digite uma tag e Enter (sugere as existentes)..."
+              />
+            </div>
+
+            <div className="space-y-1.5 md:col-span-2">
+              <KeywordsField
+                value={form.keywords}
+                onChange={(next) => setForm(prev => ({ ...prev, keywords: next }))}
+                suggestions={tagsList}
+                hint="Vão para a meta keywords do artigo. Vazio = usa as tags."
               />
             </div>
 

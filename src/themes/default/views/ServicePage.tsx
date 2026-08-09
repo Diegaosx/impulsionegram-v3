@@ -5,7 +5,7 @@ import Footer from '../chrome/Footer';
 import FloatingWidgets from '../chrome/FloatingWidgets';
 import CookieConsent from '../chrome/CookieConsent';
 import InteractiveCalculator from '../sections/InteractiveCalculator';
-import { platformName as catalogPlatformName, useCatalog } from '../../../utils/catalog';
+import { platformName as catalogPlatformName, serviceTypeLabel, useCatalog } from '../../../utils/catalog';
 import { ServiceItem } from '../../../types';
 import { AuthUser, HomeContent, CompanySettings, serviceSlug } from '../../../utils/storage';
 import { applyBasicSEO, setJsonLd } from '../../../utils/seo';
@@ -22,14 +22,6 @@ interface ServicePageProps {
   onAuthSuccess?: (user: AuthUser) => void;
   onAddSimulatedOrder?: (order: any) => void;
 }
-
-const TYPE_LABEL: Record<string, string> = {
-  followers: 'Seguidores',
-  likes: 'Curtidas',
-  views: 'Visualizações',
-  comments: 'Comentários',
-  stories: 'Views Stories'
-};
 
 export default function ServicePage({ services, homeContent, company, siteName, logoUrl, currentUser, servicesLoaded, onAuthSuccess, onAddSimulatedOrder }: ServicePageProps) {
   const catalog = useCatalog();
@@ -49,7 +41,7 @@ export default function ServicePage({ services, homeContent, company, siteName, 
   const pageTitle = (service?.pageTitle || '').trim() || service?.label || '';
   const subtitle = service
     ? ((service.pageSubtitle || '').trim()
-      || `Impulsione seu perfil no ${platformName} com ${(TYPE_LABEL[service.type] || 'engajamento').toLowerCase()} de alta qualidade, entrega segura e reposição garantida.`)
+      || `Impulsione seu perfil no ${platformName} com ${serviceTypeLabel(catalog, service.type).toLowerCase()} de alta qualidade, entrega segura e reposição garantida.`)
     : '';
   const metaDescription = service ? ((service.pageMetaDescription || '').trim() || subtitle) : '';
   const image = service?.pageImageUrl?.trim() || '';
@@ -70,7 +62,8 @@ export default function ServicePage({ services, homeContent, company, siteName, 
       canonical,
       brand,
       image: image || undefined,
-      type: 'product'
+      type: 'product',
+      keywords: service.pageKeywords
     });
 
     const prices = (service.packages || []).map((p) => p.price).filter((n) => n > 0);
@@ -165,7 +158,7 @@ export default function ServicePage({ services, homeContent, company, siteName, 
                   {platformName}
                 </span>
                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest bg-white border border-slate-200 px-2 py-1 rounded">
-                  {TYPE_LABEL[service.type] || service.type}
+                  {serviceTypeLabel(catalog, service.type)}
                 </span>
               </div>
               <h1 className="font-display font-black text-3xl sm:text-4xl lg:text-5xl text-slate-900 tracking-tight leading-tight">

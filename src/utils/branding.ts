@@ -1,4 +1,5 @@
 import { GeneralSettings } from './storage';
+import { setSiteKeywords } from './seo';
 
 // Apply site branding/SEO to the document head at runtime (SPA), so the
 // configurable title, description and favicon take effect without a rebuild.
@@ -17,6 +18,11 @@ export function applyBrandingToHead(s: GeneralSettings, opts: { skipTitle?: bool
     }
     meta.setAttribute('content', s.seoDescription);
   }
+
+  // Só registra o padrão do site; quem escreve a meta é o applyBasicSEO de cada
+  // rota. Escrever a tag aqui apagaria as palavras-chave que uma página de
+  // serviço ou um artigo já tivessem declarado.
+  setSiteKeywords(s.seoKeywords || []);
 
   if (s.faviconUrl) {
     let link = document.querySelector<HTMLLinkElement>("link[rel='icon']");

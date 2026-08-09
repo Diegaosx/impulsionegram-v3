@@ -15,6 +15,8 @@ import {
   slugify, serviceSlug
 } from '../utils/storage';
 import RichTextEditor from './RichTextEditor';
+import KeywordsField from './KeywordsField';
+import { normalizeKeywords } from '../utils/keywords';
 import { setAppTimezone, formatDateTime } from '../utils/datetime';
 import BlogAdmin from './BlogAdmin';
 import TestimonialsAdmin from './TestimonialsAdmin';
@@ -282,6 +284,7 @@ export default function AdminPanel({
     faviconUrl: '',
     seoTitle: '',
     seoDescription: '',
+    seoKeywords: [],
     timezone: 'America/Recife',
     theme: 'default',
     homeSections: DEFAULT_HOME_ORDER
@@ -611,8 +614,12 @@ export default function AdminPanel({
 
   // Dedicated "Página & SEO" modal (per service).
   const [pageEditingService, setPageEditingService] = useState<ServiceItem | null>(null);
-  const [pageForm, setPageForm] = useState({
-    pageTitle: '', pageSubtitle: '', slug: '', pageImageUrl: '', pageMetaDescription: '', pageDescriptionHtml: ''
+  const [pageForm, setPageForm] = useState<{
+    pageTitle: string; pageSubtitle: string; slug: string; pageImageUrl: string;
+    pageMetaDescription: string; pageKeywords: string[]; pageDescriptionHtml: string;
+  }>({
+    pageTitle: '', pageSubtitle: '', slug: '', pageImageUrl: '',
+    pageMetaDescription: '', pageKeywords: [], pageDescriptionHtml: ''
   });
   const [pageImageUploading, setPageImageUploading] = useState(false);
 
@@ -790,6 +797,7 @@ export default function AdminPanel({
       slug: service.slug || '',
       pageImageUrl: service.pageImageUrl || '',
       pageMetaDescription: service.pageMetaDescription || '',
+      pageKeywords: service.pageKeywords || [],
       pageDescriptionHtml: service.pageDescriptionHtml || ''
     });
   };
@@ -823,6 +831,7 @@ export default function AdminPanel({
       slug,
       pageImageUrl: pageForm.pageImageUrl.trim(),
       pageMetaDescription: pageForm.pageMetaDescription.trim(),
+      pageKeywords: normalizeKeywords(pageForm.pageKeywords),
       pageDescriptionHtml: pageForm.pageDescriptionHtml
     };
     onUpdateServices(services.map(s => s.id === pageEditingService.id ? { ...s, ...patch } : s));
@@ -1981,6 +1990,13 @@ export default function AdminPanel({
                         <span className="text-[10px] text-slate-400">{pageForm.pageMetaDescription.length}/200</span>
                       </div>
 
+                      <KeywordsField
+                        value={pageForm.pageKeywords}
+                        onChange={(next) => setPageForm(prev => ({ ...prev, pageKeywords: next }))}
+                        suggestions={generalForm.seoKeywords || []}
+                        hint="Termos que descrevem esta página. Vazio = usa as palavras-chave do site."
+                      />
+
                       <div className="space-y-1">
                         <label className="text-[10px] uppercase font-black text-slate-400 block">Descrição da página</label>
                         <RichTextEditor
@@ -2912,6 +2928,11 @@ export default function AdminPanel({
                           className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg p-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-y"
                         />
                       </div>
+                      <KeywordsField
+                        value={generalForm.seoKeywords || []}
+                        onChange={(next) => setGeneralForm(prev => ({ ...prev, seoKeywords: next }))}
+                        hint="Valem para o site inteiro. Cada serviço e cada artigo pode ter as suas próprias."
+                      />
                     </div>
 
                     {/* REGIONAL + THEME */}

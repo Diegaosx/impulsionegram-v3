@@ -43,6 +43,7 @@ export default function App() {
   const [logoUrl, setLogoUrl] = useState('');
   const [seoTitle, setSeoTitle] = useState('');
   const [seoDescription, setSeoDescription] = useState('');
+  const [seoKeywords, setSeoKeywords] = useState<string[]>([]);
   const [company, setCompany] = useState<CompanySettings | null>(null);
 
   // Active public-site theme. Seeded synchronously from the last known value so
@@ -95,6 +96,7 @@ export default function App() {
         setLogoUrl(loadedGeneral.logoUrl);
         setSeoTitle(loadedGeneral.seoTitle || loadedGeneral.siteName);
         setSeoDescription(loadedGeneral.seoDescription || '');
+        setSeoKeywords(loadedGeneral.seoKeywords || []);
         setAppTimezone(loadedGeneral.timezone);
         applyThemeId(resolveThemeId(loadedGeneral.theme), setThemeId);
         applyBrandingToHead(loadedGeneral, {
@@ -153,9 +155,10 @@ export default function App() {
       description: seoDescription,
       canonical: `${origin}${path}`,
       brand: siteName,
-      type: 'website'
+      type: 'website',
+      keywords: seoKeywords
     });
-  }, [location.pathname, siteName, seoTitle, seoDescription]);
+  }, [location.pathname, siteName, seoTitle, seoDescription, seoKeywords]);
 
   // Reset the scroll position to the top on every route change. Without this,
   // react-router keeps the previous page's scroll offset, so opening a service

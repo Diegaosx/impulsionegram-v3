@@ -2,6 +2,8 @@
 // inject JSON-LD structured data. Used by pages that need per-route SEO in this
 // single-page app (blog articles, service pages, …).
 
+import { normalizeKeywords } from './keywords';
+
 // Upsert a <meta> tag selected by an attribute/value pair.
 export function upsertMeta(attr: 'name' | 'property', key: string, content: string) {
   let el = document.head.querySelector(`meta[${attr}="${key}"]`);
@@ -42,6 +44,19 @@ export function setJsonLd(id: string, data: object | null) {
   document.head.appendChild(script);
 }
 
+// Palavras-chave do site inteiro, cadastradas nas configurações gerais.
+//
+// Ficam num módulo, e não em props, porque a <head> já é global: quando uma
+// página não declara palavras próprias ela herda estas, e não existe caminho de
+// props ligando as configurações gerais às quatro implementações de cada página
+// (serviço, blog, institucional) sem passar o mesmo valor por dezenas de
+// componentes que não têm nada a ver com SEO.
+let siteKeywords: string[] = [];
+
+export function setSiteKeywords(list: string[]) {
+  siteKeywords = normalizeKeywords(list);
+}
+
 export interface BasicSEO {
   title: string;          // full document title (used as-is)
   description: string;
@@ -49,12 +64,20 @@ export interface BasicSEO {
   brand?: string;
   image?: string;
   type?: 'website' | 'article' | 'product';
+  // Palavras-chave da página. Sem elas valem as do site.
+  keywords?: string[];
 }
 
 // Apply title, description, canonical, robots and Open Graph / Twitter tags.
-export function applyBasicSEO({ title, description, canonical, brand, image, type = 'website' }: BasicSEO) {
+export function applyBasicSEO({ title, description, canonical, brand, image, type = 'website', keywords }: BasicSEO) {
   document.title = title;
   upsertMeta('name', 'description', description);
+  // Idempotente como as tags de imagem: sem palavras-chave a meta sai do head,
+  // senão a lista de um artigo ficaria colada numa página que não a declara.
+  const pageKeywords = normalizeKeywords(keywords);
+  const content = (pageKeywords.length ? pageKeywords : siteKeywords).join(', ');
+  if (content) upsertMeta('name', 'keywords', content);
+  else removeMeta('name', 'keywords');
   upsertMeta('name', 'robots', 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1');
   upsertCanonical(canonical);
 

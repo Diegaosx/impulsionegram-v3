@@ -6,7 +6,7 @@
 import { useEffect, useMemo } from 'react';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ThemeServiceProps } from '../../types';
-import { platformName as catalogPlatformName, useCatalog } from '../../../utils/catalog';
+import { platformName as catalogPlatformName, serviceTypeLabel, useCatalog } from '../../../utils/catalog';
 import { serviceSlug } from '../../../utils/storage';
 import { applyBasicSEO, setJsonLd } from '../../../utils/seo';
 import { sellablePackages } from '../../../site/pricing';
@@ -15,11 +15,6 @@ import JapFooter from '../chrome/Footer';
 import JapCalculator from '../sections/Calculator';
 import JapFaq from '../sections/Faq';
 import { Check } from 'lucide-react';
-
-const TYPE_LABEL: Record<string, string> = {
-  followers: 'Seguidores', likes: 'Curtidas', views: 'Visualizações',
-  comments: 'Comentários', stories: 'Views Stories'
-};
 
 export default function JapServiceView({
   services, homeContent, company, siteName, logoUrl, currentUser, servicesLoaded, onAuthSuccess, onAddSimulatedOrder
@@ -42,7 +37,7 @@ export default function JapServiceView({
   const pageTitle = (service?.pageTitle || '').trim() || service?.label || '';
   const subtitle = service
     ? ((service.pageSubtitle || '').trim()
-      || `Impulsione seu perfil no ${platformName} com ${(TYPE_LABEL[service.type] || 'engajamento').toLowerCase()} de alta qualidade.`)
+      || `Impulsione seu perfil no ${platformName} com ${serviceTypeLabel(catalog, service.type).toLowerCase()} de alta qualidade.`)
     : '';
   const metaDescription = service ? ((service.pageMetaDescription || '').trim() || subtitle) : '';
   const image = service?.pageImageUrl?.trim() || '';
@@ -52,7 +47,7 @@ export default function JapServiceView({
     if (!service) return;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const canonical = `${origin}/servico/${serviceSlug(service)}`;
-    applyBasicSEO({ title: `${pageTitle}${brand ? ' | ' + brand : ''}`, description: metaDescription, canonical, brand, image: image || undefined, type: 'product' });
+    applyBasicSEO({ title: `${pageTitle}${brand ? ' | ' + brand : ''}`, description: metaDescription, canonical, brand, image: image || undefined, type: 'product', keywords: service.pageKeywords });
 
     const pkgs = sellablePackages(service).map(p => p.price);
     const lowest = pkgs.length ? Math.min(...pkgs) : Math.round(service.pricePerItem * (service.minQuantity || 1000) * 100) / 100;
@@ -108,7 +103,7 @@ export default function JapServiceView({
             <div>
               <div className="flex flex-wrap gap-2">
                 <span className="jap-chip" aria-hidden="true">{platformName}</span>
-                <span className="jap-chip" aria-hidden="true">{TYPE_LABEL[service.type] || service.type}</span>
+                <span className="jap-chip" aria-hidden="true">{serviceTypeLabel(catalog, service.type)}</span>
               </div>
 
               <h1 className="font-bold mt-5" style={{ color: 'var(--jap-ink)', fontSize: 'clamp(26px, 4vw, 55px)', lineHeight: 1.2 }}>

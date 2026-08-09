@@ -4,6 +4,9 @@ import { randomUUID } from 'crypto';
 
 // Initial catalog data is bundled so a fresh database can be seeded on first run.
 import { SERVICES, PREBUILT_PLANS, TESTIMONIALS } from './src/data';
+// O saneamento das palavras-chave é o mesmo do painel: uma só regra evita que
+// o que o admin vê no campo seja diferente do que vai para a meta tag.
+import { normalizeKeywords } from './src/utils/keywords';
 
 // --- Shared domain types (also consumed by server.ts) ---
 export interface UserItem {
@@ -650,6 +653,7 @@ export interface BlogPostRecord {
   date: string;
   readTime: string;
   tags: string[];
+  keywords: string[]; // <meta name="keywords"> do artigo
   publishedAt?: string; // ISO timestamp from the published_at column (for SEO)
 }
 
@@ -687,6 +691,8 @@ function normalizePost(data: any, publishedAt?: string): BlogPostRecord {
     date: data.date || '',
     readTime: data.readTime || '',
     tags: Array.isArray(data.tags) ? data.tags : [],
+    // Artigos antigos não tinham o campo: as tags eram o que ia para a meta.
+    keywords: normalizeKeywords(data.keywords ?? data.tags),
     publishedAt
   };
 }
@@ -1216,6 +1222,7 @@ export interface GeneralSettings {
   faviconUrl: string;
   seoTitle: string;
   seoDescription: string;
+  seoKeywords: string[];
   timezone: string;
   theme: string;
   plansEnabled: boolean;
@@ -1240,6 +1247,7 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   seoTitle: 'ImpulsioneGram | Impulsione suas Redes Sociais',
   seoDescription:
     'Plataforma premium para impulsionar suas redes sociais com seguidores, curtidas e visualizações reais e brasileiros.',
+  seoKeywords: [],
   timezone: 'America/Recife',
   theme: 'default',
   plansEnabled: true,
@@ -1264,12 +1272,14 @@ export async function getGeneralSettings(): Promise<GeneralSettings> {
   }
   for (const id of KNOWN_HOME_SECTIONS) if (!seen.has(id)) order.push(id);
   merged.homeSections = order;
+  merged.seoKeywords = normalizeKeywords(merged.seoKeywords);
   return merged;
 }
 
 export async function saveGeneralSettings(data: Partial<GeneralSettings>): Promise<GeneralSettings> {
   const current = await getGeneralSettings();
   const merged: GeneralSettings = { ...current, ...data };
+  merged.seoKeywords = normalizeKeywords(merged.seoKeywords);
   await pool.query(
     `INSERT INTO settings (key, value)
      VALUES ('general', $1::jsonb)
@@ -1488,15 +1498,24 @@ export async function saveCatalog(input: {
     return { ok: false, error: 'Mantenha ao menos um tipo de entrega.', ...current };
   }
 
-  const missingPlatform = inUse.platforms.find(id => !platforms.some(p => p.id === id));
-  if (missingPlatform) {
-    const name = current.platforms.find(p => p.id === missingPlatform)?.name || missingPlatform;
-    return { ok: false, error: `A rede "${name}" está em uso por um serviço e não pode ser removida.`, ...current };
+  // A trava vale só para a lista que está sendo alterada. Checar a outra
+  // também faria uma inconsistência antiga (um serviço importado apontando
+  // para uma rede que nunca esteve no catálogo) travar a edição dos tipos de
+  // entrega — um beco sem saída, já que o erro fala de algo que o admin nem
+  // tocou nesta requisição.
+  if (input.platforms !== undefined) {
+    const missingPlatform = inUse.platforms.find(id => !platforms.some(p => p.id === id));
+    if (missingPlatform) {
+      const name = current.platforms.find(p => p.id === missingPlatform)?.name || missingPlatform;
+      return { ok: false, error: `A rede "${name}" está em uso por um serviço e não pode ser removida.`, ...current };
+    }
   }
-  const missingType = inUse.types.find(id => !serviceTypes.some(t => t.id === id));
-  if (missingType) {
-    const label = current.serviceTypes.find(t => t.id === missingType)?.label || missingType;
-    return { ok: false, error: `O tipo "${label}" está em uso por um serviço e não pode ser removido.`, ...current };
+  if (input.serviceTypes !== undefined) {
+    const missingType = inUse.types.find(id => !serviceTypes.some(t => t.id === id));
+    if (missingType) {
+      const label = current.serviceTypes.find(t => t.id === missingType)?.label || missingType;
+      return { ok: false, error: `O tipo "${label}" está em uso por um serviço e não pode ser removido.`, ...current };
+    }
   }
 
   if (input.platforms !== undefined) await saveSetting('social_platforms', platforms);
