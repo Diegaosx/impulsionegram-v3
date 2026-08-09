@@ -1488,15 +1488,24 @@ export async function saveCatalog(input: {
     return { ok: false, error: 'Mantenha ao menos um tipo de entrega.', ...current };
   }
 
-  const missingPlatform = inUse.platforms.find(id => !platforms.some(p => p.id === id));
-  if (missingPlatform) {
-    const name = current.platforms.find(p => p.id === missingPlatform)?.name || missingPlatform;
-    return { ok: false, error: `A rede "${name}" está em uso por um serviço e não pode ser removida.`, ...current };
+  // A trava vale só para a lista que está sendo alterada. Checar a outra
+  // também faria uma inconsistência antiga (um serviço importado apontando
+  // para uma rede que nunca esteve no catálogo) travar a edição dos tipos de
+  // entrega — um beco sem saída, já que o erro fala de algo que o admin nem
+  // tocou nesta requisição.
+  if (input.platforms !== undefined) {
+    const missingPlatform = inUse.platforms.find(id => !platforms.some(p => p.id === id));
+    if (missingPlatform) {
+      const name = current.platforms.find(p => p.id === missingPlatform)?.name || missingPlatform;
+      return { ok: false, error: `A rede "${name}" está em uso por um serviço e não pode ser removida.`, ...current };
+    }
   }
-  const missingType = inUse.types.find(id => !serviceTypes.some(t => t.id === id));
-  if (missingType) {
-    const label = current.serviceTypes.find(t => t.id === missingType)?.label || missingType;
-    return { ok: false, error: `O tipo "${label}" está em uso por um serviço e não pode ser removido.`, ...current };
+  if (input.serviceTypes !== undefined) {
+    const missingType = inUse.types.find(id => !serviceTypes.some(t => t.id === id));
+    if (missingType) {
+      const label = current.serviceTypes.find(t => t.id === missingType)?.label || missingType;
+      return { ok: false, error: `O tipo "${label}" está em uso por um serviço e não pode ser removido.`, ...current };
+    }
   }
 
   if (input.platforms !== undefined) await saveSetting('social_platforms', platforms);

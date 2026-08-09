@@ -13,7 +13,7 @@
 import { useEffect, useMemo } from 'react';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ThemeServiceProps } from '../../types';
-import { platformName as catalogPlatformName, platformsWithServices, useCatalog } from '../../../utils/catalog';
+import { platformName as catalogPlatformName, platformsWithServices, serviceTypeLabel, useCatalog } from '../../../utils/catalog';
 import { serviceSlug } from '../../../utils/storage';
 import { applyBasicSEO, setJsonLd } from '../../../utils/seo';
 import { sellablePackages } from '../../../site/pricing';
@@ -25,11 +25,6 @@ import PlatformIcon, { platformGradient } from '../chrome/PlatformIcon';
 import TurboCalculator from '../sections/Calculator';
 import TurboFaq from '../sections/Faq';
 import { Check } from 'lucide-react';
-
-const TYPE_LABEL: Record<string, string> = {
-  followers: 'Seguidores', likes: 'Curtidas', views: 'Visualizações',
-  comments: 'Comentários', stories: 'Views Stories'
-};
 
 export default function TurboServiceView({
   services, company, siteName, logoUrl, currentUser, servicesLoaded, onAuthSuccess, onAddSimulatedOrder
@@ -51,7 +46,7 @@ export default function TurboServiceView({
   const pageTitle = (service?.pageTitle || '').trim() || service?.label || '';
   const subtitle = service
     ? ((service.pageSubtitle || '').trim()
-      || `Impulsione seu perfil no ${platformName} com ${(TYPE_LABEL[service.type] || 'engajamento').toLowerCase()} de alta qualidade.`)
+      || `Impulsione seu perfil no ${platformName} com ${serviceTypeLabel(catalog, service.type).toLowerCase()} de alta qualidade.`)
     : '';
   const metaDescription = service ? ((service.pageMetaDescription || '').trim() || subtitle) : '';
   const image = service?.pageImageUrl?.trim() || '';
@@ -109,7 +104,7 @@ export default function TurboServiceView({
 
   const specs = [
     { label: 'Rede social', value: platformName },
-    { label: 'Serviço', value: TYPE_LABEL[service.type] || service.type },
+    { label: 'Serviço', value: serviceTypeLabel(catalog, service.type) },
     { label: 'Quantidade mínima', value: `${service.minQuantity?.toLocaleString('pt-BR')} un.` },
     { label: 'Quantidade máxima', value: `${service.maxQuantity?.toLocaleString('pt-BR')} un.` },
     { label: 'Entrega', value: service.deliverySpeed || 'Início imediato' },
@@ -135,7 +130,7 @@ export default function TurboServiceView({
             <span className="w-12 h-12 rounded-full grid place-items-center bg-white shrink-0" style={{ color: 'var(--tb-ink)' }}>
               <PlatformIcon id={service.platform} className="h-5 w-5" />
             </span>
-            <span className="tb-kicker">{platformName} · {TYPE_LABEL[service.type] || service.type}</span>
+            <span className="tb-kicker">{platformName} · {serviceTypeLabel(catalog, service.type)}</span>
           </div>
 
           <h1 className="tb-title mt-4" style={{ maxWidth: 820 }}>{pageTitle}</h1>

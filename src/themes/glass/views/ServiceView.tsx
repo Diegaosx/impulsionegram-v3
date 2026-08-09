@@ -6,7 +6,7 @@
 import { useEffect, useMemo } from 'react';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ThemeServiceProps } from '../../types';
-import { platformName as catalogPlatformName, useCatalog } from '../../../utils/catalog';
+import { platformName as catalogPlatformName, serviceTypeLabel, useCatalog } from '../../../utils/catalog';
 import { serviceSlug } from '../../../utils/storage';
 import { applyBasicSEO, setJsonLd } from '../../../utils/seo';
 import { sellablePackages } from '../../../site/pricing';
@@ -16,11 +16,6 @@ import GlassFab from '../chrome/Fab';
 import GlassCalculator from '../sections/Calculator';
 import GlassFaq from '../sections/Faq';
 import { Check } from 'lucide-react';
-
-const TYPE_LABEL: Record<string, string> = {
-  followers: 'Seguidores', likes: 'Curtidas', views: 'Visualizações',
-  comments: 'Comentários', stories: 'Views Stories'
-};
 
 export default function GlassServiceView({
   services, company, siteName, logoUrl, currentUser, servicesLoaded, onAuthSuccess, onAddSimulatedOrder
@@ -41,7 +36,7 @@ export default function GlassServiceView({
   const pageTitle = (service?.pageTitle || '').trim() || service?.label || '';
   const subtitle = service
     ? ((service.pageSubtitle || '').trim()
-      || `Impulsione seu perfil no ${platformName} com ${(TYPE_LABEL[service.type] || 'engajamento').toLowerCase()} de alta qualidade.`)
+      || `Impulsione seu perfil no ${platformName} com ${serviceTypeLabel(catalog, service.type).toLowerCase()} de alta qualidade.`)
     : '';
   const metaDescription = service ? ((service.pageMetaDescription || '').trim() || subtitle) : '';
   const image = service?.pageImageUrl?.trim() || '';
@@ -107,7 +102,7 @@ export default function GlassServiceView({
             <div>
               <div className="flex flex-wrap gap-2">
                 <span className="gl-chip" aria-hidden="true">{platformName}</span>
-                <span className="gl-chip" aria-hidden="true">{TYPE_LABEL[service.type] || service.type}</span>
+                <span className="gl-chip" aria-hidden="true">{serviceTypeLabel(catalog, service.type)}</span>
               </div>
 
               <h1 className="font-bold mt-5" style={{ color: 'var(--gl-ink)', fontSize: 'clamp(34px, 4.5vw, 60px)', lineHeight: 1.05 }}>
