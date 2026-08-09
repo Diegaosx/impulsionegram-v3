@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingBag, User as UserIcon, LogOut, ArrowLeft, Sparkles,
   Package, CircleDollarSign, Clock, CheckCircle2, ShoppingCart, QrCode, LifeBuoy, ArrowLeftCircle,
-  AlertCircle
+  AlertCircle, MessageSquare
 } from 'lucide-react';
 import { AuthUser, AdminOrder, HomeContent, CompanySettings, fetchMyOrders, fetchServices } from '../utils/storage';
 import { ServiceItem } from '../types';
@@ -13,6 +13,7 @@ import BuyServices from '../components/BuyServices';
 import OrderConfirmation from '../components/OrderConfirmation';
 import ProfileForm from '../components/ProfileForm';
 import HelpForm from '../components/HelpForm';
+import ClientTickets from '../components/ClientTickets';
 
 interface ClientDashboardProps {
   user: AuthUser;
@@ -24,11 +25,14 @@ interface ClientDashboardProps {
   homeContent?: HomeContent | null;
 }
 
-type Tab = 'overview' | 'orders' | 'buy' | 'order' | 'profile' | 'help';
+type Tab = 'overview' | 'orders' | 'buy' | 'order' | 'profile' | 'tickets' | 'help';
 
 export default function ClientDashboard({ user, onLogout, onUserUpdate, siteName, logoUrl, company, homeContent }: ClientDashboardProps) {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>('overview');
+  // ?aba=tickets: é para cá que o site manda quem clica em "Abrir um ticket"
+  // vindo do rodapé, da página de ajuda ou da seção de contato.
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(searchParams.get('aba') === 'tickets' ? 'tickets' : 'overview');
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [services, setServices] = useState<ServiceItem[]>([]);
@@ -134,6 +138,7 @@ export default function ClientDashboard({ user, onLogout, onUserUpdate, siteName
               <NavBtn id="buy" icon={<ShoppingCart className="h-4 w-4" />} label="Comprar" />
               <NavBtn id="orders" icon={<ShoppingBag className="h-4 w-4" />} label="Meus Pedidos" />
               <NavBtn id="profile" icon={<UserIcon className="h-4 w-4" />} label="Perfil" />
+              <NavBtn id="tickets" icon={<MessageSquare className="h-4 w-4" />} label="Atendimento" />
               <NavBtn id="help" icon={<LifeBuoy className="h-4 w-4" />} label="Ajuda" />
             </nav>
           </div>
@@ -218,10 +223,12 @@ export default function ClientDashboard({ user, onLogout, onUserUpdate, siteName
             </div>
           )}
 
+          {tab === 'tickets' && <ClientTickets orders={orders} />}
+
           {tab === 'help' && (
             <div className="space-y-4">
               <h1 className="font-display font-black text-xl text-slate-900">Central de Ajuda</h1>
-              <HelpForm homeContent={homeContent || null} company={company} onGoFaq={goHomeFaq} />
+              <HelpForm homeContent={homeContent || null} company={company} onGoFaq={goHomeFaq} user={user} />
             </div>
           )}
         </main>

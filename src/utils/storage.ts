@@ -944,22 +944,126 @@ export interface ContactMessage {
   createdAt: string;
 }
 
-export async function submitContactMessage(
-  payload: { name: string; email: string; subject: string; message: string },
-  recaptchaToken?: string | null
-): Promise<{ ok: boolean; error?: string }> {
+// --- Tickets de atendimento ---
+//
+// O envio anônimo saiu: mensagem só sai de uma conta, e o token vai junto pelo
+// wrapper global de fetch. As mensagens antigas continuam sendo lidas pelas
+// funções de ContactMessage abaixo, no painel.
+
+export interface TicketReply {
+  id: string;
+  ticketId: string;
+  author: 'cliente' | 'admin';
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface Ticket {
+  id: string;
+  accountId: string;
+  subject: string;
+  category: string;
+  priority: string;
+  status: string;
+  orderId: string;
+  unreadAdmin: boolean;
+  unreadClient: boolean;
+  createdAt: string;
+  updatedAt: string;
+  accountName?: string;
+  accountEmail?: string;
+  repliesCount?: number;
+  lastReplyAt?: string;
+  lastReplyBy?: 'cliente' | 'admin' | '';
+  replies?: TicketReply[];
+}
+
+export interface NewTicketInput {
+  subject: string;
+  message: string;
+  category: string;
+  priority: string;
+  orderId?: string;
+}
+
+async function ticketRequest(
+  url: string,
+  init: RequestInit = {}
+): Promise<{ ok: boolean; error?: string; ticket?: Ticket }> {
   try {
-    const res = await fetch('/api/contact', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...payload, recaptchaToken })
+    const res = await fetch(url, {
+      ...init,
+      headers: { 'Content-Type': 'application/json', ...(init.headers || {}) }
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, error: data.error || 'Falha ao enviar a mensagem.' };
-    return { ok: true };
+    if (!res.ok) return { ok: false, error: data.error || 'Não foi possível concluir a ação.' };
+    return { ok: true, ticket: data.ticket };
   } catch {
-    return { ok: false, error: 'Erro de conexão ao enviar a mensagem.' };
+    return { ok: false, error: 'Erro de conexão.' };
   }
+}
+
+export async function fetchMyTickets(): Promise<Ticket[]> {
+  try {
+    const res = await fetch('/api/my/tickets');
+    if (!res.ok) throw new Error('falha');
+    return asArray<Ticket>(await res.json(), 'fetchMyTickets');
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchMyTicket(id: string): Promise<Ticket | null> {
+  try {
+    const res = await fetch(`/api/my/tickets/${encodeURIComponent(id)}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export const createMyTicket = (input: NewTicketInput) =>
+  ticketRequest('/api/my/tickets', { method: 'POST', body: JSON.stringify(input) });
+
+export const replyMyTicket = (id: string, message: string) =>
+  ticketRequest(`/api/my/tickets/${encodeURIComponent(id)}/replies`, { method: 'POST', body: JSON.stringify({ message }) });
+
+export const setMyTicketStatus = (id: string, status: 'fechado' | 'aberto') =>
+  ticketRequest(`/api/my/tickets/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ status }) });
+
+// --- Tickets: lado do admin ---
+
+export async function fetchTickets(): Promise<Ticket[]> {
+  try {
+    const res = await fetch('/api/tickets');
+    if (!res.ok) throw new Error('falha');
+    return asArray<Ticket>(await res.json(), 'fetchTickets');
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchTicket(id: string): Promise<Ticket | null> {
+  try {
+    const res = await fetch(`/api/tickets/${encodeURIComponent(id)}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export const replyTicket = (id: string, message: string) =>
+  ticketRequest(`/api/tickets/${encodeURIComponent(id)}/replies`, { method: 'POST', body: JSON.stringify({ message }) });
+
+export const updateTicketFields = (id: string, patch: { status?: string; priority?: string; category?: string }) =>
+  ticketRequest(`/api/tickets/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(patch) });
+
+export async function deleteTicket(id: string): Promise<{ ok: boolean; error?: string }> {
+  const r = await ticketRequest(`/api/tickets/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  return { ok: r.ok, error: r.error };
 }
 
 export async function fetchContactMessages(): Promise<ContactMessage[]> {

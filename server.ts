@@ -71,12 +71,15 @@ import {
   patchOrderData,
   addContactMessage,
   listContactMessages,
+  createTicket, listTicketsByAccount, listAllTickets, getTicket, addTicketReply,
+  updateTicket, markTicketRead, deleteTicket, countRecentTicketsByAccount,
   updateContactMessageStatus,
   deleteContactMessage
 } from './db';
 import { isMailerConfigured, mailerMissingConfig, sendMail, renderEmailLayout, renderOrderIssueEmail } from './mailer';
 import { normalizeOrderTarget, orderTargetLink } from './src/utils/socialTarget';
 import { normalizeKeywords } from './src/utils/keywords';
+import { TICKET_LIMITS, isTicketClosed } from './src/utils/tickets';
 import { isMercadoPagoConfigured, getPaymentStatus } from './mercadopago';
 import { isPixConfigured, createPix, getPixStatus, getActiveProvider } from './payments';
 import { isSmmConfigured, smmAddOrder, smmOrderStatus, smmBalance, smmServices, isSmmCompleted, smmStatusToOrderStatus } from './smm';
@@ -143,7 +146,6 @@ const PUBLIC_API: { method: string; re: RegExp }[] = [
   { method: 'GET', re: /^\/blog\/tags\/?$/ },
   { method: 'GET', re: /^\/testimonials\/?$/ },
   { method: 'POST', re: /^\/testimonials\/?$/ },
-  { method: 'POST', re: /^\/contact\/?$/ },
   { method: 'POST', re: /^\/orders\/?$/ },
   { method: 'POST', re: /^\/mercadopago\/webhook\/?$/ },
   { method: 'POST', re: /^\/woovi\/webhook\/?$/ }
@@ -156,7 +158,8 @@ const AUTH_API: { method: string; re: RegExp }[] = [
   { method: 'PUT', re: /^\/auth\/password\/?$/ },
   { method: 'POST', re: /^\/upload\/?$/ },
   { method: 'GET', re: /^\/my\// },
-  { method: 'POST', re: /^\/my\// }
+  { method: 'POST', re: /^\/my\// },
+  { method: 'PUT', re: /^\/my\// }
 ];
 
 app.use('/api', (req, res, next) => {
@@ -304,6 +307,7 @@ app.post('/api/accounts', async (req, res) => {
     });
     res.json({ success: true, account });
   } catch (e: any) {
+    if (e?.code === '23505') return res.status(409).json({ error: 'Já existe uma conta com este e-mail.' });
     res.status(500).json({ error: e.message });
   }
 });
@@ -328,6 +332,7 @@ app.put('/api/accounts/:id', async (req, res) => {
     const account = await adminUpdateAccount(req.params.id, { name, email, phone, role, blocked });
     res.json({ success: true, account });
   } catch (e: any) {
+    if (e?.code === '23505') return res.status(409).json({ error: 'Já existe uma conta com este e-mail.' });
     res.status(500).json({ error: e.message });
   }
 });
@@ -628,6 +633,11 @@ app.post('/api/auth/register', async (req, res) => {
     const token = signAccountToken(account);
     res.json({ success: true, token, user: publicUser(account) });
   } catch (e: any) {
+    // Duas inscrições simultâneas com o mesmo e-mail passam pela checagem
+    // acima e batem na unicidade do banco. Sem isto o segundo veria um 500.
+    if (e?.code === '23505') {
+      return res.status(409).json({ error: 'Já existe uma conta com este e-mail. Faça login.' });
+    }
     res.status(500).json({ error: e.message });
   }
 });
@@ -1551,32 +1561,11 @@ app.delete('/api/testimonials/:id', async (req, res) => {
   }
 });
 
-// --- Contact messages (help / "Fale Conosco") ---
-
-// Submit a contact message (public). Protected by reCAPTCHA v3 and URL stripping.
-app.post('/api/contact', async (req, res) => {
-  try {
-    const { name, email, subject, message, recaptchaToken } = req.body || {};
-    if (!name || !email || !message) {
-      return res.status(400).json({ error: 'Nome, e-mail e mensagem são obrigatórios.' });
-    }
-    const verification = await verifyRecaptcha(recaptchaToken, req.ip);
-    if (!verification.ok) {
-      return res.status(400).json({ error: 'Falha na verificação de segurança. Tente novamente.' });
-    }
-    const id = `msg_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-    const created = await addContactMessage(
-      id,
-      stripLinks(String(name)).slice(0, 120),
-      String(email).trim().slice(0, 160),
-      stripLinks(String(subject || '')).slice(0, 160),
-      stripLinks(String(message)).slice(0, 4000)
-    );
-    res.json({ success: true, message: created });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
-});
+// --- Mensagens de contato (histórico) ---
+//
+// O envio anônimo saiu do ar: o atendimento agora é por ticket, e ticket exige
+// conta. As rotas de leitura continuam porque as mensagens recebidas antes da
+// mudança não têm dono e precisam seguir visíveis para o admin.
 
 // List contact messages (admin).
 app.get('/api/contact', async (req, res) => {
@@ -1601,6 +1590,192 @@ app.put('/api/contact/:id', async (req, res) => {
 app.delete('/api/contact/:id', async (req, res) => {
   try {
     await deleteContactMessage(req.params.id);
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
+// --- Tickets de atendimento ---
+//
+// O atendimento por mensagem deixou de ser anônimo: toda conversa nasce presa a
+// uma conta. Isso é o que permite o cliente acompanhar a resposta, o admin ver
+// o histórico de quem está falando e ninguém abrir cem mensagens sem rosto.
+
+const MAX_TICKETS_POR_HORA = 10;
+
+// Quem pede: a conta do token. Bloqueada não abre nem responde ticket.
+async function contaDoPedido(req: any) {
+  const payload = getPayload(req)!;
+  const account = await getAccountById(payload.sub);
+  if (!account || account.blocked) return null;
+  return account;
+}
+
+// Meus tickets (cliente).
+app.get('/api/my/tickets', async (req, res) => {
+  try {
+    const account = await contaDoPedido(req);
+    if (!account) return res.status(403).json({ error: 'Conta indisponível.' });
+    res.json(await listTicketsByAccount(account.id));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Um ticket meu, com a conversa. Marca como lido do lado do cliente.
+app.get('/api/my/tickets/:id', async (req, res) => {
+  try {
+    const account = await contaDoPedido(req);
+    if (!account) return res.status(403).json({ error: 'Conta indisponível.' });
+    const ticket = await getTicket(String(req.params.id));
+    // Mesma resposta para "não existe" e "não é seu": um 403 aqui contaria a
+    // quem tentou que o ticket existe.
+    if (!ticket || ticket.accountId !== account.id) {
+      return res.status(404).json({ error: 'Ticket não encontrado.' });
+    }
+    await markTicketRead(ticket.id, 'cliente');
+    res.json({ ...ticket, unreadClient: false });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Abrir um ticket.
+app.post('/api/my/tickets', async (req, res) => {
+  try {
+    const account = await contaDoPedido(req);
+    if (!account) return res.status(403).json({ error: 'Conta indisponível.' });
+
+    const subject = String(req.body?.subject || '').trim();
+    const body = String(req.body?.message || '').trim();
+    if (!subject || !body) return res.status(400).json({ error: 'Informe o assunto e a mensagem.' });
+
+    if (await countRecentTicketsByAccount(account.id) >= MAX_TICKETS_POR_HORA) {
+      return res.status(429).json({
+        error: 'Você abriu muitos tickets na última hora. Responda os que já estão abertos ou tente mais tarde.'
+      });
+    }
+
+    const ticket = await createTicket({
+      accountId: account.id,
+      authorName: account.name || account.email,
+      subject: subject.slice(0, TICKET_LIMITS.subject),
+      category: req.body?.category,
+      priority: req.body?.priority,
+      body: body.slice(0, TICKET_LIMITS.body),
+      orderId: String(req.body?.orderId || '')
+    });
+    res.json({ success: true, ticket: await getTicket(ticket.id) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Responder um ticket meu.
+app.post('/api/my/tickets/:id/replies', async (req, res) => {
+  try {
+    const account = await contaDoPedido(req);
+    if (!account) return res.status(403).json({ error: 'Conta indisponível.' });
+    const ticket = await getTicket(String(req.params.id));
+    if (!ticket || ticket.accountId !== account.id) {
+      return res.status(404).json({ error: 'Ticket não encontrado.' });
+    }
+    const body = String(req.body?.message || '').trim();
+    if (!body) return res.status(400).json({ error: 'Escreva a sua mensagem.' });
+
+    const updated = await addTicketReply({
+      ticketId: ticket.id,
+      author: 'cliente',
+      authorName: account.name || account.email,
+      body: body.slice(0, TICKET_LIMITS.body)
+    });
+    res.json({ success: true, ticket: updated });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// O cliente só mexe no próprio ticket e só para encerrar ou reabrir — status e
+// prioridade de atendimento são decisão de quem atende.
+app.put('/api/my/tickets/:id', async (req, res) => {
+  try {
+    const account = await contaDoPedido(req);
+    if (!account) return res.status(403).json({ error: 'Conta indisponível.' });
+    const ticket = await getTicket(String(req.params.id));
+    if (!ticket || ticket.accountId !== account.id) {
+      return res.status(404).json({ error: 'Ticket não encontrado.' });
+    }
+    const wanted = String(req.body?.status || '');
+    if (wanted !== 'fechado' && wanted !== 'aberto') {
+      return res.status(400).json({ error: 'Você pode encerrar ou reabrir o ticket.' });
+    }
+    res.json({ success: true, ticket: await updateTicket(ticket.id, { status: wanted }) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- Tickets: lado do admin (tudo abaixo exige token de administrador) ---
+
+app.get('/api/tickets', async (req, res) => {
+  try {
+    res.json(await listAllTickets());
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/tickets/:id', async (req, res) => {
+  try {
+    const ticket = await getTicket(String(req.params.id));
+    if (!ticket) return res.status(404).json({ error: 'Ticket não encontrado.' });
+    await markTicketRead(ticket.id, 'admin');
+    res.json({ ...ticket, unreadAdmin: false });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/tickets/:id/replies', async (req, res) => {
+  try {
+    const payload = getPayload(req)!;
+    const admin = await getAccountById(payload.sub);
+    const ticket = await getTicket(String(req.params.id));
+    if (!ticket) return res.status(404).json({ error: 'Ticket não encontrado.' });
+    const body = String(req.body?.message || '').trim();
+    if (!body) return res.status(400).json({ error: 'Escreva a resposta.' });
+
+    const updated = await addTicketReply({
+      ticketId: ticket.id,
+      author: 'admin',
+      authorName: admin?.name || 'Atendimento',
+      body: body.slice(0, TICKET_LIMITS.body)
+    });
+    res.json({ success: true, ticket: updated });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/tickets/:id', async (req, res) => {
+  try {
+    const ticket = await updateTicket(String(req.params.id), {
+      status: req.body?.status,
+      priority: req.body?.priority,
+      category: req.body?.category
+    });
+    if (!ticket) return res.status(404).json({ error: 'Ticket não encontrado.' });
+    res.json({ success: true, ticket });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/tickets/:id', async (req, res) => {
+  try {
+    await deleteTicket(String(req.params.id));
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });

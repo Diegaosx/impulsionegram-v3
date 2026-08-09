@@ -7,6 +7,11 @@ import { SERVICES, PREBUILT_PLANS, TESTIMONIALS } from './src/data';
 // O saneamento das palavras-chave é o mesmo do painel: uma só regra evita que
 // o que o admin vê no campo seja diferente do que vai para a meta tag.
 import { normalizeKeywords } from './src/utils/keywords';
+// Vocabulário dos tickets: o servidor grava só o que as telas sabem exibir.
+import {
+  TicketAuthor, TicketCategory, TicketPriority, TicketStatus,
+  TICKET_LIMITS, normalizeCategory, normalizePriority, normalizeStatus
+} from './src/utils/tickets';
 
 // --- Shared domain types (also consumed by server.ts) ---
 export interface UserItem {
@@ -261,6 +266,41 @@ async function createSchema(client: PoolClient) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`
   );
+
+  // --- Tickets de atendimento ---
+  //
+  // Toda mensagem nova nasce presa a uma conta (ON DELETE CASCADE: apagar o
+  // usuário não deixa ticket órfão sem dono para responder). A conversa fica em
+  // ticket_replies, inclusive a primeira mensagem — assim a linha do tempo é
+  // uma lista só, sem um caso especial para "a mensagem original".
+  await client.query(
+    `CREATE TABLE IF NOT EXISTS tickets (
+      id            TEXT PRIMARY KEY,
+      account_id    TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+      subject       TEXT NOT NULL,
+      category      TEXT NOT NULL DEFAULT 'duvida',
+      priority      TEXT NOT NULL DEFAULT 'normal',
+      status        TEXT NOT NULL DEFAULT 'aberto',
+      order_id      TEXT,
+      unread_admin  BOOLEAN NOT NULL DEFAULT true,
+      unread_client BOOLEAN NOT NULL DEFAULT false,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`
+  );
+  await client.query(
+    `CREATE TABLE IF NOT EXISTS ticket_replies (
+      id          TEXT PRIMARY KEY,
+      ticket_id   TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+      author      TEXT NOT NULL,
+      author_name TEXT NOT NULL DEFAULT '',
+      body        TEXT NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`
+  );
+  // A lista do cliente e a do admin ordenam pela última movimentação.
+  await client.query(`CREATE INDEX IF NOT EXISTS tickets_account_idx ON tickets (account_id, updated_at DESC)`);
+  await client.query(`CREATE INDEX IF NOT EXISTS ticket_replies_ticket_idx ON ticket_replies (ticket_id, created_at)`);
 }
 
 // --- Contact messages (help / "Fale Conosco" form) ---
@@ -311,6 +351,241 @@ export async function updateContactMessageStatus(id: string, status: string): Pr
 
 export async function deleteContactMessage(id: string): Promise<void> {
   await pool.query(`DELETE FROM contact_messages WHERE id = $1`, [id]);
+}
+
+// --- Tickets de atendimento ---
+
+export interface TicketReplyRecord {
+  id: string;
+  ticketId: string;
+  author: TicketAuthor;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface TicketRecord {
+  id: string;
+  accountId: string;
+  subject: string;
+  category: TicketCategory;
+  priority: TicketPriority;
+  status: TicketStatus;
+  orderId: string;
+  unreadAdmin: boolean;
+  unreadClient: boolean;
+  createdAt: string;
+  updatedAt: string;
+  // Preenchidos nas listagens, para a tela não fazer uma consulta por linha.
+  accountName?: string;
+  accountEmail?: string;
+  repliesCount?: number;
+  lastReplyAt?: string;
+  lastReplyBy?: TicketAuthor | '';
+  replies?: TicketReplyRecord[];
+}
+
+const iso = (v: any): string => (v instanceof Date ? v.toISOString() : v ? String(v) : '');
+
+function mapTicket(r: any): TicketRecord {
+  return {
+    id: r.id,
+    accountId: r.account_id,
+    subject: r.subject || '',
+    category: normalizeCategory(r.category),
+    priority: normalizePriority(r.priority),
+    status: normalizeStatus(r.status),
+    orderId: r.order_id || '',
+    unreadAdmin: r.unread_admin === true,
+    unreadClient: r.unread_client === true,
+    createdAt: iso(r.created_at),
+    updatedAt: iso(r.updated_at),
+    ...(r.account_name !== undefined ? { accountName: r.account_name || '' } : {}),
+    ...(r.account_email !== undefined ? { accountEmail: r.account_email || '' } : {}),
+    ...(r.replies_count !== undefined ? { repliesCount: Number(r.replies_count) || 0 } : {}),
+    ...(r.last_reply_at !== undefined ? { lastReplyAt: iso(r.last_reply_at) } : {}),
+    ...(r.last_reply_by !== undefined ? { lastReplyBy: (r.last_reply_by || '') as TicketAuthor | '' } : {})
+  };
+}
+
+function mapReply(r: any): TicketReplyRecord {
+  return {
+    id: r.id,
+    ticketId: r.ticket_id,
+    author: r.author === 'admin' ? 'admin' : 'cliente',
+    authorName: r.author_name || '',
+    body: r.body || '',
+    createdAt: iso(r.created_at)
+  };
+}
+
+// Colunas derivadas usadas nas duas listagens.
+const TICKET_LIST_COLUMNS = `
+  t.*,
+  a.name  AS account_name,
+  a.email AS account_email,
+  (SELECT COUNT(*) FROM ticket_replies r WHERE r.ticket_id = t.id)::int AS replies_count,
+  (SELECT MAX(r.created_at) FROM ticket_replies r WHERE r.ticket_id = t.id) AS last_reply_at,
+  (SELECT r.author FROM ticket_replies r WHERE r.ticket_id = t.id ORDER BY r.created_at DESC LIMIT 1) AS last_reply_by
+`;
+
+/**
+ * Abre um ticket com a primeira mensagem já dentro da conversa.
+ *
+ * Ticket e mensagem entram na mesma transação: um ticket sem nenhuma mensagem
+ * seria um registro que o cliente vê na lista e não consegue explicar.
+ */
+export async function createTicket(input: {
+  accountId: string;
+  authorName: string;
+  subject: string;
+  category: unknown;
+  priority: unknown;
+  body: string;
+  orderId?: string;
+}): Promise<TicketRecord> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const id = `TCK-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const t = await client.query(
+      `INSERT INTO tickets (id, account_id, subject, category, priority, status, order_id, unread_admin, unread_client)
+       VALUES ($1, $2, $3, $4, $5, 'aberto', $6, true, false) RETURNING *`,
+      [
+        id,
+        input.accountId,
+        input.subject.slice(0, TICKET_LIMITS.subject),
+        normalizeCategory(input.category),
+        normalizePriority(input.priority),
+        String(input.orderId || '').slice(0, 60)
+      ]
+    );
+    await client.query(
+      `INSERT INTO ticket_replies (id, ticket_id, author, author_name, body)
+       VALUES ($1, $2, 'cliente', $3, $4)`,
+      [randomUUID(), id, input.authorName.slice(0, 120), input.body.slice(0, TICKET_LIMITS.body)]
+    );
+    await client.query('COMMIT');
+    return mapTicket(t.rows[0]);
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+export async function listTicketsByAccount(accountId: string): Promise<TicketRecord[]> {
+  const r = await pool.query(
+    `SELECT ${TICKET_LIST_COLUMNS} FROM tickets t
+       JOIN accounts a ON a.id = t.account_id
+      WHERE t.account_id = $1
+      ORDER BY t.updated_at DESC LIMIT 500`,
+    [accountId]
+  );
+  return r.rows.map(mapTicket);
+}
+
+export async function listAllTickets(limit = 1000): Promise<TicketRecord[]> {
+  const r = await pool.query(
+    `SELECT ${TICKET_LIST_COLUMNS} FROM tickets t
+       JOIN accounts a ON a.id = t.account_id
+      ORDER BY t.updated_at DESC LIMIT $1`,
+    [limit]
+  );
+  return r.rows.map(mapTicket);
+}
+
+export async function getTicket(id: string): Promise<TicketRecord | null> {
+  const r = await pool.query(
+    `SELECT ${TICKET_LIST_COLUMNS} FROM tickets t
+       JOIN accounts a ON a.id = t.account_id
+      WHERE t.id = $1`,
+    [id]
+  );
+  if (!r.rows[0]) return null;
+  const ticket = mapTicket(r.rows[0]);
+  const replies = await pool.query(
+    `SELECT * FROM ticket_replies WHERE ticket_id = $1 ORDER BY created_at ASC`,
+    [id]
+  );
+  ticket.replies = replies.rows.map(mapReply);
+  return ticket;
+}
+
+/**
+ * Acrescenta uma resposta e move o ticket.
+ *
+ * Quem responde marca o outro lado como não lido e nunca a si mesmo — foi o
+ * admin quem escreveu, então para ele o ticket já está lido. O status também
+ * anda sozinho: resposta do admin pede retorno do cliente, resposta do cliente
+ * devolve o ticket para a fila. Um ticket resolvido/fechado que recebe resposta
+ * volta a andar, senão a conversa continuaria num registro "encerrado".
+ */
+export async function addTicketReply(input: {
+  ticketId: string;
+  author: TicketAuthor;
+  authorName: string;
+  body: string;
+}): Promise<TicketRecord | null> {
+  const current = await pool.query(`SELECT status FROM tickets WHERE id = $1`, [input.ticketId]);
+  if (!current.rows[0]) return null;
+
+  const nextStatus: TicketStatus = input.author === 'admin' ? 'aguardando_cliente' : 'em_andamento';
+
+  await pool.query(
+    `INSERT INTO ticket_replies (id, ticket_id, author, author_name, body) VALUES ($1, $2, $3, $4, $5)`,
+    [randomUUID(), input.ticketId, input.author, input.authorName.slice(0, 120), input.body.slice(0, TICKET_LIMITS.body)]
+  );
+  await pool.query(
+    `UPDATE tickets
+        SET status = $2,
+            unread_admin  = CASE WHEN $3 = 'cliente' THEN true ELSE false END,
+            unread_client = CASE WHEN $3 = 'admin'   THEN true ELSE false END,
+            updated_at = now()
+      WHERE id = $1`,
+    [input.ticketId, nextStatus, input.author]
+  );
+  return getTicket(input.ticketId);
+}
+
+export async function updateTicket(id: string, patch: {
+  status?: unknown;
+  priority?: unknown;
+  category?: unknown;
+}): Promise<TicketRecord | null> {
+  const sets: string[] = [];
+  const values: any[] = [id];
+  if (patch.status !== undefined) { values.push(normalizeStatus(patch.status)); sets.push(`status = $${values.length}`); }
+  if (patch.priority !== undefined) { values.push(normalizePriority(patch.priority)); sets.push(`priority = $${values.length}`); }
+  if (patch.category !== undefined) { values.push(normalizeCategory(patch.category)); sets.push(`category = $${values.length}`); }
+  if (!sets.length) return getTicket(id);
+  const r = await pool.query(`UPDATE tickets SET ${sets.join(', ')}, updated_at = now() WHERE id = $1 RETURNING id`, values);
+  return r.rows[0] ? getTicket(id) : null;
+}
+
+/** Zera o "não lido" de um dos lados ao abrir a conversa. */
+export async function markTicketRead(id: string, side: TicketAuthor): Promise<void> {
+  const column = side === 'admin' ? 'unread_admin' : 'unread_client';
+  await pool.query(`UPDATE tickets SET ${column} = false WHERE id = $1`, [id]);
+}
+
+export async function countUnreadTicketsForAdmin(): Promise<number> {
+  const r = await pool.query(`SELECT COUNT(*)::int AS n FROM tickets WHERE unread_admin = true`);
+  return Number(r.rows[0]?.n) || 0;
+}
+
+export async function deleteTicket(id: string): Promise<void> {
+  await pool.query(`DELETE FROM tickets WHERE id = $1`, [id]);
+}
+
+/** Quantos tickets a conta abriu na última hora (trava simples contra enxurrada). */
+export async function countRecentTicketsByAccount(accountId: string, minutes = 60): Promise<number> {
+  const r = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM tickets WHERE account_id = $1 AND created_at > now() - ($2 || ' minutes')::interval`,
+    [accountId, String(minutes)]
+  );
+  return Number(r.rows[0]?.n) || 0;
 }
 
 // --- User accounts (multi-user auth: admin + cliente) ---
