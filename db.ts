@@ -513,17 +513,23 @@ export async function patchOrderData(id: string, patch: Record<string, any>): Pr
   await pool.query(`UPDATE orders SET data = data || $2::jsonb WHERE id = $1`, [id, JSON.stringify(patch)]);
 }
 
-// Pedidos ainda em aberto: tudo que não está entregue nem cancelado.
+// Pedidos ainda em aberto: tudo que não chegou a um estado terminal.
 //
 // A comparação é feita sobre o texto do status porque o histórico tem apelidos
 // para o mesmo estado ('pendente', 'aguardando', 'aprovado', …) — o mesmo motivo
 // que existe o mapa em src/utils/orderStatus.ts. Aqui só precisamos excluir os
-// dois estados terminais, e qualquer apelido deles cai no mesmo LIKE.
+// estados terminais, e qualquer apelido deles cai na mesma lista.
+//
+// Espelha TERMINAL_ORDER_STATUSES de src/utils/orderStatus.ts; o servidor não
+// importa módulos do cliente.
+export const TERMINAL_ORDER_STATUSES = ['entregue', 'cancelado', 'outro'];
+
 export async function listOpenOrders(): Promise<any[]> {
   const r = await pool.query(
     `SELECT data FROM orders
-     WHERE lower(coalesce(data->>'status','')) NOT IN ('entregue', 'cancelado')
-     ORDER BY seq ASC`
+     WHERE lower(coalesce(data->>'status','')) <> ALL($1::text[])
+     ORDER BY seq ASC`,
+    [TERMINAL_ORDER_STATUSES]
   );
   return r.rows.map((x) => x.data);
 }

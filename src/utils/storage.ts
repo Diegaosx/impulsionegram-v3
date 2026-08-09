@@ -61,6 +61,57 @@ export interface AdminOrder {
   smmStatus?: string;
   smmStartCount?: string;
   smmRemains?: string;
+  // Status "Outro": motivo do problema e o que aconteceu com o aviso.
+  issueTitle?: string;
+  issueDetails?: string;
+  issueAt?: string;
+  issueNotifiedAt?: string;
+  issueNotifyError?: string;
+  // Cancelamento automático por falta de pagamento.
+  cancelReason?: string;
+  canceledAt?: string;
+}
+
+export interface OrderIssueResult {
+  ok: boolean;
+  emailSent?: boolean;
+  emailError?: string;
+  error?: string;
+}
+
+// Marca o pedido com o status "Outro" e o motivo, e avisa o cliente por e-mail.
+export async function reportOrderIssue(
+  orderId: string,
+  input: { title: string; details?: string; notify?: boolean }
+): Promise<OrderIssueResult> {
+  try {
+    const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}/issue`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data.error || 'Falha ao registrar o motivo.' };
+    return { ok: true, emailSent: !!data.emailSent, emailError: data.emailError || '' };
+  } catch {
+    return { ok: false, error: 'Erro de conexão.' };
+  }
+}
+
+// Envia um e-mail de teste para validar a configuração de envio.
+export async function sendTestEmail(to?: string): Promise<{ ok: boolean; to?: string; error?: string }> {
+  try {
+    const res = await fetch('/api/email/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data.error || 'Falha ao enviar o e-mail de teste.' };
+    return { ok: true, to: data.to };
+  } catch {
+    return { ok: false, error: 'Erro de conexão.' };
+  }
 }
 
 export async function fetchSmmBalance(): Promise<{ balance?: string; currency?: string; error?: string }> {

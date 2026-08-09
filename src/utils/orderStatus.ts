@@ -6,7 +6,10 @@ export type OrderStatus =
   | 'processando'
   | 'pago'
   | 'entregue'
-  | 'cancelado';
+  | 'cancelado'
+  // "Outro" marca um problema que depende do cliente (perfil privado, link
+  // errado…). O motivo fica em issueTitle/issueDetails no pedido.
+  | 'outro';
 
 export interface OrderStatusInfo {
   key: string;
@@ -26,8 +29,18 @@ const MAP: Record<string, OrderStatusInfo> = {
   aprovado:             { key: 'pago', label: 'Pagamento aprovado', badge: 'bg-green-50 text-green-700 border-green-200', dot: 'bg-green-500' },
   pagamento_aprovado:   { key: 'pago', label: 'Pagamento aprovado', badge: 'bg-green-50 text-green-700 border-green-200', dot: 'bg-green-500' },
   entregue:             { key: 'entregue', label: 'Entregue', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
-  cancelado:            { key: 'cancelado', label: 'Cancelado', badge: 'bg-red-50 text-red-700 border-red-200', dot: 'bg-red-500' }
+  cancelado:            { key: 'cancelado', label: 'Cancelado', badge: 'bg-red-50 text-red-700 border-red-200', dot: 'bg-red-500' },
+  outro:                { key: 'outro', label: 'Outro', badge: 'bg-orange-50 text-orange-700 border-orange-200', dot: 'bg-orange-500' }
 };
+
+// Estados em que o pedido está encerrado: nada mais é consultado no painel SMM
+// e o tempo não o cancela sozinho. "Outro" entra aqui porque marca um problema
+// que só uma ação humana resolve.
+export const TERMINAL_ORDER_STATUSES = ['entregue', 'cancelado', 'outro'];
+
+export function isTerminalOrderStatus(status: string): boolean {
+  return TERMINAL_ORDER_STATUSES.includes(orderStatusInfo(status).key);
+}
 
 function normalizeKey(status: string): string {
   return String(status || '')

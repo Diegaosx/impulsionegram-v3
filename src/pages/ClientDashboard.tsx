@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingBag, User as UserIcon, LogOut, ArrowLeft, Sparkles,
-  Package, CircleDollarSign, Clock, CheckCircle2, ShoppingCart, QrCode, LifeBuoy, ArrowLeftCircle
+  Package, CircleDollarSign, Clock, CheckCircle2, ShoppingCart, QrCode, LifeBuoy, ArrowLeftCircle,
+  AlertCircle
 } from 'lucide-react';
 import { AuthUser, AdminOrder, HomeContent, CompanySettings, fetchMyOrders, fetchServices } from '../utils/storage';
 import { ServiceItem } from '../types';
@@ -51,7 +52,9 @@ export default function ClientDashboard({ user, onLogout, onUserUpdate, siteName
   const metrics = useMemo(() => {
     const total = orders.length;
     const spent = orders.reduce((sum, o) => sum + (Number(o.price) || 0), 0);
-    const pending = orders.filter((o) => ['aguardando_pagamento', 'processando'].includes(orderStatusInfo(o.status).key)).length;
+    // "Outro" entra em andamento: é um pedido não resolvido, e deixá-lo fora
+    // dos dois contadores faria o total não bater com nada na tela.
+    const pending = orders.filter((o) => ['aguardando_pagamento', 'processando', 'pago', 'outro'].includes(orderStatusInfo(o.status).key)).length;
     const delivered = orders.filter((o) => orderStatusInfo(o.status).key === 'entregue').length;
     return { total, spent, pending, delivered };
   }, [orders]);
@@ -268,10 +271,27 @@ function OrdersList({ orders, loading, onBuy, onPay }: { orders: AdminOrder[]; l
               <p className="text-[11px] text-slate-400 font-semibold mt-0.5">
                 {o.quantity ? `${Number(o.quantity).toLocaleString('pt-BR')} • ` : ''}{o.platform || ''} • #{o.id}
               </p>
-              {(o.smmStatus || o.smmRemains) && o.status !== 'entregue' && (
+              {(o.smmStatus || o.smmRemains) && st.key !== 'entregue' && st.key !== 'outro' && (
                 <p className="text-[10px] text-sky-600 font-bold mt-0.5">
                   Entrega: {o.smmStatus || 'em andamento'}{o.smmRemains ? ` • faltam ${Number(o.smmRemains).toLocaleString('pt-BR')}` : ''}
                 </p>
+              )}
+              {/* Problema no pedido: o cliente precisa ver o motivo aqui, não
+                  só no e-mail — é a tela que ele abre para conferir o pedido. */}
+              {st.key === 'outro' && o.issueTitle && (
+                <div className="mt-1.5 rounded-lg bg-orange-50 border border-orange-200 px-2.5 py-2">
+                  <p className="text-[11px] font-black text-orange-800 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3 shrink-0" /> {o.issueTitle}
+                  </p>
+                  {o.issueDetails && (
+                    <p className="text-[10px] font-semibold text-orange-700 mt-1 whitespace-pre-line leading-relaxed">
+                      {o.issueDetails}
+                    </p>
+                  )}
+                </div>
+              )}
+              {st.key === 'cancelado' && o.cancelReason && (
+                <p className="text-[10px] text-red-600 font-bold mt-0.5">{o.cancelReason}</p>
               )}
               <p className="text-[10px] text-slate-300 font-mono mt-0.5">{o.date ? formatDateTime(o.date) : ''}</p>
             </div>
