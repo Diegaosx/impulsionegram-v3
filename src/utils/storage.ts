@@ -47,6 +47,8 @@ export interface AdminOrder {
   accountId?: string;
   serviceType?: string;
   serviceId?: string;
+  /** Pedido de origem, quando este nasceu de um "comprar novamente". */
+  repeatOf?: string;
   postUrl?: string;
   couponCode?: string;
   couponDiscountPercent?: number;
@@ -398,6 +400,21 @@ export async function createMyOrder(input: NewOrderInput): Promise<{ ok: boolean
     return { ok: true, order: data.order };
   } catch {
     return { ok: false, error: 'Falha de conexão ao criar o pedido.' };
+  }
+}
+
+/** Repete um pedido anterior como um pedido novo (preço recalculado pelo servidor). */
+export async function repeatMyOrder(id: string): Promise<{ ok: boolean; order?: AdminOrder; error?: string }> {
+  try {
+    const res = await fetch(`/api/my/orders/${encodeURIComponent(id)}/repeat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data.error || 'Não foi possível repetir o pedido.' };
+    return { ok: true, order: data.order };
+  } catch {
+    return { ok: false, error: 'Erro de conexão.' };
   }
 }
 

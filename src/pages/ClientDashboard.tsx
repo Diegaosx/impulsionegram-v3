@@ -3,11 +3,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingBag, User as UserIcon, LogOut, ArrowLeft, Sparkles,
   Package, CircleDollarSign, Clock, CheckCircle2, ShoppingCart, QrCode, LifeBuoy, ArrowLeftCircle,
-  AlertCircle, MessageSquare, Star
+  AlertCircle, MessageSquare, Star, Search, RotateCcw, Repeat
 } from 'lucide-react';
 import {
   AuthUser, AdminOrder, HomeContent, CompanySettings, ServiceReview,
-  fetchMyOrders, fetchServices, fetchMyReviews
+  fetchMyOrders, fetchServices, fetchMyReviews, repeatMyOrder
 } from '../utils/storage';
 import { ServiceItem } from '../types';
 import { orderStatusInfo } from '../utils/orderStatus';
@@ -18,6 +18,8 @@ import ProfileForm from '../components/ProfileForm';
 import HelpForm from '../components/HelpForm';
 import ClientTickets from '../components/ClientTickets';
 import ReviewOrderModal from '../components/ReviewOrderModal';
+import AdminPagination, { clampPage, pageSlice } from '../components/AdminPagination';
+import { orderStatusInfo as statusInfo } from '../utils/orderStatus';
 
 interface ClientDashboardProps {
   user: AuthUser;
@@ -61,6 +63,16 @@ export default function ClientDashboard({ user, onLogout, onUserUpdate, siteName
   const [reviewingOrder, setReviewingOrder] = useState<AdminOrder | null>(null);
   const reloadReviews = () => fetchMyReviews().then(setReviews);
 
+  // Filtros e paginação de "Meus Pedidos". Quem compra sempre acaba com uma
+  // lista longa; sem isso, achar um pedido antigo vira rolagem.
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderStatus, setOrderStatus] = useState('todos');
+  const [orderPage, setOrderPage] = useState(1);
+  const [orderPerPage, setOrderPerPage] = useState(10);
+  // Comprar novamente: um pedido novo do mesmo serviço, que já cai no PIX.
+  const [repeating, setRepeating] = useState('');
+  const [repeatError, setRepeatError] = useState('');
+
   const reloadOrders = () => fetchMyOrders().then(setOrders);
 
   useEffect(() => {
@@ -73,6 +85,35 @@ export default function ClientDashboard({ user, onLogout, onUserUpdate, siteName
   const openOrder = (id: string) => {
     const o = orders.find((x) => x.id === id) || null;
     setSelectedOrder(o);
+    setTab('order');
+  };
+
+  const filteredOrders = useMemo(() => {
+    const termo = orderSearch.trim().toLowerCase();
+    return orders.filter(o => {
+      if (termo) {
+        const alvo = [o.id, o.serviceLabel, o.platform, o.username]
+          .map(v => String(v || '').toLowerCase()).join(' ');
+        if (!alvo.includes(termo)) return false;
+      }
+      // Comparado pela chave canônica: pedidos antigos gravaram "Pendente" e
+      // afins, e o filtro precisa alcançá-los.
+      if (orderStatus !== 'todos' && statusInfo(o.status).key !== orderStatus) return false;
+      return true;
+    });
+  }, [orders, orderSearch, orderStatus]);
+
+  useEffect(() => { setOrderPage(1); }, [orderSearch, orderStatus]);
+
+  const repetirPedido = async (order: AdminOrder) => {
+    setRepeatError('');
+    setRepeating(order.id);
+    const res = await repeatMyOrder(order.id);
+    setRepeating('');
+    if (!res.ok || !res.order) { setRepeatError(res.error || 'Não foi possível repetir o pedido.'); return; }
+    // Cai direto na tela de pagamento do pedido novo.
+    await reloadOrders();
+    setSelectedOrder(res.order);
     setTab('order');
   };
 
@@ -225,14 +266,78 @@ export default function ClientDashboard({ user, onLogout, onUserUpdate, siteName
           {tab === 'orders' && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
               <h1 className="font-display font-black text-xl text-slate-900 mb-4">Meus Pedidos</h1>
-              <OrdersList
-                orders={orders}
-                loading={loading}
-                onBuy={goBuy}
-                onPay={openOrder}
-                reviews={reviews}
-                onReview={setReviewingOrder}
-              />
+
+              {orders.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2.5 mb-4">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="h-4 w-4 text-slate-300 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={orderSearch}
+                      onChange={(e) => setOrderSearch(e.target.value)}
+                      placeholder="Buscar por pedido, serviço ou perfil..."
+                      className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg py-2.5 pl-9 pr-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                    />
+                  </div>
+                  <select
+                    value={orderStatus}
+                    onChange={(e) => setOrderStatus(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg py-2.5 px-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                  >
+                    <option value="todos">Todos os status</option>
+                    <option value="aguardando_pagamento">Aguardando pagamento</option>
+                    <option value="processando">Processando</option>
+                    <option value="pago">Pagamento aprovado</option>
+                    <option value="entregue">Entregue</option>
+                    <option value="cancelado">Cancelado</option>
+                    <option value="outro">Com problema</option>
+                  </select>
+                  {(orderSearch.trim() || orderStatus !== 'todos') && (
+                    <button
+                      type="button"
+                      onClick={() => { setOrderSearch(''); setOrderStatus('todos'); }}
+                      className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-primary px-2 py-2.5 cursor-pointer transition-colors"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" /> Limpar
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {repeatError && (
+                <p className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-lg px-3 py-2 mb-3">{repeatError}</p>
+              )}
+
+              {orders.length > 0 && filteredOrders.length === 0 ? (
+                <p className="text-center text-xs font-semibold text-slate-500 py-10">
+                  Nenhum pedido corresponde aos filtros.
+                </p>
+              ) : (
+                <OrdersList
+                  orders={pageSlice<AdminOrder>(filteredOrders, orderPage, orderPerPage)}
+                  loading={loading}
+                  onBuy={goBuy}
+                  onPay={openOrder}
+                  reviews={reviews}
+                  onReview={setReviewingOrder}
+                  onRepeat={repetirPedido}
+                  repeatingId={repeating}
+                />
+              )}
+
+              {filteredOrders.length > 0 && (
+                <div className="-mx-5 -mb-5 mt-4">
+                  <AdminPagination
+                    total={filteredOrders.length}
+                    page={clampPage(orderPage, filteredOrders.length, orderPerPage)}
+                    perPage={orderPerPage}
+                    onPageChange={setOrderPage}
+                    onPerPageChange={setOrderPerPage}
+                    itemLabel="pedidos"
+                    perPageOptions={[5, 10, 25, 50]}
+                  />
+                </div>
+              )}
             </div>
           )}
 
@@ -292,13 +397,15 @@ function MetricCard({ icon, label, value, tone }: { icon: ReactNode; label: stri
   );
 }
 
-function OrdersList({ orders, loading, onBuy, onPay, reviews = [], onReview }: {
+function OrdersList({ orders, loading, onBuy, onPay, reviews = [], onReview, onRepeat, repeatingId = '' }: {
   orders: AdminOrder[];
   loading: boolean;
   onBuy: () => void;
   onPay: (id: string) => void;
   reviews?: ServiceReview[];
   onReview?: (order: AdminOrder) => void;
+  onRepeat?: (order: AdminOrder) => void;
+  repeatingId?: string;
 }) {
   if (loading) {
     return <div className="flex items-center justify-center py-10"><div className="animate-spin rounded-full h-7 w-7 border-b-2 border-primary"></div></div>;
@@ -322,6 +429,9 @@ function OrdersList({ orders, loading, onBuy, onPay, reviews = [], onReview }: {
         const canPay = isPending && (o.paymentMethod || 'PIX') === 'PIX';
         const minhaAvaliacao = reviews.find(r => r.orderId === o.id);
         const podeAvaliar = st.key === 'entregue' && !minhaAvaliacao && !!onReview;
+        // Repetir só faz sentido quando o pedido chegou ao fim de alguma forma;
+        // com um pagamento em aberto, o caminho é pagar o que já existe.
+        const podeRepetir = !!onRepeat && ['entregue', 'cancelado', 'pago', 'outro'].includes(st.key);
         return (
           <div key={o.id} className="flex items-center justify-between gap-3 border border-slate-100 rounded-xl p-3 hover:border-slate-200 transition-colors">
             <div className="min-w-0">
@@ -373,6 +483,17 @@ function OrdersList({ orders, loading, onBuy, onPay, reviews = [], onReview }: {
                   className="inline-flex items-center gap-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-[10px] font-black uppercase tracking-wide rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer"
                 >
                   <Star className="h-3 w-3" /> Avaliar serviço
+                </button>
+              )}
+              {podeRepetir && (
+                <button
+                  onClick={() => onRepeat!(o)}
+                  disabled={repeatingId === o.id}
+                  className="inline-flex items-center gap-1 bg-white hover:bg-purple-50 text-primary border border-primary/30 disabled:opacity-60 text-[10px] font-black uppercase tracking-wide rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer"
+                  title="Cria um pedido novo, igual a este, e abre o PIX"
+                >
+                  <Repeat className="h-3 w-3" />
+                  {repeatingId === o.id ? 'Criando...' : 'Comprar novamente'}
                 </button>
               )}
               {minhaAvaliacao && (
