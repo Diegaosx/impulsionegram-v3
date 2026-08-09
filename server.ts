@@ -84,6 +84,8 @@ import { normalizeKeywords } from './src/utils/keywords';
 import { TICKET_LIMITS, isTicketClosed } from './src/utils/tickets';
 // Mesmo normalizador do cliente: pedidos antigos gravaram "Entregue" e afins.
 import { orderStatusInfo } from './src/utils/orderStatus';
+// Mesma regra de preço da calculadora e da tela de compra.
+import { computePrice, sellablePackages } from './src/site/pricing';
 import { isMercadoPagoConfigured, getPaymentStatus } from './mercadopago';
 import { isPixConfigured, createPix, getPixStatus, getActiveProvider } from './payments';
 import { isSmmConfigured, smmAddOrder, smmOrderStatus, smmBalance, smmServices, isSmmCompleted, smmStatusToOrderStatus } from './smm';
@@ -903,6 +905,45 @@ app.get('/api/smm/services', async (req, res) => {
 
 // Create an order for the logged-in client. Always starts as awaiting payment;
 // a real Mercado Pago PIX flow will flip the status later.
+// Gera a cobrança PIX de um pedido recém-criado, quando o provedor está
+// configurado. Fica numa função porque a compra e a recompra criam pedidos do
+// mesmo jeito — se cada uma tivesse a sua cópia, uma delas envelheceria.
+//
+// A falha não derruba o pedido: ele fica gravado e o PIX pode ser tentado de
+// novo depois; o motivo do erro vai junto no registro.
+async function gerarPixDoPedido(order: any, account: any, req: any): Promise<void> {
+  if (order.paymentMethod !== 'PIX') return;
+  try {
+    const integ = await getIntegrations();
+    if (!isPixConfigured(integ)) return;
+    const pay = await createPix(integ, {
+      amount: order.price,
+      description: `${order.serviceLabel} (${order.id})`,
+      email: account.email,
+      firstName: account.name,
+      orderId: order.id,
+      notificationUrl: `${publicBaseUrl(req)}/api/mercadopago/webhook`
+    });
+    const patch = {
+      paymentProvider: getActiveProvider(integ),
+      mpPaymentId: pay.id,
+      pixQrCode: pay.qrCode,
+      pixQrCodeBase64: pay.qrCodeBase64,
+      pixTicketUrl: pay.ticketUrl,
+      pixExpiresAt: pay.expiresAt,
+      paymentStatus: pay.status
+    };
+    await patchOrderData(order.id, patch);
+    Object.assign(order, patch);
+  } catch (mpErr: any) {
+    const msg = mpErr?.message || String(mpErr);
+    console.error('Mercado Pago PIX creation failed:', msg);
+    const patch = { pixError: msg };
+    await patchOrderData(order.id, patch);
+    Object.assign(order, patch);
+  }
+}
+
 app.post('/api/my/orders', async (req, res) => {
   try {
     const payload = getPayload(req)!;
@@ -983,40 +1024,7 @@ app.post('/api/my/orders', async (req, res) => {
     db.orders = [newOrder, ...db.orders];
     await writeDB(db);
 
-    // Generate a real Mercado Pago PIX charge when configured (PIX orders only).
-    if (newOrder.paymentMethod === 'PIX') {
-      try {
-        const integ = await getIntegrations();
-        if (isPixConfigured(integ)) {
-          const pay = await createPix(integ, {
-            amount: newOrder.price,
-            description: `${newOrder.serviceLabel} (${newOrder.id})`,
-            email: account.email,
-            firstName: account.name,
-            orderId: newOrder.id,
-            notificationUrl: `${publicBaseUrl(req)}/api/mercadopago/webhook`
-          });
-          const patch = {
-            paymentProvider: getActiveProvider(integ),
-            mpPaymentId: pay.id,
-            pixQrCode: pay.qrCode,
-            pixQrCodeBase64: pay.qrCodeBase64,
-            pixTicketUrl: pay.ticketUrl,
-            pixExpiresAt: pay.expiresAt,
-            paymentStatus: pay.status
-          };
-          await patchOrderData(newOrder.id, patch);
-          Object.assign(newOrder, patch);
-        }
-      } catch (mpErr: any) {
-        // The order is still created; the PIX can be retried/checked later.
-        const msg = mpErr?.message || String(mpErr);
-        console.error('Mercado Pago PIX creation failed:', msg);
-        const patch = { pixError: msg };
-        await patchOrderData(newOrder.id, patch);
-        Object.assign(newOrder, patch);
-      }
-    }
+    await gerarPixDoPedido(newOrder, account, req);
 
     res.json({ success: true, order: newOrder });
   } catch (e: any) {
@@ -1791,6 +1799,84 @@ app.delete('/api/tickets/:id', async (req, res) => {
   }
 });
 
+
+
+// Comprar de novo: repete um pedido anterior como um pedido NOVO.
+//
+// O que se repete é a escolha (serviço, quantidade e o perfil/publicação de
+// destino), não o valor: o preço é recalculado pelo catálogo de hoje. Repetir
+// o preço antigo cobraria uma tabela que não existe mais — para menos ou para
+// mais — e ninguém saberia explicar de onde veio.
+app.post('/api/my/orders/:id/repeat', async (req, res) => {
+  try {
+    const payload = getPayload(req)!;
+    const account = await getAccountById(payload.sub);
+    if (!account || account.blocked) return res.status(403).json({ error: 'Conta indisponível.' });
+
+    const original = await getOrderById(String(req.params.id));
+    const meu = original && (original.accountId === account.id ||
+      String(original.email || '').toLowerCase() === account.email.toLowerCase());
+    // Mesma resposta para "não existe" e "não é seu".
+    if (!original || !meu) return res.status(404).json({ error: 'Pedido não encontrado.' });
+
+    const db = await readDB();
+    const services = db.services || [];
+    const serviceId = servicoDoPedido(original, services);
+    const service = services.find((s: any) => s.id === serviceId);
+    if (!service) {
+      return res.status(400).json({ error: 'Este serviço não está mais disponível.' });
+    }
+
+    const quantity = Number(original.quantity) || 0;
+    if (quantity <= 0) return res.status(400).json({ error: 'Pedido original sem quantidade.' });
+
+    // Preço de hoje: o pacote de mesma quantidade, quando o serviço vende por
+    // pacotes; senão a regra por unidade.
+    const pacotes = sellablePackages(service);
+    const pacote = pacotes.find((p: any) => Number(p.quantity) === quantity);
+    if (pacotes.length && !pacote) {
+      return res.status(400).json({ error: 'A quantidade deste pedido não é mais vendida. Monte um novo pedido.' });
+    }
+    const price = Number(computePrice({
+      service,
+      quantity,
+      packages: pacote ? [pacote] : [],
+      selectedPackage: pacote
+    }).finalPrice.toFixed(2));
+    if (price <= 0) return res.status(400).json({ error: 'Não foi possível calcular o preço deste serviço.' });
+
+    const novo = {
+      id: `TRX-${Math.floor(100000 + Math.random() * 900000)}`,
+      accountId: account.id,
+      username: original.username,
+      platform: service.platform,
+      serviceType: service.type,
+      serviceId: service.id,
+      serviceLabel: service.label,
+      quantity,
+      price,
+      // Cupom não se repete: ele pertence à campanha em que a compra aconteceu.
+      couponCode: '',
+      couponDiscountPercent: 0,
+      paymentMethod: 'PIX',
+      postUrl: original.postUrl || '',
+      email: account.email,
+      phone: account.phone,
+      status: 'aguardando_pagamento',
+      repeatOf: original.id,
+      date: new Date().toISOString()
+    };
+
+    db.orders = [novo, ...db.orders];
+    await writeDB(db);
+
+    await gerarPixDoPedido(novo, account, req);
+
+    res.json({ success: true, order: novo });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // --- Avaliações de serviço ---
 //
