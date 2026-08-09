@@ -21,7 +21,7 @@ import { setAppTimezone, formatDateTime } from '../utils/datetime';
 import { orderStatusInfo } from '../utils/orderStatus';
 import BlogAdmin from './BlogAdmin';
 import TestimonialsAdmin from './TestimonialsAdmin';
-import MessagesAdmin from './MessagesAdmin';
+import TicketsAdmin from './TicketsAdmin';
 import {
   X, Plus, Pencil, Trash2, RotateCcw, LayoutDashboard, ShoppingBag, Star, Package,
   BarChart3, Settings, ShieldCheck, HelpCircle, Save, Check, Copy, AlertCircle,
@@ -1465,7 +1465,7 @@ export default function AdminPanel({
                 }`}
               >
                 <Inbox className="h-4 w-4" />
-                <span>Mensagens</span>
+                <span>Tickets</span>
               </button>
 
               <button
@@ -3031,7 +3031,7 @@ export default function AdminPanel({
 
             {/* =================== TAB: MENSAGENS =================== */}
             {activeTab === 'messages' && (
-              <MessagesAdmin triggerSuccess={triggerSuccess} triggerError={triggerError} />
+              <TicketsAdmin triggerSuccess={triggerSuccess} triggerError={triggerError} />
             )}
 
             {/* =================== TAB: CONFIGURAÇÕES GERAIS =================== */}
