@@ -1087,6 +1087,43 @@ export default function AdminPanel({
   const orderFiltersOn = orderSearchText.trim() !== '' || orderStatusFilter !== 'todos' ||
     orderPlatformFilter !== 'todos' || orderPeriodFilter !== 'todos';
 
+  // Filtros e paginação dos consentimentos de cookies. A tabela cresce a cada
+  // visitante do site, então é a que mais rápido fica impossível de ler inteira.
+  const [cookieSearch, setCookieSearch] = useState('');
+  const [cookieAnalytics, setCookieAnalytics] = useState<'todos' | 'sim' | 'nao'>('todos');
+  const [cookieMarketing, setCookieMarketing] = useState<'todos' | 'sim' | 'nao'>('todos');
+  const [cookiePeriod, setCookiePeriod] = useState<'todos' | 'hoje' | '7' | '30'>('todos');
+  const [cookiePage, setCookiePage] = useState(1);
+  const [cookiePerPage, setCookiePerPage] = useState(25);
+
+  const filteredConsents = useMemo(() => {
+    const termo = cookieSearch.trim().toLowerCase();
+    const agora = Date.now();
+    const janela = cookiePeriod === 'hoje' ? 1 : cookiePeriod === '7' ? 7 : cookiePeriod === '30' ? 30 : 0;
+    const casa = (escolha: string, valor: boolean) =>
+      escolha === 'todos' || (escolha === 'sim' ? valor : !valor);
+
+    return cookieConsents.filter(rec => {
+      if (termo) {
+        const alvo = `${rec.id} ${rec.userAgent || ''}`.toLowerCase();
+        if (!alvo.includes(termo)) return false;
+      }
+      if (!casa(cookieAnalytics, !!rec.choices?.analytics)) return false;
+      if (!casa(cookieMarketing, !!rec.choices?.marketing)) return false;
+      if (janela) {
+        const quando = Date.parse(rec.createdAt || '');
+        if (!Number.isFinite(quando)) return false;
+        if (agora - quando > janela * 24 * 60 * 60 * 1000) return false;
+      }
+      return true;
+    });
+  }, [cookieConsents, cookieSearch, cookieAnalytics, cookieMarketing, cookiePeriod]);
+
+  useEffect(() => { setCookiePage(1); }, [cookieSearch, cookieAnalytics, cookieMarketing, cookiePeriod]);
+
+  const cookieFiltersOn = cookieSearch.trim() !== '' || cookieAnalytics !== 'todos' ||
+    cookieMarketing !== 'todos' || cookiePeriod !== 'todos';
+
   // --- ORDER OPERATIONS ---
   // Canonical statuses (matching the client-facing orderStatus util).
   const ORDER_STATUSES: { value: string; label: string }[] = [
@@ -1106,6 +1143,7 @@ export default function AdminPanel({
   const [catalogModal, setCatalogModal] = useState<'platforms' | 'types' | null>(null);
   // Qual lista a aba de depoimentos está mostrando.
   const [reviewsView, setReviewsView] = useState<'testimonials' | 'services'>('testimonials');
+
   const [catalogDraft, setCatalogDraft] = useState<Catalog>(DEFAULT_CATALOG);
   const [catalogSaving, setCatalogSaving] = useState(false);
 
@@ -2755,6 +2793,64 @@ export default function AdminPanel({
                   </div>
                 </div>
 
+                {cookieConsents.length > 0 && (
+                  <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-wrap items-center gap-3">
+                    <div className="relative flex-1 min-w-[220px]">
+                      <Search className="h-4 w-4 text-slate-300 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={cookieSearch}
+                        onChange={(e) => setCookieSearch(e.target.value)}
+                        placeholder="Buscar por identificador ou navegador..."
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg py-2.5 pl-9 pr-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                      />
+                    </div>
+                    <select
+                      value={cookieAnalytics}
+                      onChange={(e) => setCookieAnalytics(e.target.value as typeof cookieAnalytics)}
+                      className="bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg py-2.5 px-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                    >
+                      <option value="todos">Análise: todos</option>
+                      <option value="sim">Análise: aceita</option>
+                      <option value="nao">Análise: recusada</option>
+                    </select>
+                    <select
+                      value={cookieMarketing}
+                      onChange={(e) => setCookieMarketing(e.target.value as typeof cookieMarketing)}
+                      className="bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg py-2.5 px-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                    >
+                      <option value="todos">Marketing: todos</option>
+                      <option value="sim">Marketing: aceito</option>
+                      <option value="nao">Marketing: recusado</option>
+                    </select>
+                    <select
+                      value={cookiePeriod}
+                      onChange={(e) => setCookiePeriod(e.target.value as typeof cookiePeriod)}
+                      className="bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg py-2.5 px-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                    >
+                      <option value="todos">Qualquer data</option>
+                      <option value="hoje">Últimas 24 horas</option>
+                      <option value="7">Últimos 7 dias</option>
+                      <option value="30">Últimos 30 dias</option>
+                    </select>
+                    {cookieFiltersOn && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCookieSearch('');
+                          setCookieAnalytics('todos');
+                          setCookieMarketing('todos');
+                          setCookiePeriod('todos');
+                        }}
+                        className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-primary px-2 py-2.5 cursor-pointer transition-colors"
+                        title="Limpar os filtros"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" /> Limpar
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 {cookieConsentsLoading ? (
                   <div className="flex items-center justify-center py-12">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -2763,6 +2859,11 @@ export default function AdminPanel({
                   <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500 text-xs font-semibold">
                     <Cookie className="h-8 w-8 text-slate-300 mx-auto mb-2" />
                     Nenhum consentimento registrado ainda.
+                  </div>
+                ) : filteredConsents.length === 0 ? (
+                  <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500 text-xs font-semibold">
+                    <Filter className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                    Nenhum consentimento corresponde aos filtros.
                   </div>
                 ) : (
                   <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
@@ -2777,7 +2878,7 @@ export default function AdminPanel({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {cookieConsents.map(rec => (
+                        {pageSlice<CookieConsentRecord>(filteredConsents, cookiePage, cookiePerPage).map(rec => (
                           <tr key={rec.id} className="hover:bg-slate-50/50 transition-colors">
                             <td className="p-4 font-mono text-slate-600">{formatDateTime(rec.createdAt)}</td>
                             <td className="p-4">
@@ -2796,6 +2897,14 @@ export default function AdminPanel({
                         ))}
                       </tbody>
                     </table>
+                    <AdminPagination
+                      total={filteredConsents.length}
+                      page={clampPage(cookiePage, filteredConsents.length, cookiePerPage)}
+                      perPage={cookiePerPage}
+                      onPageChange={setCookiePage}
+                      onPerPageChange={setCookiePerPage}
+                      itemLabel="consentimentos"
+                    />
                   </div>
                 )}
               </div>
