@@ -13,6 +13,8 @@
 // O remetente é o mesmo nos dois: "Nome do Remetente <E-mail do Remetente>".
 
 import nodemailer from 'nodemailer';
+import dns from 'node:dns/promises';
+import net from 'node:net';
 
 export interface MailerConfig {
   emailProvider?: 'smtp' | 'resend' | string;
@@ -110,10 +112,41 @@ async function sendViaResend(cfg: MailerConfig, msg: MailMessage): Promise<void>
   }
 }
 
+/**
+ * Resolve o servidor para um endereço IPv4.
+ *
+ * Por que não deixar o nodemailer resolver: ele junta os endereços IPv4 e IPv6
+ * do servidor e escolhe UM AO ACASO (shared/index.js: `addresses[Math.random()
+ * * addresses.length]`), sem tentar o próximo quando a conexão falha. Num host
+ * sem rota IPv6 — o caso da maioria das hospedagens de aplicação — isso faz o
+ * envio falhar de forma intermitente, com "connect ENETUNREACH <endereço v6>",
+ * que se parece com erro de senha e não é.
+ *
+ * Entregando o IP já resolvido, o nodemailer pula a própria resolução
+ * (`net.isIP(host)` → "nothing to do here") e a escolha aleatória some.
+ *
+ * Devolve null quando não há registro IPv4 — aí o servidor é IPv6 de verdade e
+ * vale deixar o nodemailer seguir com o nome.
+ */
+async function resolveIPv4Host(host: string): Promise<string | null> {
+  if (!host || net.isIP(host)) return null;
+  try {
+    const addresses = await dns.resolve4(host);
+    return addresses?.[0] || null;
+  } catch {
+    return null;
+  }
+}
+
 async function sendViaSmtp(cfg: MailerConfig, msg: MailMessage): Promise<void> {
   const port = Number(cfg.smtpPort) || 587;
+  const hostname = (cfg.smtpHost || '').trim();
+  const ipv4 = await resolveIPv4Host(hostname);
   const transport = nodemailer.createTransport({
-    host: (cfg.smtpHost || '').trim(),
+    // Conecta no IPv4 resolvido, mas valida o certificado contra o NOME: sem o
+    // servername o TLS compararia o certificado com o IP e recusaria.
+    host: ipv4 || hostname,
+    ...(ipv4 ? { tls: { servername: hostname } } : {}),
     port,
     // A porta 465 fala TLS desde o primeiro byte; 587 começa em claro e sobe
     // para TLS com STARTTLS. Marcar errado trava a conexão até o timeout.
@@ -125,13 +158,67 @@ async function sendViaSmtp(cfg: MailerConfig, msg: MailMessage): Promise<void> {
     greetingTimeout: 15_000,
     socketTimeout: 20_000
   });
-  await transport.sendMail({
-    from: fromAddress(cfg),
-    to: msg.to,
-    subject: msg.subject,
-    html: msg.html,
-    text: msg.text || htmlToText(msg.html)
-  });
+  try {
+    await transport.sendMail({
+      from: fromAddress(cfg),
+      to: msg.to,
+      subject: msg.subject,
+      html: msg.html,
+      text: msg.text || htmlToText(msg.html)
+    });
+  } catch (e: any) {
+    throw new Error(explainSmtpError(e, hostname, port));
+  }
+}
+
+/**
+ * Traduz a falha do SMTP para algo acionável.
+ *
+ * A mensagem crua ("connect ENETUNREACH 2606:4700:...:465") parece erro de
+ * senha e não é: nem chegou a haver autenticação. Sem esta tradução o próximo
+ * passo vira tentativa e erro em cima da credencial errada.
+ */
+export function explainSmtpError(e: any, host: string, port: number): string {
+  const raw = String(e?.message || e);
+  const where = `${host}:${port}`;
+
+  // O nodemailer embrulha a falha do socket e reescreve o `code` como ESOCKET
+  // ou ETIMEDOUT, mas preserva o texto original ("connect ENETUNREACH ..."). Ler
+  // só o código faria toda falha de rede virar "tempo esgotado".
+  const codes = [String(e?.code || ''), String(e?.errno || ''), raw];
+  const has = (needle: string) => codes.some(c => c.includes(needle));
+
+  const code =
+    has('ENETUNREACH') ? 'ENETUNREACH'
+    : has('EHOSTUNREACH') ? 'EHOSTUNREACH'
+    : has('ECONNREFUSED') ? 'ECONNREFUSED'
+    : has('EAUTH') || /Invalid login|authentication fail/i.test(raw) ? 'EAUTH'
+    : has('EENVELOPE') ? 'EENVELOPE'
+    : has('EDNS') || has('ENOTFOUND') || has('EAI_AGAIN') ? 'EDNS'
+    : has('ETIMEDOUT') || has('ESOCKET') ? 'ETIMEDOUT'
+    : String(e?.code || '');
+
+  switch (code) {
+    case 'ENETUNREACH':
+    case 'EHOSTUNREACH':
+      return `Não há rota de rede até ${where}. Costuma ser o servidor tentando IPv6 sem ter saída IPv6, ` +
+        `ou a porta ${port} bloqueada pela hospedagem. Se o problema persistir, tente a porta 587 ` +
+        `(sem "conexão segura") ou use o Resend. (${raw})`;
+    case 'ECONNREFUSED':
+      return `O servidor ${where} recusou a conexão. Confira o endereço e a porta — ` +
+        `465 exige "conexão segura" marcada; 587 exige desmarcada. (${raw})`;
+    case 'ETIMEDOUT':
+    case 'ESOCKET':
+      return `Tempo esgotado ao falar com ${where}. Verifique se a hospedagem libera a porta ${port} para saída. (${raw})`;
+    case 'EAUTH':
+      return `Usuário ou senha recusados por ${host}. Use o e-mail completo como usuário e a senha da caixa de e-mail. (${raw})`;
+    case 'EENVELOPE':
+      return `O servidor recusou o remetente ou o destinatário. O "E-mail do Remetente" precisa ser uma caixa real deste domínio. (${raw})`;
+    case 'EDNS':
+      return `Não foi possível resolver o endereço "${host}". Confira se está escrito corretamente. (${raw})`;
+    default:
+      return raw;
+  }
 }
 
 /** Envia a mensagem. Lança em qualquer falha — o chamador decide o que fazer. */
