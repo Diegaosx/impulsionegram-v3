@@ -18,6 +18,7 @@ import RichTextEditor from './RichTextEditor';
 import KeywordsField from './KeywordsField';
 import { normalizeKeywords } from '../utils/keywords';
 import { setAppTimezone, formatDateTime } from '../utils/datetime';
+import { orderStatusInfo } from '../utils/orderStatus';
 import BlogAdmin from './BlogAdmin';
 import TestimonialsAdmin from './TestimonialsAdmin';
 import MessagesAdmin from './MessagesAdmin';
@@ -35,6 +36,8 @@ import {
   fetchCatalog, fetchCatalogInUse, saveCatalog as saveCatalogToServer, primeCatalog
 } from '../utils/catalog';
 import PlatformGlyph, { PLATFORM_ICON_NAMES } from './PlatformGlyph';
+import AdminPagination, { clampPage, pageSlice } from './AdminPagination';
+import UserOrdersModal, { ordersOfUser } from './UserOrdersModal';
 import { listThemes } from '../themes';
 import { DEFAULT_HOME_ORDER, HOME_SECTIONS, normalizeHomeOrder } from '../site/homeSections';
 
@@ -95,6 +98,21 @@ export default function AdminPanel({
   const [users, setUsers] = useState<AdminAccount[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [userSearchText, setUserSearchText] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState<'todos' | 'admin' | 'cliente'>('todos');
+  const [userStatusFilter, setUserStatusFilter] = useState<'todos' | 'ativos' | 'bloqueados'>('todos');
+  const [userBuyerFilter, setUserBuyerFilter] = useState<'todos' | 'com' | 'sem'>('todos');
+  const [userPage, setUserPage] = useState(1);
+  const [userPerPage, setUserPerPage] = useState(25);
+  // Pedidos do usuário, abertos pela coluna "Compras".
+  const [ordersOfUserModal, setOrdersOfUserModal] = useState<AdminAccount | null>(null);
+
+  // Filtros e paginação da aba de pedidos.
+  const [orderSearchText, setOrderSearchText] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState('todos');
+  const [orderPlatformFilter, setOrderPlatformFilter] = useState('todos');
+  const [orderPeriodFilter, setOrderPeriodFilter] = useState<'todos' | 'hoje' | '7' | '30'>('todos');
+  const [orderPage, setOrderPage] = useState(1);
+  const [orderPerPage, setOrderPerPage] = useState(25);
   // Account create/edit modal
   const emptyAccountForm = { id: '', name: '', email: '', phone: '', role: 'cliente' as 'admin' | 'cliente', password: '', blocked: false };
   const [accountForm, setAccountForm] = useState(emptyAccountForm);
@@ -217,7 +235,7 @@ export default function AdminPanel({
         `${canceled} cancelado(s) pelo painel · ${expired} expirado(s) sem pagamento.`
       );
       // A varredura mexeu nos pedidos no servidor; recarrega a lista da aba
-      // "Pedidos Recentes" para não deixar status velho na tela.
+      // "Pedidos" para não deixar status velho na tela.
       if (checked || canceled || expired) onUpdateOrders(await fetchOrders());
     }
     setSmmSyncing(false);
@@ -995,6 +1013,79 @@ export default function AdminPanel({
     }
   };
 
+  // Aviso de pedidos novos no menu.
+  //
+  // Antes o selo trazia o total de pedidos, então ele nunca zerava e virava
+  // paisagem. Agora ele conta só o que chegou depois da última visita à aba: um
+  // carimbo de tempo no navegador, atualizado enquanto a aba está aberta.
+  //
+  // Sem carimbo (primeiro acesso neste navegador) o momento atual é gravado, e
+  // não a data zero — senão a primeira sessão mostraria o total de novo.
+  const ORDERS_SEEN_KEY = 'admin_orders_seen_at';
+  const [ordersSeenAt, setOrdersSeenAt] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem(ORDERS_SEEN_KEY);
+      if (saved) return saved;
+      const now = new Date().toISOString();
+      localStorage.setItem(ORDERS_SEEN_KEY, now);
+      return now;
+    } catch {
+      return new Date().toISOString();
+    }
+  });
+
+  const newOrdersCount = useMemo(
+    () => orders.filter(o => String(o.date || '') > ordersSeenAt).length,
+    [orders, ordersSeenAt]
+  );
+
+  // Enquanto a aba está aberta, o que chega já está sendo visto.
+  //
+  // O carimbo é o maior entre o agora e a data do pedido mais recente: um
+  // pedido gravado com a hora do banco alguns segundos à frente do navegador
+  // ficaria "sempre novo" e o selo nunca zeraria.
+  useEffect(() => {
+    if (activeTab !== 'orders') return;
+    const maisNovo = orders.reduce((max, o) => (String(o.date || '') > max ? String(o.date) : max), '');
+    const marca = [new Date().toISOString(), maisNovo].sort().pop() as string;
+    setOrdersSeenAt(prev => (marca > prev ? marca : prev));
+    try { localStorage.setItem(ORDERS_SEEN_KEY, marca); } catch { /* sessão anônima */ }
+  }, [activeTab, orders]);
+
+  // Pedidos depois dos filtros da aba. O status é comparado pela chave
+  // canônica: registros antigos gravaram "Pendente", "aprovado" e afins, e o
+  // filtro tem de alcançá-los.
+  const filteredOrders = useMemo<AdminOrder[]>(() => {
+    const termo = orderSearchText.trim().toLowerCase();
+    const agora = Date.now();
+    const janela = orderPeriodFilter === 'hoje' ? 1 : orderPeriodFilter === '7' ? 7 : orderPeriodFilter === '30' ? 30 : 0;
+
+    return orders.filter(order => {
+      if (termo) {
+        const alvo = [
+          order.id, order.username, order.email, order.phone,
+          order.serviceLabel, order.platform, order.smmOrderId
+        ].map(v => String(v || '').toLowerCase()).join(' ');
+        if (!alvo.includes(termo)) return false;
+      }
+      if (orderStatusFilter !== 'todos' && orderStatusInfo(order.status).key !== orderStatusFilter) return false;
+      if (orderPlatformFilter !== 'todos' && order.platform !== orderPlatformFilter) return false;
+      if (janela) {
+        const quando = Date.parse(order.date || '');
+        if (!Number.isFinite(quando)) return false;
+        if (agora - quando > janela * 24 * 60 * 60 * 1000) return false;
+      }
+      return true;
+    });
+  }, [orders, orderSearchText, orderStatusFilter, orderPlatformFilter, orderPeriodFilter]);
+
+  // Um filtro novo pode deixar a página atual além do fim da lista.
+  useEffect(() => { setOrderPage(1); }, [orderSearchText, orderStatusFilter, orderPlatformFilter, orderPeriodFilter]);
+  useEffect(() => { setUserPage(1); }, [userSearchText, userRoleFilter, userStatusFilter, userBuyerFilter]);
+
+  const orderFiltersOn = orderSearchText.trim() !== '' || orderStatusFilter !== 'todos' ||
+    orderPlatformFilter !== 'todos' || orderPeriodFilter !== 'todos';
+
   // --- ORDER OPERATIONS ---
   // Canonical statuses (matching the client-facing orderStatus util).
   const ORDER_STATUSES: { value: string; label: string }[] = [
@@ -1282,10 +1373,13 @@ export default function AdminPanel({
                 }`}
               >
                 <BarChart3 className="h-4 w-4" />
-                <span>Pedidos Recentes</span>
-                {orders.length > 0 && (
-                  <span className="absolute right-2 top-1/2 -translate-y-1/2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black animate-pulse">
-                    {orders.length}
+                <span>Pedidos</span>
+                {newOrdersCount > 0 && (
+                  <span
+                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black animate-pulse"
+                    title={`${newOrdersCount} ${newOrdersCount === 1 ? 'pedido novo' : 'pedidos novos'} desde a sua última visita`}
+                  >
+                    {newOrdersCount}
                   </span>
                 )}
               </button>
@@ -1535,7 +1629,7 @@ export default function AdminPanel({
                     <div>
                       <h4 className="font-bold text-slate-800 text-sm mb-3">Auditoria de Vendas Ativa</h4>
                       <p className="text-slate-500 text-xs font-semibold leading-relaxed">
-                        A plataforma está simulando vendas em ambiente Sandbox. Cada ação de pagamento completada pelos usuários finais na calculadora ou nos planos gera uma guia imediata no módulo de <strong>Pedidos Recentes</strong> para validação de fluxos.
+                        A plataforma está simulando vendas em ambiente Sandbox. Cada ação de pagamento completada pelos usuários finais na calculadora ou nos planos gera uma guia imediata no módulo de <strong>Pedidos</strong> para validação de fluxos.
                       </p>
                     </div>
                     <div className="bg-purple-50 text-primary border border-primary/20 rounded-xl p-4 mt-4 text-xs font-semibold space-y-1">
@@ -2424,13 +2518,73 @@ export default function AdminPanel({
               </div>
             )}
 
-            {/* =================== TAB 4: PEDIDOS RECENTES =================== */}
+            {/* =================== TAB 4: PEDIDOS =================== */}
             {activeTab === 'orders' && (
               <div className="space-y-6">
                 <div>
                   <h3 className="font-display font-black text-xl text-slate-900">Histórico de Pedidos</h3>
                   <p className="text-slate-500 text-xs font-semibold">Acompanhe, edite e altere o status dos pedidos dos clientes</p>
                 </div>
+
+                {orders.length > 0 && (
+                  <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-wrap items-center gap-3">
+                    <div className="relative flex-1 min-w-[220px]">
+                      <Search className="h-4 w-4 text-slate-300 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={orderSearchText}
+                        onChange={(e) => setOrderSearchText(e.target.value)}
+                        placeholder="Buscar por pedido, perfil, e-mail, telefone ou serviço..."
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg py-2.5 pl-9 pr-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
+                      />
+                    </div>
+                    <select
+                      value={orderStatusFilter}
+                      onChange={(e) => setOrderStatusFilter(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg py-2.5 px-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                    >
+                      <option value="todos">Todos os status</option>
+                      {ORDER_STATUSES.map(st => (
+                        <option key={st.value} value={st.value}>{st.label}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={orderPlatformFilter}
+                      onChange={(e) => setOrderPlatformFilter(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg py-2.5 px-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                    >
+                      <option value="todos">Todas as redes</option>
+                      {catalog.platforms.map(pf => (
+                        <option key={pf.id} value={pf.id}>{pf.name}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={orderPeriodFilter}
+                      onChange={(e) => setOrderPeriodFilter(e.target.value as typeof orderPeriodFilter)}
+                      className="bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg py-2.5 px-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                    >
+                      <option value="todos">Qualquer data</option>
+                      <option value="hoje">Últimas 24 horas</option>
+                      <option value="7">Últimos 7 dias</option>
+                      <option value="30">Últimos 30 dias</option>
+                    </select>
+                    {orderFiltersOn && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOrderSearchText('');
+                          setOrderStatusFilter('todos');
+                          setOrderPlatformFilter('todos');
+                          setOrderPeriodFilter('todos');
+                        }}
+                        className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-primary px-2 py-2.5 cursor-pointer transition-colors"
+                        title="Limpar os filtros"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" /> Limpar
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {orders.length === 0 ? (
                   <div className="bg-white rounded-2xl p-12 text-center shadow-sm max-w-sm mx-auto border border-slate-200">
@@ -2439,6 +2593,11 @@ export default function AdminPanel({
                     <p className="text-slate-500 text-xs mt-1 font-semibold leading-relaxed">
                       Nenhum pedido foi efetuado ainda. Eles aparecerão aqui assim que um cliente comprar.
                     </p>
+                  </div>
+                ) : filteredOrders.length === 0 ? (
+                  <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500 text-xs font-semibold">
+                    <Filter className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                    Nenhum pedido corresponde aos filtros selecionados.
                   </div>
                 ) : (
                   <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
@@ -2454,7 +2613,7 @@ export default function AdminPanel({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {orders.map(order => {
+                        {pageSlice<AdminOrder>(filteredOrders, orderPage, orderPerPage).map(order => {
                           const orderDateStr = formatDateTime(order.date, {
                             day: '2-digit', month: '2-digit', year: 'numeric',
                             hour: '2-digit', minute: '2-digit'
@@ -2547,6 +2706,14 @@ export default function AdminPanel({
                         })}
                       </tbody>
                     </table>
+                    <AdminPagination
+                      total={filteredOrders.length}
+                      page={clampPage(orderPage, filteredOrders.length, orderPerPage)}
+                      perPage={orderPerPage}
+                      onPageChange={setOrderPage}
+                      onPerPageChange={setOrderPerPage}
+                      itemLabel="pedidos"
+                    />
                   </div>
                 )}
               </div>
@@ -2640,23 +2807,67 @@ export default function AdminPanel({
                     <p className="text-slate-500 text-xs font-semibold">Crie, edite, bloqueie ou remova contas e redefina senhas</p>
                   </div>
 
-                  <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <div className="relative flex-1 sm:w-56">
-                      <input
-                        type="text"
-                        placeholder="Buscar por nome ou email..."
-                        value={userSearchText}
-                        onChange={(e) => setUserSearchText(e.target.value)}
-                        className="w-full bg-white border border-slate-200 text-xs font-semibold rounded-lg py-2.5 px-4 focus:outline-none focus:ring-2 focus:ring-primary text-slate-800"
-                      />
-                    </div>
-                    <button
-                      onClick={openCreateAccount}
-                      className="flex items-center gap-1.5 bg-primary hover:bg-purple-700 text-white text-xs font-bold rounded-lg px-3 py-2.5 transition-colors shrink-0"
-                    >
-                      <Plus className="h-4 w-4" /> Novo usuário
-                    </button>
+                  <button
+                    onClick={openCreateAccount}
+                    className="flex items-center gap-1.5 bg-primary hover:bg-purple-700 text-white text-xs font-bold rounded-lg px-3 py-2.5 transition-colors shrink-0"
+                  >
+                    <Plus className="h-4 w-4" /> Novo usuário
+                  </button>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-wrap items-center gap-3">
+                  <div className="relative flex-1 min-w-[220px]">
+                    <Search className="h-4 w-4 text-slate-300 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por nome, e-mail ou telefone..."
+                      value={userSearchText}
+                      onChange={(e) => setUserSearchText(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg py-2.5 pl-9 pr-3 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white text-slate-800"
+                    />
                   </div>
+                  <select
+                    value={userRoleFilter}
+                    onChange={(e) => setUserRoleFilter(e.target.value as typeof userRoleFilter)}
+                    className="bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg py-2.5 px-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                  >
+                    <option value="todos">Todos os perfis</option>
+                    <option value="cliente">Clientes</option>
+                    <option value="admin">Administradores</option>
+                  </select>
+                  <select
+                    value={userStatusFilter}
+                    onChange={(e) => setUserStatusFilter(e.target.value as typeof userStatusFilter)}
+                    className="bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg py-2.5 px-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                  >
+                    <option value="todos">Ativos e bloqueados</option>
+                    <option value="ativos">Só ativos</option>
+                    <option value="bloqueados">Só bloqueados</option>
+                  </select>
+                  <select
+                    value={userBuyerFilter}
+                    onChange={(e) => setUserBuyerFilter(e.target.value as typeof userBuyerFilter)}
+                    className="bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg py-2.5 px-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                  >
+                    <option value="todos">Com ou sem compras</option>
+                    <option value="com">Só quem já comprou</option>
+                    <option value="sem">Só quem nunca comprou</option>
+                  </select>
+                  {(userSearchText.trim() || userRoleFilter !== 'todos' || userStatusFilter !== 'todos' || userBuyerFilter !== 'todos') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserSearchText('');
+                        setUserRoleFilter('todos');
+                        setUserStatusFilter('todos');
+                        setUserBuyerFilter('todos');
+                      }}
+                      className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-primary px-2 py-2.5 cursor-pointer transition-colors"
+                      title="Limpar os filtros"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" /> Limpar
+                    </button>
+                  )}
                 </div>
 
                 {usersLoading ? (
@@ -2665,9 +2876,18 @@ export default function AdminPanel({
                   </div>
                 ) : (
                   (() => {
+                    const search = userSearchText.trim().toLowerCase();
                     const filteredUsers = users.filter(u => {
-                      const search = userSearchText.toLowerCase();
-                      return (u.name || '').toLowerCase().includes(search) || (u.email || '').toLowerCase().includes(search);
+                      if (search) {
+                        const alvo = [u.name, u.email, u.phone].map(v => String(v || '').toLowerCase()).join(' ');
+                        if (!alvo.includes(search)) return false;
+                      }
+                      if (userRoleFilter !== 'todos' && (u.role || 'cliente') !== userRoleFilter) return false;
+                      if (userStatusFilter === 'ativos' && u.blocked) return false;
+                      if (userStatusFilter === 'bloqueados' && !u.blocked) return false;
+                      if (userBuyerFilter === 'com' && !(u.ordersCount > 0)) return false;
+                      if (userBuyerFilter === 'sem' && u.ordersCount > 0) return false;
+                      return true;
                     });
 
                     return filteredUsers.length === 0 ? (
@@ -2689,7 +2909,7 @@ export default function AdminPanel({
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 font-medium text-slate-600">
-                            {filteredUsers.map(user => {
+                            {pageSlice<AdminAccount>(filteredUsers, userPage, userPerPage).map(user => {
                               const createdStr = user.createdAt ? formatDateTime(user.createdAt, {
                                 day: '2-digit', month: '2-digit', year: 'numeric',
                                 hour: '2-digit', minute: '2-digit'
@@ -2724,8 +2944,22 @@ export default function AdminPanel({
                                     {createdStr}
                                   </td>
                                   <td className="p-4">
-                                    <div className="font-bold text-slate-900 text-sm font-mono">{user.ordersCount || 0} ped.</div>
-                                    <div className="text-[10px] text-slate-400 font-mono">R$ {(user.totalSpent || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                    {user.ordersCount > 0 ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => setOrdersOfUserModal(user)}
+                                        className="text-left cursor-pointer group"
+                                        title="Ver os pedidos deste usuário"
+                                      >
+                                        <div className="font-bold text-primary text-sm font-mono group-hover:underline">{user.ordersCount} ped.</div>
+                                        <div className="text-[10px] text-slate-400 font-mono">R$ {(user.totalSpent || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                      </button>
+                                    ) : (
+                                      <>
+                                        <div className="font-bold text-slate-400 text-sm font-mono">0 ped.</div>
+                                        <div className="text-[10px] text-slate-300 font-mono">R$ 0,00</div>
+                                      </>
+                                    )}
                                   </td>
                                   <td className="p-4">
                                     <button
@@ -2770,6 +3004,14 @@ export default function AdminPanel({
                             })}
                           </tbody>
                         </table>
+                        <AdminPagination
+                          total={filteredUsers.length}
+                          page={clampPage(userPage, filteredUsers.length, userPerPage)}
+                          perPage={userPerPage}
+                          onPageChange={setUserPage}
+                          onPerPageChange={setUserPerPage}
+                          itemLabel="usuários"
+                        />
                       </div>
                     );
                   })()
@@ -4531,6 +4773,16 @@ export default function AdminPanel({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ===== PEDIDOS DE UM USUÁRIO (coluna "Compras") ===== */}
+      {ordersOfUserModal && (
+        <UserOrdersModal
+          user={ordersOfUserModal}
+          orders={orders}
+          catalog={catalog}
+          onClose={() => setOrdersOfUserModal(null)}
+        />
       )}
 
       {/* ===== ORDER EDIT MODAL ===== */}
