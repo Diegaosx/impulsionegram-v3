@@ -9,6 +9,7 @@ import { ThemeServiceProps } from '../../types';
 import { platformName as catalogPlatformName, serviceTypeLabel, useCatalog } from '../../../utils/catalog';
 import { serviceSlug } from '../../../utils/storage';
 import { applyBasicSEO, setJsonLd } from '../../../utils/seo';
+import ServiceReviews from '../../../components/ServiceReviews';
 import { sellablePackages } from '../../../site/pricing';
 import JapHeader from '../chrome/Header';
 import JapFooter from '../chrome/Footer';
@@ -154,6 +155,13 @@ export default function JapServiceView({
           title={(service.faqTitle || '').trim() || 'Perguntas frequentes'}
           subtitle={(service.faqSubtitle || '').trim() || undefined}
         />
+
+        {/* Avaliações de quem comprou este serviço. */}
+        <section className="py-[30px] md:py-[50px]">
+          <div className="max-w-[1320px] mx-auto px-6 lg:px-3">
+            <ServiceReviews serviceId={service.id} cardClassName="jap-card" />
+          </div>
+        </section>
       </main>
 
       <JapFooter siteName={siteName} logoUrl={logoUrl} company={company} onNavigate={goHome} />

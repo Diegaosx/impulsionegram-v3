@@ -3,9 +3,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingBag, User as UserIcon, LogOut, ArrowLeft, Sparkles,
   Package, CircleDollarSign, Clock, CheckCircle2, ShoppingCart, QrCode, LifeBuoy, ArrowLeftCircle,
-  AlertCircle, MessageSquare
+  AlertCircle, MessageSquare, Star
 } from 'lucide-react';
-import { AuthUser, AdminOrder, HomeContent, CompanySettings, fetchMyOrders, fetchServices } from '../utils/storage';
+import {
+  AuthUser, AdminOrder, HomeContent, CompanySettings, ServiceReview,
+  fetchMyOrders, fetchServices, fetchMyReviews
+} from '../utils/storage';
 import { ServiceItem } from '../types';
 import { orderStatusInfo } from '../utils/orderStatus';
 import { formatDateTime } from '../utils/datetime';
@@ -14,6 +17,7 @@ import OrderConfirmation from '../components/OrderConfirmation';
 import ProfileForm from '../components/ProfileForm';
 import HelpForm from '../components/HelpForm';
 import ClientTickets from '../components/ClientTickets';
+import ReviewOrderModal from '../components/ReviewOrderModal';
 
 interface ClientDashboardProps {
   user: AuthUser;
@@ -31,19 +35,38 @@ export default function ClientDashboard({ user, onLogout, onUserUpdate, siteName
   const navigate = useNavigate();
   // ?aba=tickets: é para cá que o site manda quem clica em "Abrir um ticket"
   // vindo do rodapé, da página de ajuda ou da seção de contato.
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>(searchParams.get('aba') === 'tickets' ? 'tickets' : 'overview');
+
+  // O link também é clicado de dentro da própria área do cliente (a aba
+  // "Ajuda" tem o mesmo botão). Nesse caso o componente não remonta e o valor
+  // inicial acima não vale de nada: é preciso reagir à mudança da URL. O
+  // parâmetro sai depois de consumido, senão voltar para outra aba e recarregar
+  // jogaria o usuário de novo no atendimento.
+  useEffect(() => {
+    if (searchParams.get('aba') !== 'tickets') return;
+    setTab('tickets');
+    const limpo = new URLSearchParams(searchParams);
+    limpo.delete('aba');
+    setSearchParams(limpo, { replace: true });
+  }, [searchParams, setSearchParams]);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [confirmedOrder, setConfirmedOrder] = useState<AdminOrder | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
+  // Avaliações que este cliente já enviou: é o que decide entre oferecer o
+  // botão e mostrar em que pé está a que já foi escrita.
+  const [reviews, setReviews] = useState<ServiceReview[]>([]);
+  const [reviewingOrder, setReviewingOrder] = useState<AdminOrder | null>(null);
+  const reloadReviews = () => fetchMyReviews().then(setReviews);
 
   const reloadOrders = () => fetchMyOrders().then(setOrders);
 
   useEffect(() => {
     fetchMyOrders().then(setOrders).finally(() => setLoading(false));
     fetchServices().then(setServices).catch(() => {});
+    fetchMyReviews().then(setReviews).catch(() => {});
   }, []);
 
   const goBuy = () => { setConfirmedOrder(null); setTab('buy'); };
@@ -172,7 +195,14 @@ export default function ClientDashboard({ user, onLogout, onUserUpdate, siteName
                     <button onClick={() => setTab('orders')} className="text-xs font-bold text-primary hover:underline">Ver todos</button>
                   )}
                 </div>
-                <OrdersList orders={orders.slice(0, 3)} loading={loading} onBuy={goBuy} onPay={openOrder} />
+                <OrdersList
+                  orders={orders.slice(0, 3)}
+                  loading={loading}
+                  onBuy={goBuy}
+                  onPay={openOrder}
+                  reviews={reviews}
+                  onReview={setReviewingOrder}
+                />
               </div>
             </>
           )}
@@ -195,7 +225,14 @@ export default function ClientDashboard({ user, onLogout, onUserUpdate, siteName
           {tab === 'orders' && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
               <h1 className="font-display font-black text-xl text-slate-900 mb-4">Meus Pedidos</h1>
-              <OrdersList orders={orders} loading={loading} onBuy={goBuy} onPay={openOrder} />
+              <OrdersList
+                orders={orders}
+                loading={loading}
+                onBuy={goBuy}
+                onPay={openOrder}
+                reviews={reviews}
+                onReview={setReviewingOrder}
+              />
             </div>
           )}
 
@@ -225,6 +262,14 @@ export default function ClientDashboard({ user, onLogout, onUserUpdate, siteName
 
           {tab === 'tickets' && <ClientTickets orders={orders} />}
 
+          {reviewingOrder && (
+            <ReviewOrderModal
+              order={reviewingOrder}
+              onClose={() => setReviewingOrder(null)}
+              onSaved={reloadReviews}
+            />
+          )}
+
           {tab === 'help' && (
             <div className="space-y-4">
               <h1 className="font-display font-black text-xl text-slate-900">Central de Ajuda</h1>
@@ -247,7 +292,14 @@ function MetricCard({ icon, label, value, tone }: { icon: ReactNode; label: stri
   );
 }
 
-function OrdersList({ orders, loading, onBuy, onPay }: { orders: AdminOrder[]; loading: boolean; onBuy: () => void; onPay: (id: string) => void }) {
+function OrdersList({ orders, loading, onBuy, onPay, reviews = [], onReview }: {
+  orders: AdminOrder[];
+  loading: boolean;
+  onBuy: () => void;
+  onPay: (id: string) => void;
+  reviews?: ServiceReview[];
+  onReview?: (order: AdminOrder) => void;
+}) {
   if (loading) {
     return <div className="flex items-center justify-center py-10"><div className="animate-spin rounded-full h-7 w-7 border-b-2 border-primary"></div></div>;
   }
@@ -268,6 +320,8 @@ function OrdersList({ orders, loading, onBuy, onPay }: { orders: AdminOrder[]; l
         const st = orderStatusInfo(o.status);
         const isPending = st.key === 'aguardando_pagamento' || st.key === 'pendente';
         const canPay = isPending && (o.paymentMethod || 'PIX') === 'PIX';
+        const minhaAvaliacao = reviews.find(r => r.orderId === o.id);
+        const podeAvaliar = st.key === 'entregue' && !minhaAvaliacao && !!onReview;
         return (
           <div key={o.id} className="flex items-center justify-between gap-3 border border-slate-100 rounded-xl p-3 hover:border-slate-200 transition-colors">
             <div className="min-w-0">
@@ -312,6 +366,29 @@ function OrdersList({ orders, loading, onBuy, onPay }: { orders: AdminOrder[]; l
                 >
                   <QrCode className="h-3 w-3" /> Pagar com PIX
                 </button>
+              )}
+              {podeAvaliar && (
+                <button
+                  onClick={() => onReview!(o)}
+                  className="inline-flex items-center gap-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-[10px] font-black uppercase tracking-wide rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer"
+                >
+                  <Star className="h-3 w-3" /> Avaliar serviço
+                </button>
+              )}
+              {minhaAvaliacao && (
+                <span
+                  className={`inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wide rounded-lg px-2.5 py-1.5 border ${
+                    minhaAvaliacao.status === 'approved'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-slate-50 text-slate-500 border-slate-200'
+                  }`}
+                  title={minhaAvaliacao.status === 'approved'
+                    ? 'A sua avaliação está publicada na página do serviço.'
+                    : 'A sua avaliação está em conferência.'}
+                >
+                  <Star className="h-3 w-3" />
+                  {minhaAvaliacao.status === 'approved' ? 'Avaliado' : 'Em análise'}
+                </span>
               )}
             </div>
           </div>

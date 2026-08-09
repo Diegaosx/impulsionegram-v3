@@ -46,6 +46,7 @@ export interface AdminOrder {
   // Optional fields present on account-linked orders.
   accountId?: string;
   serviceType?: string;
+  serviceId?: string;
   postUrl?: string;
   couponCode?: string;
   couponDiscountPercent?: number;
@@ -262,6 +263,8 @@ export async function fetchMyOrders(): Promise<AdminOrder[]> {
 export interface NewOrderInput {
   platform: string;
   serviceType: string;
+  /** Serviço escolhido: é o que liga a avaliação à página dele. */
+  serviceId?: string;
   serviceLabel: string;
   quantity: number;
   price: number;
@@ -908,6 +911,110 @@ export async function setTestimonialStatus(id: string, status: 'approved' | 'hid
 export async function deleteTestimonialFromServer(id: string): Promise<void> {
   const res = await fetch(`/api/testimonials/${encodeURIComponent(id)}`, { method: 'DELETE' });
   if (!res.ok) throw new Error('Failed to delete testimonial');
+}
+
+// --- Avaliações de serviço ---
+//
+// Diferente dos depoimentos da home: cada avaliação vem de um pedido entregue e
+// aparece na página do serviço que foi comprado.
+
+export interface ServiceReview {
+  id: string;
+  serviceId: string;
+  orderId: string;
+  accountId: string;
+  authorName: string;
+  rating: number;
+  comment: string;
+  reply: string;
+  status: 'pending' | 'approved' | 'hidden';
+  createdAt: string;
+  accountEmail?: string;
+}
+
+export interface ServiceReviewSummary {
+  reviews: ServiceReview[];
+  average: number;
+  count: number;
+}
+
+export async function fetchServiceReviews(serviceId: string): Promise<ServiceReviewSummary> {
+  try {
+    const res = await fetch(`/api/services/${encodeURIComponent(serviceId)}/reviews`);
+    if (!res.ok) throw new Error('falha');
+    const data = await res.json();
+    return {
+      reviews: Array.isArray(data?.reviews) ? data.reviews : [],
+      average: Number(data?.average) || 0,
+      count: Number(data?.count) || 0
+    };
+  } catch {
+    return { reviews: [], average: 0, count: 0 };
+  }
+}
+
+export async function fetchMyReviews(): Promise<ServiceReview[]> {
+  try {
+    const res = await fetch('/api/my/reviews');
+    if (!res.ok) throw new Error('falha');
+    return asArray<ServiceReview>(await res.json(), 'fetchMyReviews');
+  } catch {
+    return [];
+  }
+}
+
+export async function submitServiceReview(input: {
+  orderId: string; rating: number; comment: string;
+}): Promise<{ ok: boolean; error?: string; review?: ServiceReview }> {
+  try {
+    const res = await fetch('/api/my/reviews', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data.error || 'Falha ao enviar a avaliação.' };
+    return { ok: true, review: data.review };
+  } catch {
+    return { ok: false, error: 'Erro de conexão.' };
+  }
+}
+
+export async function fetchAllServiceReviews(): Promise<ServiceReview[]> {
+  try {
+    const res = await fetch('/api/reviews');
+    if (!res.ok) throw new Error('falha');
+    return asArray<ServiceReview>(await res.json(), 'fetchAllServiceReviews');
+  } catch {
+    return [];
+  }
+}
+
+export async function updateServiceReviewOnServer(
+  id: string,
+  patch: { status?: string; reply?: string }
+): Promise<{ ok: boolean; error?: string; review?: ServiceReview }> {
+  try {
+    const res = await fetch(`/api/reviews/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data.error || 'Falha ao atualizar a avaliação.' };
+    return { ok: true, review: data.review };
+  } catch {
+    return { ok: false, error: 'Erro de conexão.' };
+  }
+}
+
+export async function deleteServiceReviewOnServer(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/reviews/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 // --- Blocked IPs (antispam) ---

@@ -301,6 +301,29 @@ async function createSchema(client: PoolClient) {
   // A lista do cliente e a do admin ordenam pela última movimentação.
   await client.query(`CREATE INDEX IF NOT EXISTS tickets_account_idx ON tickets (account_id, updated_at DESC)`);
   await client.query(`CREATE INDEX IF NOT EXISTS ticket_replies_ticket_idx ON ticket_replies (ticket_id, created_at)`);
+
+  // --- Avaliações de serviço ---
+  //
+  // Uma por pedido, e só de pedido entregue: é o que separa isto de um mural
+  // aberto de opiniões. O índice único no pedido é a trava de verdade — sem
+  // ele, dois cliques no botão viram duas avaliações do mesmo serviço.
+  await client.query(
+    `CREATE TABLE IF NOT EXISTS service_reviews (
+      id          TEXT PRIMARY KEY,
+      service_id  TEXT NOT NULL,
+      order_id    TEXT NOT NULL UNIQUE,
+      account_id  TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+      author_name TEXT NOT NULL DEFAULT '',
+      rating      INTEGER NOT NULL DEFAULT 5,
+      comment     TEXT NOT NULL,
+      reply       TEXT NOT NULL DEFAULT '',
+      status      TEXT NOT NULL DEFAULT 'pending',
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`
+  );
+  await client.query(
+    `CREATE INDEX IF NOT EXISTS service_reviews_service_idx ON service_reviews (service_id, status, created_at DESC)`
+  );
 }
 
 // --- Contact messages (help / "Fale Conosco" form) ---
@@ -586,6 +609,141 @@ export async function countRecentTicketsByAccount(accountId: string, minutes = 6
     [accountId, String(minutes)]
   );
   return Number(r.rows[0]?.n) || 0;
+}
+
+
+// --- Avaliações de serviço ---
+
+export interface ServiceReviewRecord {
+  id: string;
+  serviceId: string;
+  orderId: string;
+  accountId: string;
+  authorName: string;
+  rating: number;
+  comment: string;
+  /** Resposta pública da loja, opcional. */
+  reply: string;
+  status: 'pending' | 'approved' | 'hidden';
+  createdAt: string;
+  // Só nas listagens do painel.
+  accountEmail?: string;
+  serviceLabel?: string;
+}
+
+function mapReview(r: any): ServiceReviewRecord {
+  return {
+    id: r.id,
+    serviceId: r.service_id,
+    orderId: r.order_id,
+    accountId: r.account_id,
+    authorName: r.author_name || '',
+    rating: Number(r.rating) || 5,
+    comment: r.comment || '',
+    reply: r.reply || '',
+    status: r.status === 'approved' ? 'approved' : r.status === 'hidden' ? 'hidden' : 'pending',
+    createdAt: iso(r.created_at),
+    ...(r.account_email !== undefined ? { accountEmail: r.account_email || '' } : {}),
+    ...(r.service_label !== undefined ? { serviceLabel: r.service_label || '' } : {})
+  };
+}
+
+const clampRating = (v: unknown) => Math.min(5, Math.max(1, Math.round(Number(v) || 5)));
+
+/**
+ * Grava a avaliação de um pedido entregue.
+ *
+ * A unicidade é do banco, não de uma checagem prévia: duas requisições
+ * simultâneas passariam por qualquer `SELECT` anterior. A violação vira um
+ * retorno claro em vez de um erro 500.
+ */
+export async function addServiceReview(input: {
+  serviceId: string;
+  orderId: string;
+  accountId: string;
+  authorName: string;
+  rating: unknown;
+  comment: string;
+}): Promise<{ ok: true; review: ServiceReviewRecord } | { ok: false; error: string }> {
+  try {
+    const r = await pool.query(
+      `INSERT INTO service_reviews (id, service_id, order_id, account_id, author_name, rating, comment, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending') RETURNING *`,
+      [
+        randomUUID(),
+        input.serviceId,
+        input.orderId,
+        input.accountId,
+        input.authorName.slice(0, 120),
+        clampRating(input.rating),
+        input.comment.slice(0, 1500)
+      ]
+    );
+    return { ok: true, review: mapReview(r.rows[0]) };
+  } catch (e: any) {
+    if (e?.code === '23505') return { ok: false, error: 'Este pedido já foi avaliado.' };
+    throw e;
+  }
+}
+
+/** Avaliações publicadas de um serviço, para a página dele. */
+export async function listApprovedReviews(serviceId: string, limit = 50): Promise<ServiceReviewRecord[]> {
+  const r = await pool.query(
+    `SELECT * FROM service_reviews WHERE service_id = $1 AND status = 'approved' ORDER BY created_at DESC LIMIT $2`,
+    [serviceId, limit]
+  );
+  return r.rows.map(mapReview);
+}
+
+/** Média e total publicados, para o resumo no topo do bloco. */
+export async function reviewSummary(serviceId: string): Promise<{ average: number; count: number }> {
+  const r = await pool.query(
+    `SELECT COUNT(*)::int AS n, COALESCE(AVG(rating), 0)::float AS avg
+       FROM service_reviews WHERE service_id = $1 AND status = 'approved'`,
+    [serviceId]
+  );
+  return { average: Math.round((Number(r.rows[0]?.avg) || 0) * 10) / 10, count: Number(r.rows[0]?.n) || 0 };
+}
+
+export async function listReviewsByAccount(accountId: string): Promise<ServiceReviewRecord[]> {
+  const r = await pool.query(
+    `SELECT * FROM service_reviews WHERE account_id = $1 ORDER BY created_at DESC`,
+    [accountId]
+  );
+  return r.rows.map(mapReview);
+}
+
+export async function listAllReviews(limit = 1000): Promise<ServiceReviewRecord[]> {
+  const r = await pool.query(
+    `SELECT sr.*, a.email AS account_email
+       FROM service_reviews sr
+       JOIN accounts a ON a.id = sr.account_id
+      ORDER BY sr.created_at DESC LIMIT $1`,
+    [limit]
+  );
+  return r.rows.map(mapReview);
+}
+
+export async function updateServiceReview(id: string, patch: {
+  status?: string;
+  reply?: string;
+}): Promise<ServiceReviewRecord | null> {
+  const sets: string[] = [];
+  const values: any[] = [id];
+  if (patch.status !== undefined) {
+    const st = patch.status === 'approved' ? 'approved' : patch.status === 'hidden' ? 'hidden' : 'pending';
+    values.push(st); sets.push(`status = $${values.length}`);
+  }
+  if (patch.reply !== undefined) {
+    values.push(String(patch.reply).slice(0, 1000)); sets.push(`reply = $${values.length}`);
+  }
+  if (!sets.length) return null;
+  const r = await pool.query(`UPDATE service_reviews SET ${sets.join(', ')} WHERE id = $1 RETURNING *`, values);
+  return r.rows[0] ? mapReview(r.rows[0]) : null;
+}
+
+export async function deleteServiceReview(id: string): Promise<void> {
+  await pool.query(`DELETE FROM service_reviews WHERE id = $1`, [id]);
 }
 
 // --- User accounts (multi-user auth: admin + cliente) ---

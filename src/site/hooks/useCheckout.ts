@@ -146,6 +146,7 @@ export function useCheckout({
     const res = await createMyOrder({
       platform,
       serviceType,
+      serviceId: service?.id || '',
       serviceLabel: service ? service.label : 'Serviço Personalizado',
       quantity,
       price,

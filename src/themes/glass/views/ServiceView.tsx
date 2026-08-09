@@ -9,6 +9,7 @@ import { ThemeServiceProps } from '../../types';
 import { platformName as catalogPlatformName, serviceTypeLabel, useCatalog } from '../../../utils/catalog';
 import { serviceSlug } from '../../../utils/storage';
 import { applyBasicSEO, setJsonLd } from '../../../utils/seo';
+import ServiceReviews from '../../../components/ServiceReviews';
 import { sellablePackages } from '../../../site/pricing';
 import GlassHeader from '../chrome/Header';
 import GlassFooter from '../chrome/Footer';
@@ -156,6 +157,12 @@ export default function GlassServiceView({
           title={(service.faqTitle || '').trim() || undefined}
           subtitle={(service.faqSubtitle || '').trim() || undefined}
         />
+
+        {/* Avaliações de quem comprou este serviço. O componente não renderiza
+            nada quando ainda não há nenhuma publicada. */}
+        <section className="gl-wrap py-8 md:py-12">
+          <ServiceReviews serviceId={service.id} cardClassName="gl-card" />
+        </section>
       </main>
 
       <GlassFooter siteName={siteName} company={company} onNavigate={goHome} />

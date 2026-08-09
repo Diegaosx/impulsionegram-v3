@@ -108,6 +108,7 @@ export default function BuyServices({ services, defaultProfile, onCreated }: Buy
     const res = await createMyOrder({
       platform,
       serviceType,
+      serviceId: activeService.id,
       serviceLabel: activeService.label,
       quantity,
       price: pricing.final,

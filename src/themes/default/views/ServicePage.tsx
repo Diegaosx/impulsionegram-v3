@@ -9,6 +9,7 @@ import { platformName as catalogPlatformName, serviceTypeLabel, useCatalog } fro
 import { ServiceItem } from '../../../types';
 import { AuthUser, HomeContent, CompanySettings, serviceSlug } from '../../../utils/storage';
 import { applyBasicSEO, setJsonLd } from '../../../utils/seo';
+import ServiceReviews from '../../../components/ServiceReviews';
 import { Check, ShieldCheck, Zap, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface ServicePageProps {
@@ -256,6 +257,12 @@ export default function ServicePage({ services, homeContent, company, siteName, 
             </div>
           </section>
         )}
+        {/* Avaliações de quem comprou este serviço. */}
+        <section className="py-12 sm:py-16 bg-slate-50 border-t border-slate-100">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            <ServiceReviews serviceId={service.id} />
+          </div>
+        </section>
       </main>
 
       <Footer onNavigate={goHome} onSetPlatformFilter={() => goHome('servicos')} siteName={siteName} company={company} />
