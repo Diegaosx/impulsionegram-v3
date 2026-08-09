@@ -38,13 +38,17 @@ export function useBlogSeo({ activePost, currentCategory, activeSearchFilter, si
 
     if (activePost) {
       const canonical = `${origin}/blog/artigo/${activePost.slug}`;
+      // O artigo pode ter palavras-chave próprias; sem elas as tags fazem o
+      // papel, que era o que já ia para os dados estruturados.
+      const postKeywords = activePost.keywords?.length ? activePost.keywords : (activePost.tags || []);
       applyBasicSEO({
         title: `${activePost.title} | Blog ${brand}`,
         description: activePost.description,
         canonical,
         brand,
         image: activePost.image,
-        type: 'article'
+        type: 'article',
+        keywords: postKeywords
       });
       // og:title/twitter:title do artigo usam o título puro, sem o sufixo.
       upsertMeta('property', 'og:title', activePost.title);
@@ -69,7 +73,7 @@ export function useBlogSeo({ activePost, currentCategory, activeSearchFilter, si
         dateModified: activePost.publishedAt || undefined,
         mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
         articleSection: activePost.categories?.length ? activePost.categories : undefined,
-        keywords: activePost.tags?.length ? activePost.tags.join(', ') : undefined,
+        keywords: postKeywords.length ? postKeywords.join(', ') : undefined,
         url: canonical
       });
 

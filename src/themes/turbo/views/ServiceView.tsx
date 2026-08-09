@@ -56,7 +56,7 @@ export default function TurboServiceView({
     if (!service) return;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const canonical = `${origin}/servico/${serviceSlug(service)}`;
-    applyBasicSEO({ title: `${pageTitle}${brand ? ' | ' + brand : ''}`, description: metaDescription, canonical, brand, image: image || undefined, type: 'product' });
+    applyBasicSEO({ title: `${pageTitle}${brand ? ' | ' + brand : ''}`, description: metaDescription, canonical, brand, image: image || undefined, type: 'product', keywords: service.pageKeywords });
 
     const prices = sellablePackages(service).map(p => p.price);
     const lowest = prices.length ? Math.min(...prices) : Math.round(service.pricePerItem * (service.minQuantity || 1000) * 100) / 100;

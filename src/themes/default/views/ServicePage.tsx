@@ -62,7 +62,8 @@ export default function ServicePage({ services, homeContent, company, siteName, 
       canonical,
       brand,
       image: image || undefined,
-      type: 'product'
+      type: 'product',
+      keywords: service.pageKeywords
     });
 
     const prices = (service.packages || []).map((p) => p.price).filter((n) => n > 0);
