@@ -84,6 +84,8 @@ import { normalizeKeywords } from './src/utils/keywords';
 import { TICKET_LIMITS, isTicketClosed } from './src/utils/tickets';
 // Mesmo normalizador do cliente: pedidos antigos gravaram "Entregue" e afins.
 import { orderStatusInfo } from './src/utils/orderStatus';
+// Mesma regra de slug que o site usa para montar /servico/:slug.
+import { serviceSlug } from './src/utils/storage';
 // Mesma regra de preço da calculadora e da tela de compra.
 import { computePrice, sellablePackages } from './src/site/pricing';
 import { isMercadoPagoConfigured, getPaymentStatus } from './mercadopago';
@@ -2202,6 +2204,10 @@ app.put('/api/analytics', async (req, res) => {
   }
 });
 
+// Extensões que o site serve como arquivo. Explícitas de propósito: usar
+// "tem um ponto no fim" transformaria um slug como "plano-2.0" em 404.
+const ARQUIVO_ESTATICO = /\.(xml|txt|json|js|mjs|cjs|css|map|png|jpe?g|gif|svg|webp|avif|ico|woff2?|ttf|otf|eot|pdf|webmanifest)$/i;
+
 // --- SEO: sitemap.xml & robots.txt ---
 
 // Resolve the public base URL from the incoming request (works behind Railway's
@@ -2240,15 +2246,27 @@ app.get('/sitemap.xml', async (req, res) => {
       );
     };
 
-    // Static, indexable pages.
+    // Páginas fixas indexáveis.
     push('/', undefined, 'weekly', '1.0');
     push('/blog', undefined, 'daily', '0.8');
-    // Article pages.
+    push('/ajuda', undefined, 'monthly', '0.5');
+    push('/termos', undefined, 'yearly', '0.3');
+    push('/privacidade', undefined, 'yearly', '0.3');
+    push('/garantia', undefined, 'yearly', '0.3');
+
+    // Páginas de serviço: são as que vendem, e estavam de fora do sitemap.
+    const db = await readDB();
+    for (const service of (db.services || [])) {
+      const slug = serviceSlug(service);
+      if (slug) push(`/servico/${slug}`, undefined, 'weekly', '0.9');
+    }
+
+    // Artigos.
     for (const p of posts) {
       const lastmod = p.publishedAt ? p.publishedAt.slice(0, 10) : undefined;
       push(`/blog/artigo/${p.slug}`, lastmod, 'monthly', '0.7');
     }
-    // Category pages.
+    // Categorias.
     for (const c of categories) {
       push(`/blog/categoria/${encodeURIComponent(c)}`, undefined, 'weekly', '0.5');
     }
@@ -2259,6 +2277,7 @@ app.get('/sitemap.xml', async (req, res) => {
       urls.join('\n') +
       `\n</urlset>\n`;
     res.set('Content-Type', 'application/xml; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=3600');
     res.send(xml);
   } catch (e: any) {
     res.status(500).send(`<!-- sitemap error: ${e.message} -->`);
@@ -2275,6 +2294,7 @@ app.get('/robots.txt', (req, res) => {
     `Disallow: /api/\n\n` +
     `Sitemap: ${base}/sitemap.xml\n`;
   res.set('Content-Type', 'text/plain; charset=utf-8');
+  res.set('Cache-Control', 'public, max-age=3600');
   res.send(body);
 });
 
@@ -2361,6 +2381,16 @@ async function mountFrontend() {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
+      // Um caminho com extensão de arquivo é arquivo, não rota do site. Sem
+      // esta guarda, qualquer arquivo que não exista volta como index.html com
+      // status 200 — foi o que fez o Google receber HTML ao pedir o
+      // /sitemap.xml e o navegador cair na home (a rota curinga do SPA manda
+      // para "/" o que ela não reconhece). Devolver 404 mostra o problema em
+      // vez de escondê-lo atrás da página inicial.
+      if (ARQUIVO_ESTATICO.test(req.path)) {
+        res.status(404).type('text/plain').send('Arquivo não encontrado.');
+        return;
+      }
       res.sendFile(path.join(distPath, 'index.html'));
     });
     console.log('Serving compiled production assets from "dist".');
